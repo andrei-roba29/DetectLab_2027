@@ -30,11 +30,11 @@ function check(name, cond, extra) {
 
 /* ── 1. Slide deck ─────────────────────────────────────────────────────── */
 const stepIds = [...TUT_SRC.matchAll(/\{\s*\n\s*id: '(\w+)',/g)].map(m => m[1]);
-check('the walkthrough has 6 slides in order (left, bottom, friends, layers, catalog, performance)',
-    JSON.stringify(stepIds) === JSON.stringify(['left', 'bottom', 'friends', 'layers', 'catalog', 'performance']),
+check('the walkthrough has 13 slides covering controls, layers and recent features',
+    JSON.stringify(stepIds) === JSON.stringify(['left', 'bottom', 'friends', 'layers', 'catalog', 'view3d', 'lidar3d', 'analysis', 'apmmanual', 'apmtrain', 'historical', 'tricks', 'performance']),
     JSON.stringify(stepIds));
-check('the header comment describes the 6-slide walkthrough incl. Friends',
-    /opens a 6-slide/.test(TUT_SRC) && /the Friends panel: unified people search/.test(TUT_SRC));
+check('the header comment describes the 13-slide walkthrough incl. Friends',
+    /opens a 13-slide/.test(TUT_SRC) && /the Friends panel: unified people search/.test(TUT_SRC));
 
 /* ── 2. Every arrow target resolves to a real control ──────────────────── */
 // Collect every #id the tutorial points at and require it to exist in the
@@ -101,11 +101,51 @@ check('closing the guide also closes a guide-opened friends panel',
     /ensureFriends\(false\)/.test(TUT_SRC));
 
 /* ── 6. Bilingual completeness ─────────────────────────────────────────── */
-const stepsSrc = TUT_SRC.slice(TUT_SRC.indexOf('var STEPS = ['), TUT_SRC.indexOf('var CATALOG = {'));
-const blocks = [...stepsSrc.matchAll(/(title|desc|authNote|text): \{\n([\s\S]{0,900}?)\n\s*\}/g)];
-check('every title/desc/authNote block in STEPS is RO+EN (' + blocks.length + ' blocks)',
-    blocks.length > 20 && blocks.every(b => b[2].indexOf('ro:') !== -1 && b[2].indexOf('en:') !== -1),
-    blocks.filter(b => b[2].indexOf('ro:') === -1 || b[2].indexOf('en:') === -1).map(b => b[1]).join(','));
+// Evaluate only the declarative data, so inline and multiline translations
+// are all checked (a regex silently misses long/one-line copy blocks).
+const vm = require('vm');
+const data = vm.runInNewContext(TUT_SRC.slice(TUT_SRC.indexOf('var STEPS = ['),
+    TUT_SRC.indexOf('    // ── Slide transition timing')) + '\n({ STEPS, CATALOG, PERF });');
+let translatedBlocks = 0;
+function bilingual(value, location) {
+    if (!value || typeof value !== 'object') return;
+    if ('ro' in value || 'en' in value) {
+        translatedBlocks++;
+        check(location + ' has nonempty RO+EN copy',
+            typeof value.ro === 'string' && value.ro.trim().length > 0 &&
+            typeof value.en === 'string' && value.en.trim().length > 0);
+        return;
+    }
+    Object.keys(value).forEach(key => bilingual(value[key], location + '.' + key));
+}
+bilingual(data, 'tutorial');
+check('full bilingual coverage includes headings, notes and catalogue', translatedBlocks > 130);
+const guides = data.STEPS.filter(step => step.type === 'guide');
+check('seven feature cards have useful sections without invoking UI actions',
+    guides.length === 7 && guides.every(step => step.sections.length >= 3 &&
+        !step.openPanel && !step.openFriends && !step.requiresAuth));
+function featureCopy(id) {
+    const step = guides.find(step => step.id === id);
+    return step.sections.map(section => section.desc.en).join(' ');
+}
+[
+    ['view3d', ['Ctrl/⌘+drag', 'two fingers', 'non-LiDAR', 'DEM']],
+    ['lidar3d', ['Whole layers', '1 km radius', 'not height measurements', 'numeric DTM']],
+    ['apmmanual', ['Premium', '1–10 km', 'weight 0', 'GeoJSON', 'not calibrated']],
+    ['apmtrain', ['50 km', 'Romanian', 'CSV', 'All periods', 'AUC/Kvamme', 'down-weighted']],
+    ['historical', ['half a second', '3 km', 'Reset position', 'CORONA', 'Other maps']],
+    ['tricks', ['two vertical controls', 'switches off only', '100 km²', '10 days']]
+].forEach(([id, snippets]) => {
+    const copy = featureCopy(id);
+    snippets.forEach(snippet => check(id + ' documents ' + snippet,
+        copy.toLowerCase().includes(snippet.toLowerCase())));
+});
+check('catalogue includes Next-Gen, vegetation fingerprint and Other maps',
+    ['APM Next-Gen', 'Vegetation Fingerprint', 'Other maps'].every(name =>
+        data.CATALOG.premium.some(layer => layer.name.en === name)));
+check('feature cards use textContent and an accessible scroll region',
+    /body.tabIndex = 0/.test(TUT_SRC) && /body.setAttribute\('role', 'region'\)/.test(TUT_SRC) &&
+    /textContent = tr\(section.desc\)/.test(TUT_SRC));
 
 /* ── 7. Versioned + pre-cached ─────────────────────────────────────────── */
 const tutUrl = (INDEX_SRC.match(/src="(js\/tutorial\.js\?v=[^"]+)"/) || [])[1];

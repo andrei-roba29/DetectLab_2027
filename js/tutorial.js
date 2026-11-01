@@ -1,19 +1,19 @@
 /* ──────────────────────────────────────────────────────────────
    DetectLab — Mini tutorial (slides)
    ------------------------------------------------------------
-   A "?" button in the top-right corner of the map opens a 6-slide
+   A "?" button in the top-right corner of the map opens a 13-slide
    walkthrough drawn on top of the live UI:
 
-     1. arrows + explanations for every button on the LEFT side
-     2. arrows + explanations for detection / storage / account
-        (PWA floating controls; falls back to the desktop .map-controls row)
+     1–2. map controls, detection, storage and account (PWA + desktop)
      3. the Friends panel: unified people search, requests and chats
-        (opened automatically for signed-in users, like the layers panel)
-     4. the layers panel: on/off switch, opacity slider, the vertical
-        slider on the map, the neon-green "visible on screen" frame
-     5. the layer catalogue with GRATIS / PREMIUM tabs
-     6. tips for optimal performance
+     4–5. layers, on-map sliders and the FREE / PREMIUM catalogue
+     6–8. 3D gestures, LiDAR scope/settings and analysis actions
+     9–10. APM Next-Gen MANUAL, TRAIN, results and limitations
+     11–12. historical-map alignment and everyday shortcuts
+     13. tips for optimal performance
 
+   Feature cards explain workflows without starting analyses, changing
+   layers, entering 3D or requesting Premium/authentication on the user's behalf.
    Everything is purple with a transparent, blurred background.
    Targets are resolved at runtime from the real DOM, so the guide
    automatically adapts to whichever controls exist (PWA vs desktop).
@@ -264,8 +264,8 @@
                 {
                     ico: '↕',
                     text: {
-                        ro: '<b>Slider vertical pe hartă:</b> dacă apeși pe un strat, sliderul lui de opacitate apare vertical peste hartă, ca să reglezi transparența fără să acoperi zona studiată.',
-                        en: '<b>Vertical slider on the map:</b> tapping a layer moves its opacity slider onto the map, vertically, so you can adjust it without covering the area you are studying.'
+                        ro: '<b>Slidere pe hartă:</b> atinge intenționat cardul unui strat ca să-i afișezi comenzile verticale; stratul se poate activa automat. Poți păstra două seturi de comenzi pentru comparație. În PWA, derularea listei sau atingerea sliderului din panou nu adaugă o comandă nouă. ✕ închide comanda și oprește stratul asociat (cu excepția bazei satelit permanente).',
+                        en: '<b>On-map sliders:</b> deliberately tap a layer card to show its vertical controls; this may switch the layer on automatically. Keep two sets of controls for comparison. In the PWA, scrolling the list or touching its panel slider does not add a new control. ✕ closes the control and switches its layer off (except the permanent satellite base).'
                     }
                 },
                 {
@@ -283,25 +283,259 @@
             type: 'catalog'
         },
         {
+            id: 'view3d',
+            title: { ro: "Explorarea în 3D", en: "Exploring in 3D" },
+            type: 'guide',
+            sections: [
+                {
+                    title: { ro: "Intrare și ieșire", en: "Enter and leave" },
+                    desc: {
+                        ro: "Alege țara și zona în 2D, activează straturile dorite, apoi apasă 3D. Pe desktop, butonul este jos, în centru; în PWA, în 2D se află deasupra butonului hărții de bază, în stânga-jos. Când ești în 3D, butonul 2D revine jos, în centru. Apasă-l pentru a reveni la harta normală.",
+                        en: "Choose your country and area in 2D, turn on the layers you need, then press 3D. On desktop the button is at the bottom-centre; in the PWA, while in 2D, it sits above the base-map button at the bottom-left. In 3D the 2D button moves to the bottom-centre. Press it to return to the normal map."
+                    }
+                },
+                {
+                    title: { ro: "Mișcarea camerei", en: "Move the camera" },
+                    desc: {
+                        ro: "Pe desktop: trage pentru deplasare, folosește rotița pentru zoom și trage cu butonul drept sau Ctrl/⌘ pentru rotire și înclinare. Shift + săgeți rotește din tastatură. Pe telefon: un deget deplasează, două degete măresc sau rotesc; trage vertical cu două degete pentru înclinare. Nu există slidere de unghi sau exagerare a reliefului.",
+                        en: "On desktop: drag to pan, use the wheel to zoom, and right-drag or Ctrl/⌘+drag to rotate and tilt. Shift + arrow keys rotates from the keyboard. On a phone: one finger pans, two fingers pinch or twist to zoom or rotate; drag vertically with two fingers to tilt. There are no camera-angle or terrain-exaggeration sliders."
+                    }
+                },
+                {
+                    title: { ro: "Bază, resetare și reîncărcare", en: "Base map, reset and refresh" },
+                    desc: {
+                        ro: "Schimbă baza între Imagery, Topographic și Terrain din selectorul ArcGIS. „Resetează” reia poziția și orientarea hărții 2D. ↻ pregătește tile-urile raster active non-LiDAR pe o rază de 1 km în jurul centrului 3D; nu descarcă întreaga țară și nu înlocuiește pregătirea LiDAR.",
+                        en: "Switch between Imagery, Topographic and Terrain in the ArcGIS picker. Reset returns to the 2D camera position and orientation. ↻ prepares active non-LiDAR raster tiles within 1 km of the current 3D centre; it does not download the entire country or replace LiDAR preparation."
+                    }
+                },
+                {
+                    title: { ro: "Ce reprezintă relieful", en: "What the terrain represents" },
+                    desc: {
+                        ro: "Straturile compatibile se suprapun pe relieful DEM. O imagine LiDAR umbrită nu transformă automat terenul 3D într-un model de înălțime de aceeași rezoluție. Acoperirea și detaliul depind de sursă; folosește legenda și verifică în 2D când ai dubii.",
+                        en: "Compatible layers are draped over DEM terrain. A shaded LiDAR image does not automatically make the 3D terrain an elevation model of the same resolution. Coverage and detail depend on the source; check the legend and compare in 2D when in doubt."
+                    }
+                },
+            ]
+        },
+        {
+            id: 'lidar3d',
+            title: { ro: "LiDAR: 3D și setări", en: "LiDAR: 3D and settings" },
+            type: 'guide',
+            sections: [
+                {
+                    title: { ro: "Straturi întregi sau doar 1 km", en: "Whole layers or only 1 km" },
+                    desc: {
+                        ro: "Cu LiDAR activ, intrarea în 3D deschide alegerea straturilor. „Straturi întregi” încarcă la cerere, pe măsură ce explorezi. „Doar 1 km” pregătește un disc cu raza de 1 km: alege straturile, punctul și așteaptă progresul înainte de intrare. Cercul marchează limita pregătită, nu o lipsă de date.",
+                        en: "With LiDAR active, entering 3D opens a layer-selection dialog. Whole layers loads on demand as you explore. Only 1 km prepares a disc with a 1 km radius: select layers, pick the point and wait for preparation before entering. The circle marks the prepared boundary, not missing data."
+                    }
+                },
+                {
+                    title: { ro: "Setări de imagine", en: "Image settings" },
+                    desc: {
+                        ro: "Activează substratul LiDAR și deschide Setări. Alege și pregătește o zonă cu raza de 1 km, apoi compară efectele fotografice și ajustează expunerea, umbrele, contrastul sau claritatea. Zona din afara cercului rămâne neschimbată. Efectele folosesc imagini: nu sunt măsurători de înălțime și nici dovezi arheologice.",
+                        en: "Enable the LiDAR sublayer and open Settings. Choose and prefetch a 1 km radius area, then compare photographic looks and adjust exposure, shadows, contrast or sharpness. Outside the circle the original stays unchanged. These effects process imagery: they are not height measurements or archaeological evidence."
+                    }
+                },
+                {
+                    title: { ro: "Trecerea între 2D și 3D", en: "Moving between 2D and 3D" },
+                    desc: {
+                        ro: "Poți folosi zona efectului ca punct de pornire pentru alegerea LiDAR în 3D sau alege alta. 3D își încarcă propriile date; efectul 2D nu devine teren numeric. La ieșirea din 3D, efectele și ajustările LiDAR se resetează. Filtrele RVT reale și profilul de teren necesită un DTM numeric compatibil, nu doar imaginea afișată.",
+                        en: "Use the image-effect area as a starting point for the 3D LiDAR selection, or choose another. 3D loads its own data; the 2D effect does not become numeric terrain. Leaving 3D resets LiDAR effects and adjustments. True RVT filters and a ground profile require a compatible numeric DTM, not just the displayed image."
+                    }
+                },
+            ]
+        },
+        {
+            id: 'analysis',
+            title: { ro: "Analiză pe hartă", en: "Map analysis" },
+            type: 'guide',
+            sections: [
+                {
+                    title: { ro: "Punct, rază, apoi acțiune", en: "Point, radius, then action" },
+                    desc: {
+                        ro: "Pentru instrumentele cu rază, alege punctul pe hartă și reglează distanța din panou sau din comanda verticală. Folosește acțiunea instrumentului selectat: Scanare, Detectare sau Generează raport. Comenzile apar lângă slidere și, în 3D, deasupra comenzilor camerei; modificarea razei nu înseamnă că ai rulat din nou analiza.",
+                        en: "For radius-based tools, choose a map point and adjust the distance in the panel or vertical control. Use the selected tool’s action: Scan, Detect or Generate report. Actions sit beside the sliders and, in 3D, above the camera controls; changing the radius does not mean you have rerun the analysis."
+                    }
+                },
+                {
+                    title: { ro: "Potențial arheologic și rapoarte", en: "Archaeological potential and reports" },
+                    desc: {
+                        ro: "Stratul „Zone cu potențial arheologic” analizează distribuția siturilor cunoscute din jurul pinului mov (sau al centrului hărții dacă nu ai pin). Atinge un rezultat pentru scor și detalii. Nu este același model cu APM Next-Gen. Rapoartele și datele istorice trebuie citite împreună cu sursele și limitele lor.",
+                        en: "The Archaeological potential areas layer analyses known-site distribution around the purple pin (or the map centre if there is no pin). Tap a result for its score and details. This is not the same model as APM Next-Gen. Read reports and historical information together with their sources and limitations."
+                    }
+                },
+                {
+                    title: { ro: "Verifică înainte de teren", en: "Check before fieldwork" },
+                    desc: {
+                        ro: "Scorurile, contururile și rapoartele sunt indicii pentru cercetare, nu confirmări ale unor descoperiri. Un loc fără marker nu este automat liber de patrimoniu. Respectă zonele protejate, autorizațiile și regulile locale; harta nu acordă drept de detecție sau săpătură.",
+                        en: "Scores, outlines and reports are research leads, not confirmed discoveries. A place without a marker is not automatically free of heritage restrictions. Respect protected areas, permissions and local rules; the map grants no right to detect or excavate."
+                    }
+                },
+            ]
+        },
+        {
+            id: 'apmmanual',
+            title: { ro: "APM Next-Gen: MANUAL", en: "APM Next-Gen: MANUAL" },
+            type: 'guide',
+            sections: [
+                {
+                    title: { ro: "Unde îl găsești", en: "Where to find it" },
+                    desc: {
+                        ro: "În lista de straturi → Premium, pornește APM Next-Gen și deschide panoul lui, pe desktop sau în PWA. Este o funcție Premium separată de APM și APM 2.0. Alege MANUAL, apasă „Alege punct pe hartă”, apoi atinge centrul zonei studiate.",
+                        en: "In the layer list → Premium, enable APM Next-Gen and open its panel, on desktop or in the PWA. It is a Premium feature separate from APM and APM 2.0. Choose MANUAL, press Pick point on map, then tap the centre of your study area."
+                    }
+                },
+                {
+                    title: { ro: "Rază și factori", en: "Radius and factors" },
+                    desc: {
+                        ro: "Alege o rază de 1–10 km (implicit 5 km). Reglează ponderile pentru relief și distanța față de apă; proxy-ul de sol are implicit pondere 0 și nu este o hartă de sol măsurată. În Avansat poți ajusta pragurile, aria minimă și curbele. Rulează modelul după modificări și urmărește mesajele de progres sau lipsă de date.",
+                        en: "Choose a radius of 1–10 km (default 5 km). Adjust terrain and water-distance weights; the soil proxy defaults to weight 0 and is not a measured soil map. Advanced settings include thresholds, minimum area and editable curves. Run the model after changes and watch progress or missing-data messages."
+                    }
+                },
+                {
+                    title: { ro: "Citește rezultatul corect", en: "Read the result correctly" },
+                    desc: {
+                        ro: "Harta termică arată scorul continuu, de la bleumarin spre roșu. Doar clasa cu potențial foarte ridicat primește contururi; este normal să nu apară niciun contur. Legenda arată pragurile rulării. Scorurile sunt potențial relativ, nu probabilități calibrate de descoperire.",
+                        en: "The heatmap shows a continuous score from navy to red. Only the very-high-potential class receives outlines; a run may legitimately have none. The legend shows the run’s thresholds. Scores indicate relative potential, not calibrated discovery probabilities."
+                    }
+                },
+                {
+                    title: { ro: "Export și curățare", en: "Export and clear" },
+                    desc: {
+                        ro: "Exportă contururile GeoJSON pentru zonele cu potențial foarte ridicat; exportul nu conține imaginea hărții termice sau rasterul complet. Folosește „Șterge rezultatul” ori oprește APM Next-Gen pentru a elimina rezultatul. Poți anula o rulare în curs.",
+                        en: "Export hotspot GeoJSON saves very-high-potential outlines, not the heatmap image or full raster. Use Clear result or switch APM Next-Gen off to remove the result. You can cancel a running analysis."
+                    }
+                },
+            ]
+        },
+        {
+            id: 'apmtrain',
+            title: { ro: "APM Next-Gen: TRAIN", en: "APM Next-Gen: TRAIN" },
+            type: 'guide',
+            sections: [
+                {
+                    title: { ro: "Învață din situri cunoscute", en: "Learn from known sites" },
+                    desc: {
+                        ro: "Alege punctul, apoi TRAIN: zona de antrenare are raza fixă de 50 km. Sursa integrată este repertoriul României, cu poziții exacte; în afara României încarcă explicit un CSV compatibil. Dacă sursa nu răspunde, reîncearcă sau folosește CSV — nu se schimbă automat cu altă sursă.",
+                        en: "Pick a point, then TRAIN: training uses a fixed 50 km radius. The built-in source is the Romanian repertory with exact-position records; outside Romania, explicitly upload a compatible CSV. If the source fails, retry or use CSV — it is not silently replaced by another source."
+                    }
+                },
+                {
+                    title: { ro: "Perioadă și calitatea datelor", en: "Period and data quality" },
+                    desc: {
+                        ro: "Implicit sunt folosite toate perioadele; poți restrânge la o perioadă locală. Verifică numărul de situri utilizabile, excluderile și avertismentele înainte de antrenare. Perioadele deduse din denumiri și regulile de excludere a siturilor care nu sunt așezări sunt aproximative, nu clasificări arheologice verificate.",
+                        en: "All periods is the default; optionally narrow to a local period. Check usable-site counts, exclusions and warnings before training. Periods inferred from names and rules excluding non-settlements are approximate, not verified archaeological classifications."
+                    }
+                },
+                {
+                    title: { ro: "Validare și situri atipice", en: "Validation and unusual sites" },
+                    desc: {
+                        ro: "TRAIN învață curbele din situri, deci nu le editezi ca în MANUAL. Compară diagnosticele AUC/Kvamme robust și simplu, nu doar culorile. Markerii gri arată situri cu pondere redusă; citește motivul și restaurează un sit sau toate siturile pentru reantrenare din datele păstrate. Un sit atipic nu înseamnă un sit greșit.",
+                        en: "TRAIN learns curves from sites rather than letting you edit them as in MANUAL. Compare robust and plain AUC/Kvamme diagnostics, not just the colours. Grey markers identify down-weighted sites; read the reason and restore one or all to refit from cached samples. An unusual site is not necessarily an incorrect site."
+                    }
+                },
+                {
+                    title: { ro: "Limite și export", en: "Limits and export" },
+                    desc: {
+                        ro: "Rezultatul folosește aceeași hartă termică și aceleași contururi de potențial foarte ridicat ca MANUAL. Exportul GeoJSON păstrează contururile și proveniența. Datele puține, perioadele incerte și acoperirea incompletă pot limita analiza; niciun scor nu înlocuiește verificarea arheologică sau regulile de protecție.",
+                        en: "Results use the same heatmap and very-high-potential outlines as MANUAL. GeoJSON exports preserve outlines and provenance. Sparse data, uncertain periods and incomplete coverage can limit analysis; no score replaces archaeological verification or protection rules."
+                    }
+                },
+            ]
+        },
+        {
+            id: 'historical',
+            title: { ro: "Truc: aliniază hărțile istorice", en: "Tip: align historical maps" },
+            type: 'guide',
+            sections: [
+                {
+                    title: { ro: "Ține apăsat pe harta 2D", en: "Long-press the 2D map" },
+                    desc: {
+                        ro: "Activează o hartă istorică, apoi ține apăsat aproximativ o jumătate de secundă într-un loc liber al hărții 2D, nu pe butoane, markere sau panouri. Merge cu mouse-ul și cu degetul, inclusiv când sliderul stratului este deja pe ecran. Se deschide „Mută harta istorică”.",
+                        en: "Enable a historical map, then hold for about half a second on an empty part of the 2D map, not on buttons, markers or panels. This works with mouse or touch, even with the layer’s slider already on screen. Move historical map opens."
+                    }
+                },
+                {
+                    title: { ro: "Alege stratul și deblochează", en: "Choose the layer and unlock" },
+                    desc: {
+                        ro: "Dacă ai mai multe hărți istorice active, selectează harta dorită din listă. Pornește comutatorul și trage pentru a muta doar suprapunerea, fără baza de dedesubt. Poți corecta deplasarea cu până la 3 km în orice direcție; folosește opacitatea pentru a potrivi drumuri, râuri sau alte repere stabile.",
+                        en: "If several historical maps are active, choose the one you want from the list. Turn the switch on and drag to move only the overlay, not the base map. Shift it by up to 3 km in any direction; use opacity to align roads, rivers or other stable landmarks."
+                    }
+                },
+                {
+                    title: { ro: "Blochează, păstrează, resetează", en: "Lock, keep, reset" },
+                    desc: {
+                        ro: "Oprește comutatorul sau închide panoul cu ✕ ca să blochezi poziția și să deplasezi din nou harta de bază. Poziția se păstrează local pentru fiecare strat, inclusiv după zoom și redeschidere. „Resetează poziția” anulează corecția. Funcționează cu hărți gratuite, Premium și imaginile CORONA disponibile.",
+                        en: "Switch off or close the panel with ✕ to lock the position and pan the base map again. The offset is saved locally per layer, surviving zoom and reopening. Reset position removes the correction. This works with available free and Premium historical maps and CORONA imagery."
+                    }
+                },
+                {
+                    title: { ro: "„Alte hărți” este un flux separat", en: "Other maps is a separate workflow" },
+                    desc: {
+                        ro: "În Premium → Hărți istorice → Alte hărți, punctele verzi deschid scanările disponibile. Adaugă o foaie și folosește comenzile ei pentru mutare, rotire și scară. Aceste scanări nu sunt deja georeferențiate: potrivirea manuală este orientativă și nu repară deformările hârtiei.",
+                        en: "In Premium → Historical maps → Other maps, green points open available scans. Add a sheet and use its own move, rotation and scale controls. These scans are not already georeferenced: manual alignment is approximate and does not correct paper distortion."
+                    }
+                },
+            ]
+        },
+        {
+            id: 'tricks',
+            title: { ro: "Alte scurtături utile", en: "More useful shortcuts" },
+            type: 'guide',
+            sections: [
+                {
+                    title: { ro: "Caută un loc sau coordonate", en: "Search a place or coordinates" },
+                    desc: {
+                        ro: "Folosește căutarea pentru localități sau coordonate; înainte de o analiză verifică țara și punctul ales. Căutarea unei destinații din 3D revine în 2D pentru a o afișa. Butonul Coordonate îți permite să copiezi un punct, să-l salvezi sau să creezi un eveniment.",
+                        en: "Use search for places or coordinates; check the selected country and point before analysis. Searching for a destination in 3D returns to 2D to show it. Coordinates lets you copy a point, save it or create an event."
+                    }
+                },
+                {
+                    title: { ro: "Compară straturi și perioade", en: "Compare layers and periods" },
+                    desc: {
+                        ro: "Păstrează două comenzi verticale pe hartă pentru a compara opacități, raze sau perioade fără să redeschizi panoul. Butonul ✕ închide comanda și oprește doar stratul asociat, fără să-l afecteze pe celălalt (baza satelit rămâne activă). Pentru satelit, bătălii și Amprenta Vegetației, verifică și perioada selectată, nu doar transparența.",
+                        en: "Keep two vertical controls on the map to compare opacity, radius or periods without reopening the panel. A control’s ✕ closes it and switches off only its associated layer, leaving the other control alone (the satellite base stays on). For satellite, battles and Vegetation Fingerprint, check the selected time period as well as transparency."
+                    }
+                },
+                {
+                    title: { ro: "Acoperire și ferestre", en: "Coverage and windows" },
+                    desc: {
+                        ro: "Alege țara înainte să cauți straturi locale și urmărește cadrul verde de acoperire. Extinde grupurile pentru substraturi și folosește ⓘ pentru surse. Unde este disponibil, minimizează o fereastră și redeschide-o din sertarul de ferestre, în loc să pierzi zona studiată sub panouri.",
+                        en: "Choose the country before looking for local layers and watch the green coverage frame. Expand groups for sublayers and use ⓘ for sources. Where available, minimise a window and reopen it from the window drawer instead of covering your study area with panels."
+                    }
+                },
+                {
+                    title: { ro: "Pregătește terenul fără internet", en: "Prepare for fieldwork offline" },
+                    desc: {
+                        ro: "Descarcă zona offline cât ai internet (maximum 100 km²) și verifică straturile salvate înainte de plecare. Le găsești în Stocare → Hărți offline; expiră după 10 zile. Descărcarea tile-urilor nu face automat disponibile offline analizele APM, antrenarea, chat-ul sau toate sursele externe.",
+                        en: "Download your offline area while online (up to 100 km²) and check saved layers before leaving. Find them in Storage → Offline maps; they expire after 10 days. Downloaded tiles do not automatically make APM analysis, training, chat or every external source work offline."
+                    }
+                },
+            ]
+        },
+        {
             id: 'performance',
             title: { ro: 'Sfaturi pentru performanță optimă', en: 'Tips for optimal performance' },
             type: 'performance'
         }
     ];
 
-    // ── Layer catalogue (slide 4) ────────────────────────────────
+    // ── Layer catalogue ────────────────────────────────
     var CATALOG = {
         free: [
             {
                 name: { ro: 'APM Layer', en: 'APM Layer' },
                 desc: {
-                    ro: 'Model de predicție arheologică bazat pe factori de mediu întâlniți în toate așezările antice încă de la începutul timpurilor. (vezi pe site legenda de culori)',
-                    en: 'Archaeological prediction model based on environmental factors found in every ancient settlement since the dawn of time. (see the colour legend on the website)'
+                    ro: "Model orientativ de potențial arheologic bazat pe factori de mediu. Citește legenda și compară cu sursele locale; scorul nu confirmă existența unui sit.",
+                    en: "Indicative archaeological potential model based on environmental factors. Read the legend and compare local sources; a score does not confirm a site."
                 }
             },
             {
                 name: { ro: 'Satelit', en: 'Satellite' },
-                desc: { ro: 'Stratul de bază.', en: 'The base layer.' }
+                desc: {
+                    ro: "Bază Imagery ArcGIS; poți alege și Topographic sau Terrain. Unde sunt disponibile, comenzile de istoric permit compararea imaginilor din perioade diferite.",
+                    en: "ArcGIS Imagery base; Topographic and Terrain are also available. Where provided, history controls let you compare imagery from different periods."
+                }
             },
             {
                 name: { ro: 'Localități OSM', en: 'OSM Places' },
@@ -314,22 +548,22 @@
             {
                 name: { ro: 'Patrimoniu', en: 'Heritage' },
                 desc: {
-                    ro: 'Situri arheologice CIMEC sincronizate zilnic cu baza noastră de date + zona de protecție.',
-                    en: 'CIMEC archaeological sites synchronised daily with our database + the protection zone.'
+                    ro: "Situri arheologice și zone de protecție din sursele disponibile pentru țara selectată. Extinde grupul pentru substraturi și atinge markerii pentru detalii; acoperirea nu este o garanție juridică.",
+                    en: "Archaeological sites and protection zones from the sources available for the selected country. Expand the group for sublayers and tap markers for details; coverage is not a legal guarantee."
                 }
             },
             {
                 name: { ro: 'Hărți istorice', en: 'Historical Maps' },
                 desc: {
-                    ro: 'Conține hărți istorice cu acoperire completă a României + harta Iosefină gratuită care conține foi — când e apăsat butonul „Caută aici” se furnizează foaia aferentă localității văzute pe hartă și se poate alinia corect folosind săgețile.',
-                    en: 'Contains historical maps with full coverage of Romania + the free Josephine map made of sheets — pressing the “Search here” button delivers the sheet matching the locality shown on the map, and it can be aligned correctly using the arrows.'
+                    ro: "Hărți și foi istorice gratuite, în funcție de țară și acoperire. Pentru Iosefina gratuită folosește „Caută aici” pentru foaia locală. Pentru aliniere, ține apăsat pe harta 2D și folosește „Mută harta istorică”.",
+                    en: "Free historical maps and sheets, depending on country and coverage. For the free Josephine map, use Search here to find a local sheet. To align an overlay, long-press the 2D map and use Move historical map."
                 }
             },
             {
                 name: { ro: 'LIDAR', en: 'LIDAR' },
                 desc: {
-                    ro: 'Light Detection and Ranging — strat laser ce pătrunde prin vegetație și este una dintre cele mai puternice unelte pentru arheologie (conține mai multe straturi de diferite rezoluții și pentru diferite zone).',
-                    en: 'Light Detection and Ranging — a laser layer that penetrates vegetation and is one of the most powerful tools in archaeology (it contains several layers of different resolutions and for different areas).'
+                    ro: "Relief umbrit și alte vizualizări LiDAR, cu rezoluții și acoperire diferite pentru fiecare sursă. Extinde substraturile pentru Setări și efecte de imagine; în 3D alege straturi întregi sau un disc cu raza de 1 km.",
+                    en: "Hillshade and other LiDAR visualisations, with source-dependent resolution and coverage. Expand sublayers for Settings and image effects; in 3D choose whole layers or a 1 km radius disc."
                 }
             },
             {
@@ -342,24 +576,45 @@
         ],
         premium: [
             {
+                name: { ro: "APM Next-Gen", en: "APM Next-Gen" },
+                desc: {
+                    ro: "MANUAL: punct, rază de 1–10 km și ponderi editabile. TRAIN: situri dintr-o rază de 50 km, perioadă și validare. Rezultate ca hartă termică, contururi de potențial foarte ridicat și export GeoJSON; vezi pașii dedicați din ghid.",
+                    en: "MANUAL: point, 1–10 km radius and editable weights. TRAIN: sites within 50 km, period selection and validation. Outputs a heatmap, very-high-potential outlines and GeoJSON export; see the dedicated guide steps."
+                }
+            },
+            {
+                name: { ro: "Amprenta Vegetației", en: "Vegetation Fingerprint" },
+                desc: {
+                    ro: "Straturi Copernicus pentru România: PPI, maxim sezonier, înverzire și ofilire. Alege substratul și perioada pentru a compara tipare ale vegetației; acestea nu confirmă structuri îngropate.",
+                    en: "Copernicus layers for Romania: PPI, seasonal maximum, green-up and green-down. Choose a sublayer and period to compare vegetation patterns; these do not confirm buried structures."
+                }
+            },
+            {
+                name: { ro: "Alte hărți", en: "Other maps" },
+                desc: {
+                    ro: "În grupul Hărți istorice: punctele verzi deschid foi scanate pe care le poți adăuga, deplasa, roti și redimensiona manual.",
+                    en: "Inside Historical maps: green points open scanned sheets you can add, move, rotate and resize manually."
+                }
+            },
+            {
                 name: { ro: 'Biblioteca din Babel', en: 'Library of Babel' },
                 desc: {
-                    ro: 'Returnează informații istorice despre localități.',
-                    en: 'Returns historical information about localities.'
+                    ro: "Caută o localitate sau un sit în mai multe surse istorice și de patrimoniu. Consultă proveniența fiecărui rezultat și dezambiguizează localitățile cu același nume.",
+                    en: "Search for a locality or site across multiple historical and heritage sources. Check each result’s provenance and disambiguate places with the same name."
                 }
             },
             {
                 name: { ro: 'APM 2.0', en: 'APM 2.0' },
                 desc: {
-                    ro: 'Model de predicție arheologică bazat pe factori de mediu întâlniți în toate așezările antice încă de la începutul timpurilor. Spre deosebire de APM, folosește informații mult mai precise. Butonul „Ajutor de căutare” / „Search help” poligonizează automat zonele cu cel mai ridicat potențial.',
-                    en: 'Archaeological prediction model based on environmental factors found in every ancient settlement since the dawn of time. Unlike APM, it uses far more precise data. The “Search help” button automatically polygonises the areas with the highest potential.'
+                    ro: "Strat de potențial arheologic cu legendă proprie. „Ajutor de căutare” conturează zone cu scor ridicat. Este diferit de APM Next-Gen, care are modurile MANUAL și TRAIN.",
+                    en: "Archaeological potential layer with its own legend. Search help outlines high-scoring areas. It is distinct from APM Next-Gen, which provides MANUAL and TRAIN modes."
                 }
             },
             {
                 name: { ro: 'Imperiul roman', en: 'Roman Empire' },
                 desc: {
-                    ro: 'Conține toată rețeaua de drumuri imperiale de pe teritoriul României, cât și alte repere importante, precum vile romane, castre, cariere etc.',
-                    en: 'Contains the entire network of imperial roads on Romanian territory, as well as other important landmarks such as Roman villas, forts, quarries, etc.'
+                    ro: "Drumuri și repere romane disponibile în atlas: castre, vile și alte obiective. Verifică detaliile și sursa; traseele istorice sunt orientative, nu drumuri actuale garantate.",
+                    en: "Roman roads and landmarks available in the atlas, including forts, villas and other sites. Check details and sources; historical routes are indicative, not guaranteed present-day roads."
                 }
             },
             {
@@ -372,22 +627,22 @@
             {
                 name: { ro: 'Hărți istorice', en: 'Historical maps' },
                 desc: {
-                    ro: 'Conține hărți istorice atât cu acoperire zonală, cât și totală a României.',
-                    en: 'Contains historical maps with both regional and country-wide coverage of Romania.'
+                    ro: 'Hărți istorice regionale și naționale, în funcție de țara selectată și acoperirea sursei. Extinde grupul pentru foi și colecții; compară cu baza folosind opacitatea și alinierea manuală.',
+                    en: 'Regional and national historical maps, depending on the selected country and source coverage. Expand the group for sheets and collections; compare with the base using opacity and manual alignment.'
                 }
             },
             {
                 name: { ro: 'Imagini satelitare anii ’60', en: "Satellite imagery 60's" },
                 desc: {
-                    ro: 'Conține imagini aeriene din anii ’60 cu acoperire parțială a României.',
-                    en: 'Contains aerial imagery from the 1960s with partial coverage of Romania.'
+                    ro: "Imagini CORONA din anii ’60, unde există acoperire. Compară cu baza actuală prin opacitate; deplasarea poate fi corectată din „Mută harta istorică” în 2D.",
+                    en: "1960s CORONA imagery where coverage exists. Compare with the modern base using opacity; correct an offset with Move historical map in 2D."
                 }
             },
             {
                 name: { ro: 'LIDAR Scanner', en: 'LIDAR Scanner' },
                 desc: {
-                    ro: 'Scanează și categorizează anomalii satelitare (alege un punct pe hartă și o arie de căutare, apoi apasă pe butonul de scanare).',
-                    en: 'Scans and categorises satellite anomalies (pick a point on the map and a search area, then press the scan button).'
+                    ro: "Alege punctul și raza, apoi apasă Scanare pentru rezultatele și adnotările disponibile. Verifică fiecare indiciu în imaginile sursă: o anomalie nu este o descoperire confirmată.",
+                    en: "Pick the point and radius, then press Scan for available results and annotations. Check each lead against the source imagery: an anomaly is not a confirmed discovery."
                 }
             },
             {
@@ -410,12 +665,12 @@
     var PERF = {
         title: { ro: 'Sfaturi pentru performanță optimă', en: 'Tips for optimal performance' },
         body: {
-            ro: 'Straturi precum <b>LIDAR</b> sau <b>Imagini satelitare anii ’60</b> sunt servite de pe web ca servicii <b>WMS</b> și sunt niște straturi foarte dense și detaliate care, deservite simultan, pot bloca temporar aplicația.',
-            en: 'Layers such as <b>LIDAR</b> or <b>Satellite imagery 60\'s</b> are served from the web as <b>WMS</b> services and are very dense, highly detailed layers which, when served simultaneously, can temporarily freeze the app.'
+            ro: 'LiDAR, imaginile istorice și straturile naționale detaliate pot necesita multe descărcări. Activează doar sursele necesare, apropie-te de zona de interes și așteaptă încărcarea înainte de a schimba din nou vederea. În 3D, discul LiDAR de 1 km limitează zona pregătită; straturile întregi continuă să se încarce în timpul explorării.',
+            en: 'LiDAR, historical imagery and detailed national layers can require many downloads. Enable only the sources you need, zoom to your study area and let loading finish before changing the view again. In 3D, the 1 km LiDAR disc limits the prepared area; whole layers keep loading as you explore.'
         },
         tip: {
-            ro: 'Recomandăm ca aceste straturi să fie activate <b>pe rând</b>, pentru cea mai bună experiență posibilă.',
-            en: 'We recommend enabling these layers <b>one at a time</b>, for the best possible experience.'
+            ro: 'Compară straturile grele <b>pe rând</b>. Dacă încărcarea eșuează, verifică acoperirea, conexiunea și mesajul sursei; încearcă o zonă mai mică. APM Next-Gen și sursele externe au nevoie de internet. Redeschide oricând acest ghid cu <b>?</b>; folosește săgețile sau punctele pentru pași și derulează în interiorul cartonașelor.',
+            en: 'Compare heavy layers <b>one at a time</b>. If loading fails, check coverage, connectivity and the source message; try a smaller area. APM Next-Gen and external sources need internet. Reopen this guide anytime with <b>?</b>; use arrows or dots for steps and scroll inside cards.'
         }
     };
 
@@ -667,7 +922,7 @@
         }, 120);
     }
 
-    // ── Layers panel handling (slide 3) ──────────────────────────
+    // ── Layers panel handling ──────────────────────────
     function panelIsOpen() {
         var p = document.getElementById('transpPanel');
         return !!(p && p.classList.contains('open'));
@@ -960,7 +1215,10 @@
         btnNext.title = tr(UI.next);
         Array.prototype.forEach.call(dots.children, function (d, i) {
             d.classList.toggle('active', i === state.idx);
-            d.setAttribute('aria-label', String(i + 1));
+            d.title = tr(STEPS[i].title);
+            d.setAttribute('aria-label', (i + 1) + '/' + STEPS.length + ' · ' + d.title);
+            if (i === state.idx) d.setAttribute('aria-current', 'step');
+            else d.removeAttribute('aria-current');
         });
     }
 
@@ -1039,6 +1297,7 @@
         } else {
             resetScrim();
             if (step.type === 'catalog') paintCatalog(step);
+            else if (step.type === 'guide') paintGuide(step);
             else if (step.type === 'performance') paintPerformance(step);
         }
     }
@@ -1299,6 +1558,21 @@
         card.style.maxHeight = (vh() - top - 16) + 'px';
         card.addEventListener('click', function (e) { e.stopPropagation(); });
         return card;
+    }
+
+    // Text-only feature walkthroughs: scroll inside the card on touch and
+    // desktop, without swallowing navigation or activating the real tools.
+    function paintGuide(step) {
+        var card = cardShell();
+        var body = el('div', 'dl-tut-card-body', card);
+        body.tabIndex = 0;
+        body.setAttribute('role', 'region');
+        body.setAttribute('aria-label', tr(step.title));
+        step.sections.forEach(function (section) {
+            var row = el('div', 'dl-tut-layer', body);
+            el('span', 'dl-tut-layer-name', row).textContent = tr(section.title);
+            el('span', 'dl-tut-layer-desc', row).textContent = tr(section.desc);
+        });
     }
 
     function paintCatalog(step) {

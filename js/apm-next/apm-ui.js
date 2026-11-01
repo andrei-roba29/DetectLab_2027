@@ -1185,7 +1185,10 @@
         document.addEventListener('detectlab:langchange', onLanguageChange);
         renderSwitch();
         updateGate();
-        if (state.enabled && rowToggle) togglePanel(true);
+        // Restoring the saved layer switch is not a request to open its
+        // configuration window. Keep startup unobstructed (including PWA
+        // relaunches), with an explicit restore action in the window drawer.
+        if (state.enabled && rowToggle) minimizePanel();
     }
 
     root.DetectLabApmUi = {
