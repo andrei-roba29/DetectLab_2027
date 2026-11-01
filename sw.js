@@ -901,7 +901,9 @@
 // row is listed only while the view shows the southern half of Romania.
 // v357: keep map windows above floating controls, including the PWA stack.
 // v358: shared touch, mouse and keyboard resizing for application windows.
-const CACHE_NAME = 'detectlab-v358-window-resize';
+// v359: the layers window (#transpPanel) carries no resize grip any more — it
+// stays anchored top→bottom of the map frame and only the dialogs resize.
+const CACHE_NAME = 'detectlab-v359-layer-no-grip';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -946,8 +948,8 @@ const PRECACHE_URLS = [
   // v301: Next-Gen APM (MANUAL) — see the header note above.
   'css/next-gen-apm.css?v=20261101-panel-only-legend',
   'css/map-window-layers.css?v=20261101-window-stacking',
-  'css/window-resize.css?v=20261101-window-resize',
-  'js/window-resize.js?v=20261101-window-resize',
+  'css/window-resize.css?v=20261101-layer-no-grip',
+  'js/window-resize.js?v=20261101-layer-no-grip',
   'js/apm-next/apm-core.js?v=20261101-robust-train',
   'js/apm-next/apm-raster.js?v=20261101-robust-train',
   'js/apm-next/apm-heatmap.js?v=20261101-spatial-exclusions',

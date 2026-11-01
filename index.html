@@ -5255,7 +5255,7 @@
     <script src="js/map-app.js?v=20261101-ro-region-sheets"></script>
     <link rel="stylesheet" href="css/rvt-panel.css?v=20261101-robust-train">
     <link rel="stylesheet" href="css/map-window-layers.css?v=20261101-window-stacking">
-    <link rel="stylesheet" href="css/window-resize.css?v=20261101-window-resize">
+    <link rel="stylesheet" href="css/window-resize.css?v=20261101-layer-no-grip">
     <script src="js/lidar-photo-filter.js?v=20261101-lidar-geographic-mask" defer></script>
     <script src="js/map-window-dock.js?v=20261101-robust-train"></script>
     <script src="js/rvt-panel.js?v=20261101-settings-opacity" defer></script>
@@ -6090,8 +6090,6 @@
                     PWA_FIT_SELECTORS.forEach(function (sel) {
                         var el = document.querySelector(sel);
                         if (!el) return;
-                        // Keep the user's layer-window height during viewport updates.
-                        if (sel === '.transp-panel' && el.classList.contains('dl-window-resized')) return;
                         el.style.setProperty('height', h, 'important');
                         el.style.setProperty('min-height', '0', 'important');
                         el.style.setProperty('max-height', 'none', 'important');
@@ -6586,6 +6584,6 @@
     }
 </script>
 <script src="js/hybrid-tile-switch.js"></script>
-<script src="js/window-resize.js?v=20261101-window-resize" defer></script>
+<script src="js/window-resize.js?v=20261101-layer-no-grip" defer></script>
 </body>
 </html>
