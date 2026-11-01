@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261030-apm-pick-hidden';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261101-robust-train';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
@@ -32,7 +32,8 @@
         centre: null,               // { lat, lon } picked on the map
         picking: false,
         radiusKm: 5,
-        records: null,              // Ariadne points for the current TRAIN centre
+        records: null,              // provider records for the current TRAIN centre
+        restoredRobustIndices: [],
         sitesToken: null,
         sitesLoading: false,
         sitesRetrievedAt: null,
@@ -47,7 +48,7 @@
         trainSession: { worker: null, analysisKey: null, provenance: null, stats: null, waterClasses: [] }
     };
 
-    var map = null, layer = null, centreMarker = null, radiusCircle = null, legendControl = null, legendEl = null;
+    var map = null, layer = null, centreMarker = null, radiusCircle = null, legendControl = null, legendEl = null, downweightedLayer = null;
     var els = {}, ui = { panel: null, btn: null };
     var i18nBindings = [];          // [{ el, key, attr }] refreshed on language change
 
@@ -394,16 +395,21 @@
         var token = { cancelled: false };
         state.sitesToken = token;
         state.sitesLoading = true;
-        state.records = null; state.siteCount = null; state.periodChosen = false; state.period = null;
+        state.records = null; state.siteCount = null; state.periodChosen = false; state.period = null; state.restoredRobustIndices = [];
         loadPeriods();
         setStatus(T('train.loading'), 'busy');
         updateGate();
-        prov().createAriadneSiteProvider().getSites(state.centre, TRAIN_AREA_KM, { token: token }).then(function (records) {
+        root.DetectLabRomaniaApmSites.createProvider().getSites(state.centre, TRAIN_AREA_KM, { token: token }).then(function (records) {
             if (token.cancelled) return;
             state.records = records;
             state.sitesRetrievedAt = new Date().toISOString();
+            state.periodChosen = true; // TRAIN defaults to All periods; narrower periods are optional.
+            if (records._meta && records._meta.outsideRomania) {
+                state.records = [];
+                setStatus(T('train.outsideRomania'), 'error');
+            }
             loadPeriods();
-            setStatus(T('train.choosePeriod'), 'ok');
+            if (!(records._meta && records._meta.outsideRomania)) setStatus(T('train.choosePeriod'), 'ok');
         }).catch(function (err) {
             if (!token.cancelled) setStatus(T('train.loadError', { msg: errText(err) }), 'error');
         }).then(function () {
@@ -481,10 +487,10 @@
                 params = {
                     centre: state.centre,
                     records: state.records,
-                    siteSource: { id: 'ariadne', label: 'ARIADNE Portal — settlements',
-                        subjectFilters: sites().ARIADNE_SETTLEMENT_FILTERS, selectedPeriod: state.period || 'all',
-                        url: 'https://ariadne-portal.d4science.org/browse/where',
-                        retrievedAt: state.sitesRetrievedAt, positionAccuracy: 'not supplied; unverified positions included' },
+                    siteSource: { id: 'romania-repertory', label: 'Romanian National Archaeological Repertory',
+                        selectedPeriod: state.period || 'all', url: 'Supabase archaeological_sites_a RPC',
+                        retrievedAt: state.sitesRetrievedAt, positionAccuracy: 'COORD=DA exact-position records only' },
+                    backgroundAllowed: function (lat, lon) { return root.DetectLabRomaniaApmSites.insideRomania(lat, lon); },
                     period: state.period,
                     radiusKm: TRAIN_AREA_KM,
                     minSlopeDeg: parseFloat(els.minSlope.value),
@@ -549,7 +555,8 @@
     function clearResult() {
         var m = getMap();
         if (layer && m) m.removeLayer(layer);
-        layer = null;
+        if (downweightedLayer && m) m.removeLayer(downweightedLayer);
+        downweightedLayer = null; layer = null;
         state.result = null;
         els.results.hidden = true;
         els.exportBtn.disabled = true;
@@ -589,8 +596,28 @@
         applyOpacity();
         renderLegend();
         renderResult(res);
+        renderDownweightedSites(res);
         els.exportBtn.disabled = false;
         els.clearBtn.disabled = false;
+    }
+
+    function renderDownweightedSites(res) {
+        var m=getMap();if(downweightedLayer&&m)m.removeLayer(downweightedLayer);downweightedLayer=null;
+        var list=res&&res.mode==='train'&&res.diagnostics&&res.diagnostics.downweightedSites||[];
+        if(!m||!root.L||!list.length)return;
+        var markers=list.map(function(site){var marker=root.L.circleMarker([site.lat,site.lon],{radius:6,color:'#777',weight:2,fillColor:'#aaa',fillOpacity:.9});
+            var reason=(site.reason||[]).map(function(k){return T('robust.var.'+k);}).join(', ')||T('robust.unusual');
+            marker.bindTooltip(T('robust.tooltip',{reason:reason}));
+            var box=h('div',{class:'apm-robust-popup'},[h('div',{text:reason}),h('button',{type:'button',class:'apm-btn apm-small',text:T('robust.restoreOne')})]);
+            box.querySelector('button').addEventListener('click',function(){restoreRobust([site.sampleIndex]);});marker.bindPopup(box);return marker;});
+        downweightedLayer=root.L.layerGroup(markers).addTo(m);
+    }
+
+    function restoreRobust(indices) {
+        if(state.busy||!indices.length)return;
+        indices.forEach(function(i){if(i!=null&&state.restoredRobustIndices.indexOf(i)<0)state.restoredRobustIndices.push(i);});
+        state.busy=true;setBusyUi(true);setStatus(T('robust.restoring'),'busy');
+        pipe().rerunTrain(state.trainSession,state.restoredRobustIndices).then(function(res){state.result=res;drawResult(res);setStatus(T('robust.restored'),'ok');}).catch(function(err){setStatus(T('status.error',{msg:errText(err)}),'error');}).then(function(){state.busy=false;setBusyUi(false);});
     }
 
     function applyOpacity() {
@@ -683,10 +710,17 @@
             var weights = d.weights ? Object.keys(d.weights).map(function (k) { return k + ' ' + fmtNum(d.weights[k], 2); }).join(', ') : T('result.none');
             var excluded = (d.excluded && d.excluded.length)
                 ? d.excluded.map(function (e) { return e.variable + ' (' + e.reason + ')'; }).join('; ') : T('result.none');
+            var hardText=Object.keys(d.hardExcluded||{}).filter(function(k){return d.hardExcluded[k];}).map(function(k){return T('robust.hard.'+k)+': '+d.hardExcluded[k];}).join(', ')||'0';
             var rows = [
-                [T('result.sites'), String(d.sitesUsed)],
-                [T('result.auc'), fmtNum(d.cv && d.cv.auc, 2)],
-                [T('result.kvamme'), fmtNum(d.cv && d.cv.kvamme75, 2)],
+                [T('robust.sitesUsed'), String(d.sitesUsed)],
+                [T('robust.hardExcluded'), String(d.hardExcludedTotal || 0) + ' (' + hardText + ')'],
+                [T('robust.positionRadius'), T('robust.positionRadiusValue',{v:d.positionMedianRadiusM||60})],
+                [T('robust.downweighted'), String((d.downweightedSites||[]).length)],
+                [T('robust.aucRobust'), fmtNum(d.cvRobust && d.cvRobust.auc, 2)],
+                [T('robust.aucPlain'), fmtNum(d.cvPlain && d.cvPlain.auc, 2)],
+                [T('robust.kvammeRobust'), fmtNum(d.cvRobust && d.cvRobust.kvamme75, 2)],
+                [T('robust.kvammePlain'), fmtNum(d.cvPlain && d.cvPlain.kvamme75, 2)],
+                [T('robust.weightChange'), fmtNum(d.weightChange, 2)],
                 [T('result.confidence'), String(d.confidence || '—')],
                 [T('result.weights'), weights],
                 [T('result.excluded'), excluded]
@@ -698,6 +732,7 @@
                     h('span', { class: 'apm-row-value', text: r[1] })
                 ]));
             });
+            if(d.downweightedSites&&d.downweightedSites.length){var restoreAll=h('button',{type:'button',class:'apm-btn apm-small',text:T('robust.restoreAll'),onclick:function(){restoreRobust(d.downweightedSites.map(function(s){return s.sampleIndex;}));}});els.diag.appendChild(restoreAll);}
         }
         els.results.hidden = false;
     }
@@ -936,7 +971,6 @@
         els.periodHint = h('div', { class: 'apm-note apm-period-hint', role: 'status' });
         els.countNote = h('div', { class: 'apm-note', role: 'status' });
         els.trainBox = h('div', { class: 'apm-train' }, [
-            h('a', { href: 'https://ariadne-portal.d4science.org/browse/where?forceReload=true&mapq=true&q=', target: '_blank', rel: 'noopener noreferrer', text: 'ARIADNE — Browse / Where' }),
             h('div', { class: 'apm-note', key: 'train.sourceNote' }),
             els.loadSites, els.sitesCount, els.periodRow, els.periodHint, els.countNote,
             h('div', { class: 'apm-note', key: 'train.area' })

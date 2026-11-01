@@ -715,7 +715,8 @@
         return '[out:json][timeout:' + (timeoutS || 60) + '];(' +
             'way["waterway"~"^(river|stream|brook|riverbank|canal|drain|ditch)$"](' + b + ');' +
             'way["natural"="water"](' + b + ');' +
-            'relation["natural"="water"]["type"="multipolygon"](' + b + ');' +
+            'way["natural"="sea"](' + b + ');' +
+            'relation["natural"~"^(water|sea)$"]["type"="multipolygon"](' + b + ');' +
             ');out geom;';
     }
 
@@ -727,7 +728,7 @@
                 var coords = el.geometry.map(function (p) { return [p.lon, p.lat]; });
                 var tags = el.tags || {};
                 var closed = coords.length > 3 && coords[0][0] === coords[coords.length - 1][0] && coords[0][1] === coords[coords.length - 1][1];
-                if (tags.natural === 'water' && closed) { polygons.push({ cls: 'large', rings: [coords] }); return; }
+                if ((tags.natural === 'water' || tags.natural === 'sea') && closed) { polygons.push({ cls: 'large', name: tags.name || null, type: tags.natural, water: tags.water || null, rings: [coords] }); return; }
                 var wt = tags.waterway;
                 var cls = OSM_CLASS[wt];
                 if (cls) lines.push({ cls: cls, coords: coords, name: tags.name || null });
@@ -736,7 +737,7 @@
                 el.members.forEach(function (m) {
                     if (m.type === 'way' && m.role === 'outer' && m.geometry) rings.push(m.geometry.map(function (p) { return [p.lon, p.lat]; }));
                 });
-                if (rings.length) polygons.push({ cls: 'large', rings: rings });
+                if (rings.length) { var rt=el.tags||{};polygons.push({ cls: 'large', name: rt.name||null, type: rt.natural||null, water: rt.water||null, rings: rings }); }
             }
         });
         return { lines: lines, polygons: polygons };
@@ -783,66 +784,6 @@
                 return Promise.resolve(records.filter(function (s) {
                     return core.haversineM(centre.lat, centre.lon, s.lat, s.lon) <= r;
                 }));
-            }
-        };
-    }
-
-    /** Uses the Browse / Where bbox contract, but pages only subject-filtered settlement hits.
-     * Parent inhabited-place and small-community settlement queries are unioned, never broadened to all sites.
-     * `mapq` is intentionally absent: that mode returns heatmap aggregations above 500 hits.
-     * Contract: github.com/ARIADNE-Infrastructure/portal server/classes/Elastic/{Query,QuerySettings}.php
-     */
-    function createAriadneSiteProvider() {
-        return {
-            id: 'ariadne', label: 'ARIADNE Portal — settlements',
-            source: 'https://ariadne-portal.d4science.org/browse/where', available: true,
-            getSites: function (centre, radiusKm, options) {
-                options = options || {};
-                var bbox = core.circleBBox(centre.lat, centre.lon, radiusKm * 1000);
-                var records = [], seen = Object.create(null), emitted = Object.create(null), page = 1, count = 0, queryIndex = 0;
-                function check() {
-                    if (options.token && options.token.cancelled) throw new Error('cancelled');
-                }
-                function next() {
-                    check();
-                    var url = new URL('https://ariadne-portal.d4science.org/api/search');
-                    // Portal order: top-left latitude, longitude, bottom-right latitude, longitude.
-                    url.search = new URLSearchParams({ q: '', bbox: [bbox.north, bbox.west, bbox.south, bbox.east].join(','),
-                        resourceType: 'Site/monument', derivedSubject: sites.ARIADNE_SETTLEMENT_FILTERS[queryIndex], size: '50', page: String(page), sort: 'issued', order: 'asc' }).toString();
-                    var controller = new AbortController();
-                    var timer = setTimeout(function () { controller.abort(); }, 20000);
-                    return fetchImpl(url.href, { signal: controller.signal }).then(function (r) {
-                        if (!r.ok) throw new Error('ARIADNE HTTP ' + r.status);
-                        return r.json();
-                    }).finally(function () { clearTimeout(timer); }).then(function (data) {
-                        check();
-                        if (!data || data.error || !Array.isArray(data.hits)) throw new Error('ARIADNE: invalid search response');
-                        var total = typeof data.total === 'object' && data.total ? data.total.value : data.total;
-                        if (!Number.isFinite(total) || total < 0) throw new Error('ARIADNE: missing result count');
-                        // Never silently train on the first page or a truncated result window.
-                        if (total > 10000 || (data.total && data.total.relation === 'gte')) throw new Error('ARIADNE: too many sites in this area (maximum 10,000).');
-                        var fresh = data.hits.filter(function (hit) {
-                            if (!hit || !hit.id || seen[hit.id]) return false;
-                            seen[hit.id] = true; return true;
-                        });
-                        if (!fresh.length && count < total) throw new Error('ARIADNE: incomplete search results');
-                        count += fresh.length;
-                        records = records.concat(sites.parseAriadneHits(fresh.filter(function (hit) {
-                            if (emitted[hit.id]) return false;
-                            emitted[hit.id] = true; return true;
-                        })));
-                        if (options.onProgress) options.onProgress(count, total);
-                        if (count < total) {
-                            if (page >= 200) throw new Error('ARIADNE: incomplete search results');
-                            page++; return next();
-                        }
-                        if (++queryIndex < sites.ARIADNE_SETTLEMENT_FILTERS.length) {
-                            page = 1; count = 0; seen = Object.create(null); return next();
-                        }
-                        return records.filter(function (r) { return core.haversineM(centre.lat, centre.lon, r.lat, r.lon) <= radiusKm * 1000; });
-                    });
-                }
-                return Promise.resolve().then(next);
             }
         };
     }
@@ -921,7 +862,6 @@
         createEuHydroProvider: createEuHydroProvider,
         createOverpassWaterProvider: createOverpassWaterProvider,
         createCsvSiteProvider: createCsvSiteProvider,
-        createAriadneSiteProvider: createAriadneSiteProvider,
         demChain: demChain,
         waterChain: waterChain
     };

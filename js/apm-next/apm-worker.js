@@ -43,6 +43,18 @@ importScripts(
     }
 
     /** TRAIN tile: values at points that fall in this tile's grid. Output rows: elev,slope,aspect,curv,valid, then water per class. */
+    function medianValue(values) { values.sort(function(a,b){return a-b;}); var h=values.length>>1;return values.length%2?values[h]:(values[h-1]+values[h])/2; }
+
+    function neighborhoodMedian(array, cell, w, h, dx, dy, radius, valid, angular) {
+        var i0=cell%w,j0=Math.floor(cell/w),rx=Math.max(1,Math.ceil(radius/dx)),ry=Math.max(1,Math.ceil(radius/dy)),vals=[];
+        for(var y=Math.max(0,j0-ry);y<=Math.min(h-1,j0+ry);y++)for(var x=Math.max(0,i0-rx);x<=Math.min(w-1,i0+rx);x++){
+            var xx=(x-i0)*dx,yy=(y-j0)*dy;if(xx*xx+yy*yy>radius*radius)continue;var k=y*w+x;if(valid[k]&&isFinite(array[k]))vals.push(array[k]);
+        }
+        if(!vals.length)return NaN;
+        if(angular){var anchor=vals[0],unwrapped=vals.map(function(v){return anchor+(((v-anchor+540)%360)-180);});return ((medianValue(unwrapped)%360)+360)%360;}
+        return medianValue(vals);
+    }
+
     function handleSampleTile(m) {
         var grid = { w: m.w, h: m.h, west: m.tile.west, north: m.tile.north, dLon: m.tile.dLon, dLat: m.tile.dLat };
         var t = R.terrain(m.elev, m.w, m.h, m.dxM, m.dyM, { smooth: m.smooth, nodata: m.nodata });
@@ -59,10 +71,13 @@ importScripts(
             if (cell < 0) { out[o + 4] = 0; inside[p] = 0; }
             else {
                 inside[p] = 1;
-                out[o] = m.elev[cell];
-                out[o + 1] = t.slope[cell];
-                out[o + 2] = t.aspect[cell];
-                out[o + 3] = t.curv[cell];
+                var dx=m.dxM,dy=m.dyM,radius=Math.max(m.positionRadiusM||0,dx,dy);
+                if(m.siteMask&&m.siteMask[p]){
+                    out[o]=neighborhoodMedian(m.elev,cell,m.w,m.h,dx,dy,radius,t.valid,false);
+                    out[o+1]=neighborhoodMedian(t.slope,cell,m.w,m.h,dx,dy,radius,t.valid,false);
+                    out[o+2]=neighborhoodMedian(t.aspect,cell,m.w,m.h,dx,dy,radius,t.valid,true);
+                    out[o+3]=neighborhoodMedian(t.curv,cell,m.w,m.h,dx,dy,radius,t.valid,false);
+                }else{out[o]=m.elev[cell];out[o+1]=t.slope[cell];out[o+2]=t.aspect[cell];out[o+3]=t.curv[cell];}
                 out[o + 4] = t.valid[cell];
             }
             classes.forEach(function (c) {
@@ -171,7 +186,7 @@ importScripts(
     }
 
     function handleTrain(m) {
-        var res = core.trainModelFromSamples(m.S, { waterClasses: m.waterClasses, minSlopeDeg: m.minSlopeDeg, folds: m.folds });
+        var res = core.trainModelFromSamples(m.S, { waterClasses: m.waterClasses, minSlopeDeg: m.minSlopeDeg, folds: m.folds, robustConfig: m.robustConfig });
         reply(m.id, { result: res });
     }
 
