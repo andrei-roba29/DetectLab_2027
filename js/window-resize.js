@@ -5,16 +5,17 @@
     // Target the visible window, not its backdrop or map-sized positioning host.
     // The layers window (.transp-panel / #transpPanel) is deliberately absent:
     // it is anchored top→bottom of the map frame and gets no resize grip.
+    // Login/register, account management, Friends and Events also stay grip-free.
     var selector = [
         '#iosBldSettingsPanel', '#iosfreeModalInner',
         '.country-dock-panel', '.hist-shift-panel', '.om-panel',
         '.offline-map-panel', '.offline-library', '.apm-panel', '#rvt-body',
         '#map3d-focus .m3d-focus-card', '.om-modal-card', '.layer-info-box',
-        '.ios-modal-card', '.babel-dialog', '.premium-box', '.auth-box',
-        '.terms-box', '.nearby-dialog', '.pwa-account-wrapper',
-        '#weatherPanel', '#accountPanel', '.site-alert-box', '.pwa-help-card', '.dl-tut-card',
-        '#friendsManagerPanel', '.fr-chat-panel', '.fr-modal-box',
-        '#eventsManagerPanel', '#eventChatModal > div',
+        '.ios-modal-card', '.babel-dialog', '.premium-box',
+        '.terms-box', '.nearby-dialog',
+        '#weatherPanel', '.site-alert-box', '.pwa-help-card', '.dl-tut-card',
+        '.fr-chat-panel', '.fr-modal-box',
+        '#eventChatModal > div',
         '#createEventModal > div', '#inquiryModal > div',
         '#manageEventModal > div', '#eventNotifModal > div'
     ].join(',');
@@ -84,13 +85,7 @@
     window.addEventListener('blur', function () { active = null; });
 
     function attach(panel) {
-        // In PWA mode accountPanel is moved inside the account window; it
-        // should not acquire a second, nested grip while it is there.
         var existing = panel.querySelector(':scope > .dl-window-resize-handle');
-        if (panel.id === 'accountPanel' && panel.closest('.pwa-account-wrapper')) {
-            if (existing) existing.remove();
-            return;
-        }
         // A panel can be re-rendered with innerHTML; restore its grip if needed.
         if (existing) return;
         var handle = document.createElement('div');

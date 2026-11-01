@@ -9,7 +9,7 @@ const script = fs.readFileSync('js/window-resize.js', 'utf8');
 const css = fs.readFileSync('css/window-resize.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 const sw = fs.readFileSync('sw.js', 'utf8');
-for (const asset of ['css/window-resize.css?v=20261101-layer-no-grip', 'js/window-resize.js?v=20261101-layer-no-grip']) {
+for (const asset of ['css/window-resize.css?v=20261101-account-social-no-grip', 'js/window-resize.js?v=20261101-account-social-no-grip']) {
     assert(html.includes(asset) && sw.includes(asset), 'new asset is loaded and precached');
 }
 assert(!/'\\.transp-panel'/.test(script), 'the layers window is never given a resize grip');
@@ -21,6 +21,8 @@ assert(/overflow-y:\s*auto\s*!important/.test(css), 'content remains scrollable'
         <div class="map-frame"><div class="transp-panel"><button>Layer control</button></div>
         <div id="rvt-body"><button>Settings</button></div></div>
         <div id="authModal" style="display:flex;align-items:center;flex-direction:row"><div class="auth-box"><input id="email"></div></div>
+        <div style="display:flex;align-items:center"><div class="premium-box"></div></div>
+        <div id="friendsManagerPanel"></div><div id="eventsManagerPanel"></div>
         <div class="pwa-account-wrapper"><div id="accountPanel"><button>Account</button></div></div>
         </body></html>`, { runScripts: 'outside-only', pretendToBeVisual: true });
     const { window } = dom;
@@ -32,13 +34,20 @@ assert(/overflow-y:\s*auto\s*!important/.test(css), 'content remains scrollable'
     };
     const layer = window.document.querySelector('.transp-panel');
     const rvt = window.document.querySelector('#rvt-body');
-    const auth = window.document.querySelector('.auth-box');
+    const auth = window.document.querySelector('.premium-box');
+    const gripFree = '.auth-box, #accountPanel, .pwa-account-wrapper, #friendsManagerPanel, #eventsManagerPanel';
+    function assertGripFree() {
+        window.document.querySelectorAll(gripFree).forEach(panel => {
+            assert(!panel.querySelector('.dl-window-resize-handle'), panel.className || panel.id);
+        });
+    }
     [layer, rvt, auth].forEach(mockHeight);
     window.eval(script);
     window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
     assert(!layer.querySelector('.dl-window-resize-handle'), 'the layers window carries no drag handle');
     assert(!layer.classList.contains('dl-window-resized'), 'the layers window is left un-resized');
     const handle = rvt.querySelector('.dl-window-resize-handle');
+    assertGripFree();
     assert(handle && auth.querySelector('.dl-window-resize-handle'));
     assert.equal(handle.getAttribute('role'), 'separator');
     assert.equal(handle.getAttribute('aria-orientation'), 'horizontal');
@@ -76,6 +85,17 @@ assert(/overflow-y:\s*auto\s*!important/.test(css), 'content remains scrollable'
     await new Promise(resolve => window.setTimeout(resolve, 0));
     assert.equal(rvt.querySelectorAll('.dl-window-resize-handle').length, 1, 'grip returns after rerender');
     assert.equal(created.querySelectorAll('.dl-window-resize-handle').length, 1, 'dynamically added windows get a grip');
+    window.document.body.appendChild(window.document.querySelector('#accountPanel'));
+    window.document.querySelectorAll(gripFree).forEach(panel => {
+        panel.innerHTML = '<button>Updated content</button>';
+    });
+    const desktopAccount = window.document.querySelector('#accountPanel');
+    if (desktopAccount) window.document.body.appendChild(desktopAccount);
+    const friends = window.document.createElement('div');
+    friends.id = 'friendsManagerPanel';
+    window.document.body.appendChild(friends);
+    await new Promise(resolve => window.setTimeout(resolve, 0));
+    assertGripFree();
     dom.window.close();
     console.log('Window resize: pointer, keyboard, limits, dynamic windows, PWA wiring and a grip-free layers window OK.');
 })().catch(err => { console.error(err); process.exitCode = 1; });

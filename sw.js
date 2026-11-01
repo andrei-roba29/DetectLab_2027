@@ -960,8 +960,8 @@ const PRECACHE_URLS = [
   // v301: Next-Gen APM (MANUAL) — see the header note above.
   'css/next-gen-apm.css?v=20261101-dock-lower-1mm',
   'css/map-window-layers.css?v=20261101-window-stacking',
-  'css/window-resize.css?v=20261101-layer-no-grip',
-  'js/window-resize.js?v=20261101-layer-no-grip',
+  'css/window-resize.css?v=20261101-account-social-no-grip',
+  'js/window-resize.js?v=20261101-account-social-no-grip',
   'js/apm-next/apm-core.js?v=20261101-robust-train',
   'js/apm-next/apm-raster.js?v=20261101-robust-train',
   'js/apm-next/apm-heatmap.js?v=20261101-train-source',
@@ -1110,7 +1110,7 @@ const PRECACHE_URLS = [
   'js/rvt-panel.js?v=20261030-area-first',
   'js/map-window-dock.js?v=20261101-robust-train',
   'js/rvt-panel.js?v=20261101-settings-opacity',
-  'js/rvt-panel.js?v=20261101-lidar-settings-reset',
+  'js/rvt-panel.js?v=20261101-desktop-3d-hint',
   'css/rvt-panel.css?v=20261101-robust-train',
   'js/map-app.js?v=20261030-lidar-touch-fix',
   'css/rvt-panel.css?v=1',
@@ -1150,7 +1150,7 @@ const PRECACHE_URLS = [
   'js/map3d-terrain.js?v=20261030-lidar-photo-3d',
   'js/map3d-terrain.js?v=20261030-3d-analysis-dock',
   'js/map3d-terrain.js?v=20261031-3d-bearing-handoff',
-  'js/map3d-terrain.js?v=20261101-lidar-settings-reset',
+  'js/map3d-terrain.js?v=20261101-desktop-3d-hint',
   'js/map-app.js?v=20261026-lidar-whole-or-disc',
   'js/lidar-3d-focus.js?v=20261026-lidar-whole-or-disc',
   'js/map3d-terrain.js?v=20261024-gesture-only-camera',
@@ -1914,7 +1914,7 @@ const PRECACHE_URLS = [
   'js/lidar-photo-filter.js?v=20261101-lidar-service-levels',
   'js/lidar-photo-filter.js?v=20261101-lidar-geographic-mask',
   'js/lidar-photo-filter.js?v=20261101-lidar-deep-zoom',
-  'js/lidar-photo-filter.js?v=20261101-lidar-settings-reset'
+  'js/lidar-photo-filter.js?v=20261101-desktop-3d-hint'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──
