@@ -1781,15 +1781,9 @@ const PRECACHE_URLS = [
   'css/styles.css?v=20261008-roman-dare-icons',
   // v184: the ArcGIS-basemap working map, restored country gate (lazy ArcGIS
   // SceneView + canvas fallback) and country dock, in the documented load
-  // order (gate → dock → map-app).
-  // v249: the gate header/✕/zoom stack now clear the phone's status bar and
-  // home indicator (env(safe-area-inset-*), see GLOBE_GATE_SAFE_AREA.md).
-  'css/globe-country-picker.css?v=20261021-gate-safe-area',
-  /* Older tag stays listed: an installed PWA still running an older
-   * index.html keeps working offline through its own URL. */
-  'css/globe-country-picker.css?v=20261013-no-change-pill',
-  'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
-  'js/globe-country-picker.js?v=20261015-outline-zoom-anchor',
+  // order (gate → dock → map-app). The globe gate and country dock are retired
+  // (Romania-only lock, js/romania-lock.js); only the current tag is listed.
+  'js/romania-lock.js?v=20261101-romania-only',
   // v221: a TURNED map used to clip vector geometry away. L.Renderer derives the
   // box of every <svg> from the padded viewport corners through
   // containerPointToLayerPoint, which map-rotate.js un-rotates — so Leaflet
@@ -1800,21 +1794,9 @@ const PRECACHE_URLS = [
   // the tile grid's compensation. The gate outline also re-captures its zoom
   // anchor only when Leaflet really recomputed the renderer bounds.
   'js/map-rotate.js?v=20261016-rotated-vector-clip',
-  'js/globe-country-picker.js?v=20261017-outline-zoom-settle',
-  'js/globe-country-picker.js?v=20261014-country-exit-3d',
-  'js/globe-country-picker.js?v=20261013-no-change-pill',
   'js/wms-health.js?v=20261014-provider-guard',
   'js/wms-health.js?v=20261014-guard-watch',
   'js/wms-health.js?v=20261013-wms-guard',
-  // v167: country dock glued under the search bar (country switcher +
-  // World-hillshade checkbox) and the “Exit view” button of the locked
-  // country view. The hillshade tiles themselves stay network-only.
-  'css/country-dock.css?v=20261021-country-exit-3d-stack',
-  'js/country-dock.js?v=20261021-country-exit-3d-stack',
-  'css/country-dock.css?v=20261008',
-  'js/country-dock.js?v=20261008',
-  'js/country-dock.js?v=20261009-3d-globe',
-  'js/country-dock.js?v=20261013-country-2d',
   'js/map-app.js?v=20261011-arcgis-basemap',
   'js/map-app.js?v=20261014-search-exit-3d',
   'js/map-app.js?v=20261013-fr-lidar',
