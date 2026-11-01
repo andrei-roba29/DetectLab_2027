@@ -267,9 +267,11 @@ body.is-pwa .apm-panel {
 @media (max-width: 768px), (pointer: coarse) {
     .apm-dock { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
 }
-/* The PWA map can extend below the measured viewport: lift the entire
-   drawer (collapsed arrow AND expanded list) out of that bleed as well. */
+/* PWA: the drawer's bottom edge sits on the same line as the "© Leafleet"
+   tag (.leaflet-container::after, index.html: bottom 4px + --pwa-bleed), so
+   the arrow is not floating above it with an extra gap. The map and the tag
+   share the same bottom edge, so the two values are directly comparable. */
 body.is-pwa .apm-dock {
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px) + var(--pwa-bleed, 0px));
+    bottom: calc(4px + var(--pwa-bleed, 0px));
 }
 .apm-dock-list { overscroll-behavior: contain; touch-action: pan-x; -webkit-overflow-scrolling: touch; }
