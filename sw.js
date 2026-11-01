@@ -915,7 +915,10 @@
 // no longer appears at random on country views, and its red coverage rectangle
 // is the real sheet footprint (js/map-app.js). The notice names
 // the Supabase-hosted map data by its real scope, not as "Finnish" (js/wms-health.js).
-const CACHE_NAME = 'detectlab-v364-google-popup';
+// v365: expanded bilingual desktop/PWA tutorial: 3D, LiDAR, APM Next-Gen,
+// historical-map alignment and current layer/slider workflows.
+// v366: restore the saved APM Next-Gen switch without reopening its window.
+const CACHE_NAME = 'detectlab-v366-apm-start-minimized';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -971,7 +974,7 @@ const PRECACHE_URLS = [
   'js/apm-next/apm-providers.js?v=20261101-train-source',
   'js/apm-next/apm-romania-sites.js?v=20261101-train-source',
   'js/apm-next/apm-pipeline.js?v=20261101-train-source',
-  'js/apm-next/apm-ui.js?v=20261101-train-source',
+  'js/apm-next/apm-ui.js?v=20261101-apm-start-minimized',
   'js/apm-next/apm-i18n.js?v=20261101-train-source',
   'js/apm-next/apm-worker.js?v=20261101-train-source',
   'js/apm-next/apm-worker.js',
@@ -1040,7 +1043,7 @@ const PRECACHE_URLS = [
   // v283: Google-Earth-style two-finger twist deadband + pinch arbitration
   // (a two-finger zoom can no longer turn the map).
   'js/map-rotate.js?v=20261026-touch-rotate-deadband',
-  'js/tutorial.js?v=20261029-live-location-guide',
+  'js/tutorial.js?v=20261101-expanded-guide',
   'js/layer-panel-rows.js?v=20261025-layer-glass',
   'js/layer-panel-rows.js?v=20261101-walachia-sheet',
   'css/styles.css?v=20261028-historical-tile-fallback',

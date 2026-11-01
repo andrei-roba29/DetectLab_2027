@@ -205,3 +205,18 @@ The defaults are in one object, `DetectLabApmCore.robustTrainConfig` (`js/apm-ne
 ## Romania TRAIN correction (2026-11-01)
 
 See [implementation and deployment gates](ROMANIA_APM_TRAIN_IMPLEMENTATION.md) and [verification report](TRAIN_CORRECTION_REPORT.md). The manual SQL was applied to production with user approval as migration `20261101163027_apm_romania_train_correction`; frontend deployment still requires the PR/static-host release. Historical test numbers elsewhere in this document are not evidence for this correction.
+
+## Startup window behaviour (2026-11-01)
+
+The stored `detectlab_apm_next` on/off preference no longer opens the
+configuration window on startup. On web and installed-PWA launches, an enabled
+feature starts minimized in the shared window drawer; restoring it is an
+explicit user action. Switching the layer on deliberately still opens the
+panel, and minimizing it does not switch APM off. Standalone embeddings without
+the layer row continue to use their launcher.
+
+Regression: `node test-apm-startup.js` (saved on/off, drawer restore, explicit
+switches, repeated initialization, blocked storage, optional drawer/launcher
+and matching versioned assets). The UI asset is
+`20261101-apm-start-minimized`; the shell cache is
+`detectlab-v366-apm-start-minimized`.
