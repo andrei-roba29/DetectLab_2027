@@ -161,4 +161,28 @@ const selectors = (html.match(/var PWA_FIT_SELECTORS = \[([\s\S]*?)\];/) || ['',
 });
 console.log('✓ the fit applies the measured px height to the whole shell chain');
 
+/* 9. A focused text field freezes the fit: the keyboard must not re-size the
+      shell while it is animating, or the OS closes the keyboard again. */
+const typingSource = (html.match(/function isTypingTarget\(\)[\s\S]*?\n                \}/) || [''])[0];
+assert(typingSource, 'index.html must define isTypingTarget()');
+const buildTypingGuard = new Function('document', typingSource + '\nreturn isTypingTarget;');
+const typingWith = (activeElement) => buildTypingGuard({ activeElement })();
+assert.strictEqual(typingWith({ nodeType: 1, tagName: 'INPUT', getAttribute: () => 'email' }), true,
+    'a focused e-mail field must count as typing');
+assert.strictEqual(typingWith({ nodeType: 1, tagName: 'INPUT', getAttribute: () => null }), true,
+    'an <input> without a type attribute is a text field');
+assert.strictEqual(typingWith({ nodeType: 1, tagName: 'INPUT', getAttribute: () => 'range' }), false,
+    'a slider must not block the fit');
+assert.strictEqual(typingWith({ nodeType: 1, tagName: 'TEXTAREA', getAttribute: () => null }), true);
+assert.strictEqual(typingWith({ nodeType: 1, tagName: 'BUTTON', getAttribute: () => null }), false);
+assert.strictEqual(typingWith(null), false);
+const updater = (html.match(/function updatePwaMapLayout\(\)[\s\S]*?\n                \}/) || [''])[0];
+assert(/if \(isTypingTarget\(\)\) return;/.test(updater),
+    'updatePwaMapLayout() must bail out while a text field is focused');
+assert(updater.indexOf('isTypingTarget()') < updater.indexOf('fitPwaViewport()'),
+    'the typing guard must run before the shell is re-measured');
+assert(/addEventListener\('focusout'/.test(html),
+    'leaving the field must schedule one more fit');
+console.log('✓ the shell is never re-sized while the on-screen keyboard is up');
+
 console.log('\nOK — one pixel measurement drives the PWA shell; no strip can survive it.');

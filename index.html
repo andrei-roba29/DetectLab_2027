@@ -111,6 +111,20 @@
             font-size: 16px !important;
         }
 
+        /* A tap on a text field must never be cancelled by a gesture rule and
+           the field itself must stay selectable: on iOS a non-selectable or
+           touch-action-restricted field can take focus without ever raising the
+           on-screen keyboard (the map container sets user-select:none, and the
+           search box lives inside it). */
+        body.is-pwa input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]),
+        body.is-pwa textarea,
+        body.is-pwa select {
+            -webkit-user-select: text !important;
+            user-select: text !important;
+            touch-action: manipulation !important;
+            -ms-touch-action: manipulation !important;
+        }
+
         /* Weather/account overlays remain vertically scrollable in PWA mode. */
         body.is-pwa #weatherPanel,
         body.is-pwa .pwa-account-overlay,
@@ -5362,13 +5376,6 @@
                 <button class="auth-tab" id="authTabRegister" onclick="switchAuthTab('register')">Register</button>
             </div>
             <div id="authMsg" class="auth-msg" role="status" aria-live="polite"></div>
-            <div id="googlePopupHelp" hidden>
-                <p>If the Google window cannot return to the app, copy its one-time code and paste it here. Do not share it.</p>
-                <label for="googlePopupCode">One-time sign-in code</label>
-                <input id="googlePopupCode" class="auth-input" autocomplete="off" spellcheck="false">
-                <button type="button" onclick="finishGooglePopupCode()">Complete sign-in</button>
-                <button type="button" onclick="cancelGooglePopup()">Cancel Google sign-in</button>
-            </div>
 
             <!-- LOGIN FORM -->
             <div id="loginForm" class="auth-form">
@@ -5660,8 +5667,8 @@
           </div>
     </div>
 
-    <script src="js/pwa-google-auth.js?v=20261101-google-popup"></script>
-    <script src="js/auth.js?v=20261101-google-popup"></script>
+    <script src="js/pwa-google-auth.js?v=20261101-google-origin"></script>
+    <script src="js/auth.js?v=20261101-google-origin"></script>
     <script src="js/newsletter.js?v=20260916-newsletter"></script>
 
 
@@ -6029,8 +6036,31 @@
                     leafletMap.invalidateSize({ debounceMoveend: true });
                 }
 
+                // ── Never re-size the shell under a finger that is typing ──
+                // Opening the on-screen keyboard makes visualViewport (and,
+                // with resizes-content, the layout viewport) shorter, which
+                // fires the same resize events as a rotation. Rewriting the
+                // !important pixel heights of #map-section and the percentage
+                // chain in that moment moves the focused field while the
+                // keyboard animates, so the OS closes the keyboard again and
+                // the field looks dead. While a text field has focus the
+                // shell keeps the height it already has; the fit runs once the
+                // field is left and the keyboard is gone.
+                function isTypingTarget() {
+                    var el = document.activeElement;
+                    if (!el || el.nodeType !== 1) return false;
+                    var tag = el.tagName;
+                    if (tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable) return true;
+                    if (tag !== 'INPUT') return false;
+                    var type = (el.getAttribute('type') || 'text').toLowerCase();
+                    return ['text', 'email', 'password', 'search', 'tel', 'url', 'number',
+                        'date', 'datetime-local', 'month', 'time', 'week'].indexOf(type) !== -1;
+                }
+
                 function updatePwaMapLayout() {
                     var leafletMap = window._dlMap || window.map;
+                    // The keyboard is up: measure again only after it is down.
+                    if (isTypingTarget()) return;
                     // Skip viewport sync while zoom is animating or pinching.
                     if (leafletMap && (leafletMap._animatingZoom || (leafletMap.touchZoom && leafletMap.touchZoom._zooming))) {
                         setTimeout(updatePwaMapLayout, 300);
@@ -6059,6 +6089,11 @@
                 }
                 window.addEventListener('load', updatePwaMapLayout);
                 window.addEventListener('pageshow', updatePwaMapLayout);
+                // Once the field is left the keyboard has closed (or is closing),
+                // so the shell can be measured and fitted again.
+                document.addEventListener('focusout', function() {
+                    setTimeout(updatePwaMapLayout, 250);
+                }, true);
 
                 // ── Re-fit after the OS settles the standalone viewport ──
                 // iOS finalises the screen height only AFTER the first paint
