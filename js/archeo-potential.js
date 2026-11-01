@@ -464,7 +464,7 @@
 
     // Collect every site inside the search circle, projected into local meters.
     // Returns { sites: [{x,y,lat,lng,layerId,oid}], polygons: [{rings(local), bboxLocal}] }
-    function collectSitesInRadius(centerLat, centerLng, radiusM, lat0) {
+    function collectSitesInRadius(centerLat, centerLng, radiusM, lat0, preserveSites) {
         var cache = buildGlobalSiteIndex(window._localLayerData || {});
         var c = projectToLocalMeters(centerLat, centerLng, lat0);
         var DEG_R = radiusM / 111320; // latitude radius for coarse culling
@@ -488,7 +488,7 @@
                 var key = (Math.round(pm.x / CONFIG.SITE_DEDUPE_M) + dx) + '|' + (Math.round(pm.y / CONFIG.SITE_DEDUPE_M) + dy);
                 if (seen[key]) { merged = true; break; }
             }
-            if (merged) continue;
+            if (merged && !preserveSites) continue;
             seen[cell] = true;
             sites.push({ x: pm.x, y: pm.y, lat: p.lat, lng: p.lng, layerId: p.layerId, oid: p.oid, props: p.props });
         }
@@ -541,7 +541,7 @@
                 if (gd <= radiusM) {
                     // dedupe guard points too (dense polygons would flood the list)
                     var gkey = Math.round(guards[g].x / CONFIG.SITE_DEDUPE_M) + '|' + Math.round(guards[g].y / CONFIG.SITE_DEDUPE_M);
-                    if (!seen[gkey]) {
+                    if (!seen[gkey] || preserveSites) {
                         seen[gkey] = true;
                         var ll = localMetersToLatLng(guards[g].x, guards[g].y, lat0);
                         sites.push({ x: guards[g].x, y: guards[g].y, lat: ll.lat, lng: ll.lng, layerId: poly.layerId, oid: poly.oid, props: poly.props, isGuard: true });
@@ -1327,6 +1327,75 @@
             if (ddx * ddx + ddy * ddy < minDist2) return 'heritage';
         }
         return null;
+    }
+
+    /** Shared prediction exclusions for Next-Gen APM. Independent of layer visibility,
+     * scoring, triangulation and selected training period. 1 = forbidden cell.
+     * Fail closed on unavailable UAT data: an unverified cell is never a result. */
+    async function computeExclusionMask(grid, centerLat, centerLng, radiusM, opts) {
+        opts = opts || {};
+        function checkCancelled() {
+            if (opts.isCancelled && opts.isCancelled()) {
+                var error = new Error('Cancelled'); error.code = 'cancelled'; throw error;
+            }
+        }
+        // Start the app's shared lazy download without enabling heritage on the map.
+        if (typeof window._loadLocalLayerData === 'function') {
+            window._loadLocalLayerData().catch(function () { /* readiness/timeout checked below */ });
+        }
+        var waited = 0;
+        while (!CONFIG.SITE_LAYERS.every(function (id) {
+            var fc = (window._localLayerData || {})[id];
+            return fc && Array.isArray(fc.features);
+        })) {
+            checkCancelled();
+            if (waited >= CONFIG.SITES_DATA_TIMEOUT_MS) throw new Error('Heritage exclusion data is unavailable. Please try again.');
+            await new Promise(function (resolve) { setTimeout(resolve, CONFIG.SITES_DATA_POLL_MS); });
+            waited += CONFIG.SITES_DATA_POLL_MS;
+        }
+        if (window._detectlabApiFailed) throw new Error('Heritage exclusion data could not be loaded. Please reload and try again.');
+        checkCancelled();
+        var dx = grid.dLon * 111320 * Math.cos(centerLat * Math.PI / 180);
+        var dy = grid.dLat * 111320;
+        var halfDiagonal = Math.hypot(dx, dy) / 2;
+        // Include sites just beyond the search circle whose buffers reach into it.
+        var clearance = CONFIG.SITE_RADIUS_M + CONFIG.SITE_BUFFER_M + halfDiagonal;
+        var ctx = collectSitesInRadius(centerLat, centerLng, radiusM + clearance, centerLat, true);
+        ctx.center = projectToLocalMeters(centerLat, centerLng, centerLat);
+        ctx.radius = radiusM;
+        ctx.siteRadius = CONFIG.SITE_RADIUS_M;
+        ctx.siteBuffer = CONFIG.SITE_BUFFER_M + halfDiagonal;
+        ctx.siteIndex = createGridIndex(1200, 1200);
+        ctx.sites.forEach(function (site) { ctx.siteIndex.insert(site.x, site.y, site); });
+        var latR = radiusM / 111320, lngR = radiusM / Math.max(1, 111320 * Math.cos(centerLat * Math.PI / 180));
+        await prewarmUatTiles({ minLat: centerLat - latR, maxLat: centerLat + latR,
+            minLng: centerLng - lngR, maxLng: centerLng + lngR });
+        checkCancelled();
+        var mask = new Uint8Array(grid.w * grid.h);
+        var stats = { heritage: 0, uat: 0, unknown: 0, outside: 0 };
+        for (var row = 0; row < grid.h; row++) {
+            for (var col = 0; col < grid.w; col++) {
+                var i = row * grid.w + col;
+                var lat = grid.north - (row + 0.5) * grid.dLat;
+                var lng = grid.west + (col + 0.5) * grid.dLon;
+                var cell = projectToLocalMeters(lat, lng, centerLat);
+                var reason = exclusionReason(cell, ctx);
+                if (!reason) {
+                    var sample = uatCellRedFraction(lat, lng, Math.max(dx, dy));
+                    // Every sampled part of a prediction cell must be verified free land.
+                    // This is conservative at built-up boundaries, unlike averaging scores.
+                    if (sample.known < sample.samples) reason = 'unknown';
+                    else if (sample.red < 1) reason = 'uat';
+                }
+                if (reason) { mask[i] = 1; stats[reason]++; }
+            }
+            if (row % 16 === 0) {
+                checkCancelled();
+                await new Promise(function (resolve) { setTimeout(resolve, 0); });
+            }
+        }
+        checkCancelled();
+        return { mask: mask, stats: stats };
     }
 
     /**
@@ -4117,6 +4186,7 @@
     window.computeArcheoPotential = computeCandidates;
     // Dense score field (both display modes of this layer).
     window.computeArcheoPotentialField = computePotentialField;
+    window.computeArcheoExclusionMask = computeExclusionMask;
     window._archeoPotentialResults = function () { return _currentResults; };
     window._archeoPotentialField = function () { return _currentField; };
     // Bulele desenate (selecția rară) + suprafața de heatmap a ultimei rulări.

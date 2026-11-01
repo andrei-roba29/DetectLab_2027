@@ -146,11 +146,6 @@
     grid-column: 2; width: 100%; padding: 4px 6px; border-radius: 6px;
     border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(18, 24, 32, 0.9); color: inherit;
 }
-.apm-legend {
-    background: rgba(18, 24, 32, 0.88); color: #f2f4f7; padding: 8px 10px; border-radius: 10px;
-    font: 12px/1.4 'Outfit', system-ui, sans-serif; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-}
-.apm-legend-title { font-weight: 600; margin-bottom: 4px; }
 .apm-legend-row { display: flex; align-items: center; gap: 8px; margin: 2px 0; }
 .apm-row-diag { grid-template-columns: 1fr auto; }
 .apm-diag h4 { margin: 10px 0 4px; font-size: 12px; }
@@ -167,11 +162,6 @@
 .apm-strahler { display: grid; gap: 4px; margin-top: 8px; }
 .apm-strahler-input { width: 100%; box-sizing: border-box; font-size: 12px; padding: 3px 6px; }
 .apm-drain { margin-bottom: 8px; }
-/* Phone layout: the map legend (bottom-right) would sit under the panel (bottom-left, 340 px wide).
-   While the panel is open on a narrow screen the map legend is hidden; the panel shows the same classes. */
-@media (max-width: 600px) {
-    body.apm-panel-open .apm-map-legend { display: none; }
-}
 /* Phase 3 layout fix: number inputs must not overflow narrow (phone) panels. */
 .apm-field input { max-width: 100%; box-sizing: border-box; min-width: 0; }
 
@@ -187,7 +177,6 @@
 .apm-heat-labels { display: flex; justify-content: space-between; gap: 16px; font-size: 11px; opacity: .9; }
 .apm-hotspot-swatch { width: 18px; height: 12px; box-sizing: border-box; border: 2px solid #d9f5ff; border-radius: 4px; background: transparent; flex-shrink: 0; }
 .apm-result-scale { margin-bottom: 6px; }
-.apm-map-legend { max-width: 270px; }
 
 /* Configuration and minimized windows live within the map frame, including fullscreen/PWA.
    Matches the dimensions, placement and responsive clearance of the LiDAR in 3D window (#map3d-focus). */

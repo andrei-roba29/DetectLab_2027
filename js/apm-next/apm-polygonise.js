@@ -79,13 +79,38 @@
             for (var h = 1; h < polyRings.length; h++) {
                 var hole = polyRings[h].map(function (q) { return [grid.west + q[0] * grid.dLon, grid.north - q[1] * grid.dLat]; });
                 hole = chaikinRing(hole, smoothIters);
-                if (raster.ringAreaM2(hole) >= minArea) holes.push(hole);
+                if (opts.preserveHoles || raster.ringAreaM2(hole) >= minArea) holes.push(hole);
             }
             var area = outerArea;
             holes.forEach(function (hr) { area -= raster.ringAreaM2(hr); });
             out.push({ rings: [outer].concat(holes), areaM2: Math.max(0, area) });
         }
         return out;
+    }
+
+    /** Exact cell-edge rectangles, merged vertically where runs match.
+     * Subtracting them (rather than smoothing a nodata contour) preserves even
+     * tiny protection holes in displayed and exported hotspot polygons. */
+    function exclusionRectangles(mask, w, h) {
+        var rectangles = [], previous = Object.create(null);
+        for (var y = 0; y < h; y++) {
+            var current = Object.create(null);
+            for (var x = 0; x < w;) {
+                if (!mask[y * w + x]) { x++; continue; }
+                var start = x;
+                while (x < w && mask[y * w + x]) x++;
+                var key = start + ':' + x;
+                var ring = previous[key];
+                if (ring) { ring[2][1] = y + 1; ring[3][1] = y + 1; }
+                else {
+                    ring = [[start, y], [x, y], [x, y + 1], [start, y + 1], [start, y]];
+                    rectangles.push([ring]);
+                }
+                current[key] = ring;
+            }
+            previous = current;
+        }
+        return rectangles;
     }
 
     /**
@@ -107,6 +132,12 @@
         var regions = opts.highestOnly
             ? { veryhigh: regionAtThreshold(values, w, h, thr.veryhigh) }
             : classRegions(values, w, h, thr);
+        if (opts.exclusionMask) {
+            var forbidden = exclusionRectangles(opts.exclusionMask, w, h);
+            Object.keys(regions).forEach(function (key) { regions[key] = diff(regions[key], forbidden); });
+            // Corner cutting can shrink a protected hole back into forbidden land.
+            opts = Object.assign({}, opts, { smoothIters: 0, preserveHoles: true });
+        }
         var features = [];
         core.CLASSES.slice().reverse().filter(function (cls) { return !opts.highestOnly || cls.id === 'veryhigh'; }).forEach(function (cls) {        // veryhigh first, draw order later
             var polys = toGeoPolygons(regions[cls.id], grid, opts);

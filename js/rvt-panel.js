@@ -500,10 +500,13 @@
     function enableRow(row) {
         const toggle = row.querySelector('input[type="checkbox"]');
         if (toggle && !toggle.checked) toggle.click();
-        // Fallback for rows supplied without a visibility switch.
-        const range = row.querySelector('input[id$="OpacitySlider"]');
-        if (!toggle && range && Number(range.value) === 0) {
-            range.value = 70; range.dispatchEvent(new Event('input', {bubbles:true}));
+        // Settings always start with the selected source layer fully visible.
+        // Use the regular input handler to sync the map, readout and saved state,
+        // including dynamically generated Albanian and Danish opacity controls.
+        const range = row.querySelector('input[type="range"]');
+        if (range) {
+            range.value = range.max || '100';
+            range.dispatchEvent(new Event('input', {bubbles:true}));
         }
     }
     function attachButtons() {

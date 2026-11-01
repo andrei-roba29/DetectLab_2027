@@ -12,10 +12,10 @@
     var deps = typeof module === 'object' && module.exports
         ? { core: require('./apm-core.js'), raster: require('./apm-raster.js'), sites: require('./apm-sites.js'), prov: require('./apm-providers.js') }
         : { core: root.DetectLabApmCore, raster: root.DetectLabApmRaster, sites: root.DetectLabApmSites, prov: root.DetectLabApmProviders };
-    var api = factory(deps.core, deps.raster, deps.sites, deps.prov);
+    var api = factory(deps.core, deps.raster, deps.sites, deps.prov, root);
     if (typeof module === 'object' && module.exports) module.exports = api;
     else root.DetectLabApmPipeline = api;
-})(typeof self !== 'undefined' ? self : this, function (core, raster, sites, prov) {
+})(typeof self !== 'undefined' ? self : this, function (core, raster, sites, prov, root) {
     'use strict';
 
     var BUFFER_M = 3000;          // context beyond the search circle (water decay band, Horn edges)
@@ -26,6 +26,27 @@
 
     function cancelledError() { var e = new Error('Cancelled'); e.code = CANCELLED; return e; }
     function isCancelled(e) { return e && e.code === CANCELLED; }
+
+    /** Both prediction modes must pass through the same protection mask. */
+    function setPredictionAnalysis(session, analysis, params, warnings) {
+        checkToken(params.token);
+        if (typeof root.computeArcheoExclusionMask !== 'function') {
+            return Promise.reject(new Error('Spatial exclusion service is unavailable. Please reload and try again.'));
+        }
+        return root.computeArcheoExclusionMask(analysis.grid, analysis.circle.lat, analysis.circle.lon,
+            analysis.circle.radiusM, { isCancelled: function () { return !!(params.token && params.token.cancelled); } })
+            .then(function (result) {
+                checkToken(params.token);
+                if (!result || !result.mask || result.mask.length !== analysis.grid.w * analysis.grid.h) {
+                    throw new Error('Invalid spatial exclusion mask');
+                }
+                analysis.exclusionMask = result.mask;
+                session.exclusionStats = result.stats;
+                if (result.stats.unknown) warnings.push(core.msg('warn.exclusionUnknown', { n: result.stats.unknown },
+                    'Cells with unavailable UAT exclusion data were left unscored.'));
+                return session.worker.call('setAnalysis', analysis);
+            });
+    }
 
     /* ── Worker client ─────────────────────────────────────────────────────── */
     /**
@@ -258,12 +279,12 @@
                             if (session.worker) session.worker.terminate();
                             session.worker = createWorkerClient(params.workerUrl);
                             session.analysisKey = null;
-                            return session.worker.call('setAnalysis', {
+                            return setPredictionAnalysis(session, {
                                 grid: grid, elev: elev, smooth: !!params.smoothDem, nodata: undefined,
                                 circle: { lat: params.centre.lat, lon: params.centre.lon, radiusM: radiusM },
                                 waterMasks: masks, altRef: null, soilRef: null
-                            }).then(function (res) {
-                                session.analysisKey = key;
+                            }, params, warnings).then(function (res) {
+                                session.analysisKey = session.exclusionStats.unknown ? null : key;
                                 session.provenance = provenanceFor(dem, grid, wr.water, wr.provider, pick.decision);
                                 session.stats = res.stats;
                                 session.waterClasses = Object.keys(masks);
@@ -557,12 +578,12 @@
             var wgrid = raster.gridForBBox(wb, dem.nominalResM);
             return prov.loadDemGrid(dem, wgrid, dem.tilePx || 1000).then(function (elev) {
                 var masks = rasteriseWater(water.water, wgrid);
-                return session.worker.call('setAnalysis', {
+                return setPredictionAnalysis(session, {
                     grid: wgrid, elev: elev, smooth: !!params.smoothDem, nodata: undefined,
                     circle: { lat: centre.lat, lon: centre.lon, radiusM: radiusM },
                     waterMasks: masks,
                     altRef: t.built.altRef, soilRef: t.built.soilRef
-                }).then(function (res) {
+                }, params, warnings).then(function (res) {
                     session.analysisKey = null;
                     session.provenance = provenanceFor(dem, wgrid, water.water, water.provider, demDecision);
                     if (params.siteSource) session.provenance.sites = params.siteSource;
@@ -665,6 +686,7 @@
         trainSiteStatus: trainSiteStatus,
         runManual: runManual,
         runTrain: runTrain,
+        rerunTrain: rerunTrain,
         pickDemProvider: pickDemProvider,
         fetchWaterChain: fetchWaterChain,
         waterOptions: waterOptions

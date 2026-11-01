@@ -847,7 +847,7 @@ test('worker harness: setAnalysis → score (MANUAL) and train → score (TRAIN)
     ctx.postMessage = (m) => posted.push(m);
     ctx.importScripts = (...files) => {
         files.forEach((f) => {
-            const file = path.join(ROOT, 'js/apm-next', f);
+            const file = path.join(ROOT, 'js/apm-next', f.split('?')[0]);
             vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
         });
     };
@@ -1000,6 +1000,63 @@ test('APM sets and clears the shared picking flag around a pick (source check)',
     assert.ok(/root\.dlApmPicking = true;/.test(src), 'flag set in startPick');
     assert.ok(/root\.dlApmPicking = false;/.test(src), 'flag cleared in stopPick');
     assert.ok(/setTimeout\(function \(\) \{ if \(!state\.picking\) root\.dlApmPicking = false; \}, 0\)/.test(src), 'flag clears after the click finishes');
+});
+
+test('APM off removes the selected point and radius; re-enabling restores them without duplicates', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'js', 'apm-next', 'apm-ui.js'), 'utf8');
+    const visible = new Set();
+    const calls = [];
+    const map = { removeLayer(layer) { visible.delete(layer); } };
+    const makeLayer = (ll, options) => ({ ll, options, addTo() { visible.add(this); return this; } });
+    const ctx = {
+        state: { enabled: true, mode: 'manual', centre: { lat: 46.77, lon: 23.59 }, radiusKm: 5 },
+        root: { L: { circleMarker: makeLayer, circle: makeLayer }, localStorage: { setItem() {} } },
+        ui: {}, SWITCH_KEY: 'apm', TRAIN_AREA_KM: 50,
+        centreMarker: null, radiusCircle: null, getMap: () => map,
+        stopPick() { calls.push('stopPick'); }, cancelRun() { calls.push('cancelRun'); },
+        cancelSiteLoad() { calls.push('cancelSiteLoad'); }, clearResult() { calls.push('clearResult'); },
+        renderSwitch() {}, updateGate() {}, loadAriadneSites() { calls.push('loadSites'); }
+    };
+    vm.createContext(ctx);
+    for (const name of ['setEnabled', 'drawCentre', 'clearCentre']) {
+        const start = src.indexOf('    function ' + name + '(');
+        const end = src.indexOf('\n    function ', start + 1);
+        vm.runInContext(src.slice(start, end), ctx);
+    }
+    ctx.drawCentre();
+    assert.strictEqual(visible.size, 2, 'selected point and radius are visible');
+    assert.strictEqual(ctx.radiusCircle.options.radius, 5000);
+    const selected = ctx.state.centre;
+    ctx.setEnabled(false);
+    assert.strictEqual(visible.size, 0, 'turning off removes both overlays');
+    assert.strictEqual(ctx.centreMarker, null);
+    assert.strictEqual(ctx.radiusCircle, null);
+    assert.deepStrictEqual(calls, ['stopPick', 'cancelRun', 'cancelSiteLoad', 'clearResult']);
+    ctx.drawCentre();
+    assert.strictEqual(visible.size, 0, 'control changes cannot redraw overlays while disabled');
+    ctx.setEnabled(false);
+    assert.strictEqual(visible.size, 0, 'repeated disable is safe');
+    ctx.setEnabled(true);
+    assert.strictEqual(ctx.state.centre, selected, 'selection is retained for reuse');
+    assert.strictEqual(visible.size, 2, 're-enabling restores overlays');
+    ctx.setEnabled(true);
+    assert.strictEqual(visible.size, 2, 'repeated enable does not duplicate overlays');
+    ctx.setEnabled(false);
+    ctx.state.mode = 'train';
+    ctx.setEnabled(true);
+    assert.strictEqual(ctx.radiusCircle.options.radius, 50000, 'training radius is restored correctly');
+    assert.ok(calls.includes('loadSites'), 'training data loading still runs');
+    ctx.setEnabled(false);
+    assert.strictEqual(visible.size, 0, 'training overlays are also removed');
+});
+
+test('APM legend is rendered only inside the results window, never as a map control', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'js', 'apm-next', 'apm-ui.js'), 'utf8');
+    assert.ok(!src.includes('apm-map-legend'), 'no standalone map legend');
+    assert.ok(!src.includes('legendControl'), 'no Leaflet legend control');
+    assert.ok(src.includes('appendHeatLegend(els.heatLegend, res)'), 'result renderer keeps the panel legend');
+    assert.ok(src.includes("els.heatLegend = h('div', { class: 'apm-result-scale' })"), 'panel scale exists');
+    assert.ok(/els.results = h\([\s\S]*?els.heatLegend/.test(src), 'legend belongs to the results section');
 });
 
 /* ── Terrarium only (outside Europe): an info note, not a warning ───────── */
