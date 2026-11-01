@@ -10,13 +10,18 @@ storage. Hiding page controls cannot fix that.
 
 For standalone, fullscreen or minimal-ui launches, Google sign-in now opens a
 separate window synchronously from the button click. On installed iOS, the PKCE
-URL is prepared in memory when the login modal opens, then opened **directly**
-from the user's tap. This avoids first creating an `about:blank` auxiliary PWA
-window that can inherit the broken iOS in-app keyboard. If preparation has not
-finished yet, the user is asked to tap again; no blank popup is opened. This is
-an attempt to let WebKit hand the external OAuth URL to Safari, not a guarantee
-of which browser iOS chooses. On Android the original blank-window flow stays
-unchanged. Supabase's PKCE flow is
+URL is prepared in memory when the login modal opens. The URL is then used in
+a **top-level, out-of-scope navigation** from the user's tap: iOS kept even a
+direct `window.open(url, '_blank')` inside an auxiliary PWA window with no
+usable keyboard. If preparation has not finished yet, the user is asked to tap
+again; no blank popup is opened. This is an attempt to let WebKit hand the
+external OAuth URL to Safari, **not a way to force Safari**: a web app cannot
+choose which browser context iOS opens. On Android the original blank-window
+flow stays unchanged. If iOS navigates the PWA itself rather than opening
+Safari, the in-memory PKCE verifier will be lost on return. Even when Safari
+opens, its storage may be isolated from the installed PWA; this flow is not
+verified as a reliable sign-in until a real iPhone confirms both keyboard AND
+session handoff. Supabase's PKCE flow is
 started by a temporary client in the original app; its verifier stays in memory
 there. The Google window may legitimately show browser controls; the original
 app is never navigated away.

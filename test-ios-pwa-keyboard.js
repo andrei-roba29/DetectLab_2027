@@ -71,7 +71,7 @@ for (const file of ['ios-input-focus', 'friends', 'library-of-babel', 'subscript
     const url = `js/${file}.js?v=20261101-ios-flow-keyboard`;
     assert(html.includes(url) && sw.includes(url), `${url} must be loaded and precached`);
 }
-assert(sw.includes('detectlab-v375-ios-safari-oauth'));
+assert(sw.includes('detectlab-v376-ios-top-level-oauth'));
 // The provisional keyboard opens automatically for EVERY editable field, with
 // no extra toggle and no second reservation below the OS-provided area.
 {

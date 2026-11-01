@@ -214,8 +214,11 @@
             return;
         }
         var nonce = Array.prototype.map.call(bytes, function (b) { return b.toString(16).padStart(2, '0'); }).join('');
-        // iOS: open the actual cross-origin URL directly in the tap so WebKit
-        // can hand it to Safari instead of an about:blank in-app popup.
+        // iOS: leave the standalone PWA via a top-level cross-origin
+        // navigation. Even window.open(realURL) was kept in an in-app popup
+        // on some iPhones, where Google's text fields have no keyboard.
+        // WebKit decides whether an out-of-scope navigation opens Safari; no
+        // web API can force Safari or promise the PWA session survives.
         // If PKCE is still preparing, never open a blank window: ask for a
         // second tap once ready (the preparation starts when auth opens).
         var direct = null;
@@ -228,10 +231,12 @@
             }
             prepared = null;
         }
-        // Must happen synchronously in the user's click, before any await.
-        var popup;
-        try { popup = window.open(direct ? direct.url : 'about:blank', '_blank'); } catch (_) { popup = null; }
-        if (!popup) {
+        // Android retains its existing auxiliary window; iOS never creates a
+        // popup. Its top-level navigation happens after the attempt listeners
+        // and nonce are recorded, still synchronously inside the user's tap.
+        var popup = null;
+        if (!direct) try { popup = window.open('about:blank', '_blank'); } catch (_) {}
+        if (!direct && !popup) {
             message('The sign-in window was blocked. Allow pop-ups and try again, or use email and password.');
             return;
         }
@@ -243,8 +248,9 @@
         recordAttempt(a);
         a.listener = function (event) {
             var data = event.data;
-            if (attempt !== a || event.origin !== window.location.origin || event.source !== popup ||
-                !data || data.type !== 'detectlab-google-callback') return;
+            if (!popup || attempt !== a || event.origin !== window.location.origin ||
+                event.source !== popup || !data ||
+                data.type !== 'detectlab-google-callback') return;
             if (data.nonce && data.nonce !== nonce) return;
             try { popup.postMessage({ type: 'detectlab-google-ack', nonce: nonce }, window.location.origin); } catch (_) {}
             if (data.error) {
@@ -272,8 +278,16 @@
         a.timer = setTimeout(function () {
             if (attempt === a && !a.busy) { stop(a, true); message('Google sign-in expired. Please try again.'); }
         }, lifetime);
-        message('Continue in the Google window, then return to the installed app.', 'success');
-        if (direct) return; // Safari was opened directly from the user's tap
+        message(direct ? 'Opening Google sign-in. iOS may switch to Safari; return to DetectLab afterwards.' :
+            'Continue in the Google window, then return to the installed app.', 'success');
+        if (direct) {
+            try { window.location.assign(direct.url); }
+            catch (_) {
+                stop(a, false);
+                message('Could not leave the app for Google sign-in. Please try Safari directly or use email and password.');
+            }
+            return;
+        }
         try {
             a.client = window.createGooglePopupClient();
             var callback = window.location.origin + CALLBACK_PATH;
