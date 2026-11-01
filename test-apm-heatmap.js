@@ -36,6 +36,14 @@ test('display raster is bounded and preserves geographic extent; masking affects
     assert.equal(partial.rgba[3], 90);
     assert.deepEqual([...partial.rgba.slice(0, 3)], heat.colourAt(new Float32Array([.9])[0], heat.stops(thresholds)));
 });
+test('downsampled heat pixels retain allowed cells beside excluded cells', () => {
+    const g = grid(2, 2);
+    const scores = new Float32Array([.8, .9, .6, .7]);
+    const exclusions = new Uint8Array([1, 0, 1, 0]);
+    const raster = heat.buildRaster(scores, g, thresholds, 1, exclusions);
+    assert.ok(raster.rgba[3] > 0, 'excluded source cells must not blank an aggregate display pixel');
+    assert.deepEqual([...raster.rgba.slice(0, 3)], heat.colourAt(.8, heat.stops(thresholds)));
+});
 test('geographic lookup uses north-first pixel centres; no-data interpolation does not darken the heat', () => {
     const raster = { ...grid(2, 2), rgba: new Uint8Array([255, 0, 0, 180, 0, 0, 0, 0, 0, 0, 255, 180, 0, 255, 0, 180]) };
     let pixel = new Uint8Array(4);
