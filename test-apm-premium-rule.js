@@ -1,0 +1,16 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+const src=fs.readFileSync('js/subscriptions.js','utf8');
+const from=src.indexOf('    function isPremium() {');
+const to=src.indexOf('    // Shared read-only entitlement',from);
+let user=null;
+const context={Date,currentUser:()=>user,localStorageRecord:()=>({plan:'premium',premiumExpiresAt:new Date(Date.now()+86400000).toISOString()})};
+vm.createContext(context);vm.runInContext(src.slice(from,to),context);
+assert.equal(context.isPremium(),false,'logged out');
+user={id:'u',plan:'free'};assert.equal(context.isPremium(),false,'local cache cannot upgrade free profile');
+user={id:'u',plan:'premium',premiumExpiresAt:new Date(Date.now()-86400000).toISOString()};assert.equal(context.isPremium(),false,'expired');
+user={id:'u',plan:'premium',premiumExpiresAt:'invalid'};assert.equal(context.isPremium(),false,'invalid expiry');
+user={id:'u',plan:'premium',premiumExpiresAt:new Date(Date.now()+86400000).toISOString()};assert.equal(context.isPremium(),true,'active premium');
+console.log('PASS real shared premium predicate: logged out/free/expired/invalid denied, active allowed, browser cache cannot upgrade profile. Server equivalent exercised by local RPC test.');

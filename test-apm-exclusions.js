@@ -205,12 +205,12 @@ function workerHarness() {
     console.log('  ok  tiny holes survive area filtering, smoothing, heat downsampling and interpolation');
     const html = read('index.html'), sw = read('sw.js');
     for (const file of ['apm-heatmap', 'apm-i18n', 'apm-pipeline', 'apm-ui']) {
-        const tag = 'js/apm-next/' + file + '.js?v=20261101-spatial-exclusions';
+        const tag = 'js/apm-next/' + file + '.js?v=20261101-train-source';
         assert.ok(html.includes(tag) && sw.includes(tag), file + ' is versioned and precached');
     }
-    assert.ok(sw.includes('js/apm-next/apm-polygonise.js?v=20261101-spatial-exclusions'));
-    assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=20261101-spatial-exclusions'));
-    assert.ok(html.includes('js/archeo-potential.js?v=20261101-spatial-exclusions'));
+    assert.ok(sw.includes('js/apm-next/apm-polygonise.js?v=20261101-train-source'));
+    assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=20261101-train-source'));
+    assert.ok(html.includes('js/archeo-potential.js?v=20261101-train-source'));
     console.log('  ok  updated prediction, mask, worker and display assets are wired into the PWA cache');
     console.log('\nAll APM spatial-exclusion checks passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

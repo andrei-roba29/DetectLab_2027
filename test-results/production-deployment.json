@@ -1,0 +1,36 @@
+{
+  "date": "2026-11-01",
+  "project_ref": "dacboefvooxgsngxkavx",
+  "migration": {
+    "name": "apm_romania_train_correction",
+    "version": "20261101163027",
+    "status": "applied"
+  },
+  "verification": {
+    "method": "Production SQL role and transaction-local JWT-claim simulation using existing profile categories; no profile or site rows modified",
+    "anonymous_denied": true,
+    "free_denied": true,
+    "premium_succeeded": true,
+    "center": "Cluj 50 km",
+    "returned": 749,
+    "truncated": false,
+    "elapsed_ms": 263.158,
+    "total_in_area": 1396,
+    "excluded_approximate": 330,
+    "excluded_geometry": 317,
+    "only_six_approved_row_fields": true,
+    "all_returned_coord_flags_DA": true,
+    "profile_protected_browser_write_grants": 0,
+    "newsletter_authenticated_update_permitted": true,
+    "service_role_entitlement_write_permitted": true,
+    "site_table_rows_after_migration": 51614,
+    "obsolete_period_count_function_removed": true,
+    "health": {"auth": "healthy", "db": "healthy", "rest": "healthy"}
+  },
+  "limits": [
+    "One-centre SQL execution measurement is not an endpoint latency or broad performance benchmark",
+    "No real signed-token HTTP/browser login test was performed",
+    "No live payment, promo redemption or newsletter mutation was performed",
+    "Frontend changes require PR merge and a successful static-host deployment; frontend production deployment is not verified"
+  ]
+}

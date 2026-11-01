@@ -1,0 +1,13 @@
+[
+  {"object_id":1,"layer_id":0,"attributes":{"COORD":"DA","NUMESIT":"Așezare romană de la Roman","CODSIT":"100.01","SIRUTA":"100"},"lat":46,"lon":25},
+  {"object_id":2,"layer_id":0,"attributes":{"COORD":"DA","NUMESIT":"Asezare romana de la Roman","CODSIT":"100.02","SIRUTA":"100"},"lat":46.00001,"lon":25},
+  {"object_id":3,"layer_id":0,"attributes":{"COORD":"DA","NUMESIT":"Așezare romană de la Roman","CODSIT":"100.03","SIRUTA":"100"},"lat":46.01,"lon":25},
+  {"object_id":4,"layer_id":0,"attributes":{"COORD":"DA","NUMESIT":"Situl arheologic de la Roman","CODSIT":"100.04"},"lat":46.02,"lon":25},
+  {"object_id":5,"layer_id":0,"attributes":{"COORD":"NU","NUMESIT":"Așezare neolitică de la X"},"lat":46.03,"lon":25},
+  {"object_id":6,"layer_id":5,"attributes":{"COORD":"","NUMESIT":"Așezare eneolitică de la Y"},"lat":46.04,"lon":25},
+  {"object_id":7,"layer_id":5,"attributes":{"NUMESIT":"Așezare medievală de la Z"},"lat":46.05,"lon":25},
+  {"object_id":8,"layer_id":0,"attributes":{"COORD":"DA","NUMESIT":"Necropola romană de la X"},"lat":46.06,"lon":25},
+  {"object_id":9,"layer_id":0,"attributes":{"COORD":"DA","NUMESIT":"Așezare dacică de la X"},"lat":46,"lon":25},
+  {"object_id":10,"layer_id":6,"attributes":{"NUMESIT":"Polygon without point"},"wkt":"POLYGON((24.9 45.9,25.1 45.9,25.1 46.1,24.9 45.9))"},
+  {"object_id":11,"layer_id":0,"attributes":{"COORD":"DA","NUMESIT":"Distant site"},"lat":48,"lon":25}
+]

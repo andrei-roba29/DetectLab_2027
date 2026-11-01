@@ -1,7 +1,7 @@
 /* DetectLab — "Biblioteca din Babel" multi-source archaeological search agent.
  *
  * The old single-source dossier search was retired; this module now queries
- * 9 open knowledge sources DIRECTLY from the browser, in parallel, aggregates
+ * 8 open knowledge sources DIRECTLY from the browser, in parallel, aggregates
  * and de-duplicates the findings and renders them with per-source provenance:
  *
  *   1. Wikipedia (ro + en)   — articles about localities and sites
@@ -12,9 +12,7 @@
  *   6. Archive.org           — digitised old documents and collections
  *   7. Europeana             — museum objects and cultural collections
  *                              (free API key required, stored locally)
- *   8. ARIADNE portal        — the European archaeological catalogue
- *                              (d4science; CORS-open JSON API)
- *   9. CIMEC / RAN           — fișe de sit arheologic din Repertoriul
+ *   8. CIMEC / RAN           — fișe de sit arheologic din Repertoriul
  *                              Arheologic Național (via ArcGIS REST JSONP)
  *
  * Contract (see AGENT spec): a source that fails never blocks the others,
@@ -30,17 +28,6 @@
  * ("Miljan Miljanić" for "Miluani"), and (c) list the RAN archaeological
  * sites AROUND the locality spatially, sorted by distance.
  *
- * ARIADNE portal (2026-10): the portal's own search box has a well-known
- * asymmetry — its type-ahead appends a wildcard ("Moldovene" → the record of
- * Stejeriș, com. Moldovenești), but the results page matches WHOLE, NOT
- * diacritics-folded tokens, so the complete name typed WITHOUT diacritics
- * ("Moldovenesti") returns "No resources found" while the accented spelling
- * ("Moldovenești") works. The adapter below never sends a single literal
- * query: it sends the gazetteer-corrected spelling, a wildcard stem cut in
- * front of the last diacritic (or, for diacritics-free input, the last three
- * characters removed) and the user's own spelling, then merges the answers
- * by resource id and keeps only wildcard hits that actually mention the
- * locality. See ARIADNE_* helpers further down.
  */
 (function () {
     'use strict';
@@ -56,15 +43,7 @@
     /* "sites around the locality": CIMEC/RAN spatial search radius (m). */
     var CIMEC_NEARBY_RADIUS_M = 10000;
     var CIMEC_MAX_RESULTS = 30;
-    /* ARIADNE portal: the index is not diacritics-folded and matches whole
-     * tokens, so every search fans out over (at most) ARIADNE_MAX_QUERIES
-     * repaired spellings, merged by resource id. */
-    var ARIADNE_BASE = 'https://ariadne-portal.d4science.org/api';
-    var ARIADNE_RESOURCE_BASE = 'https://ariadne-portal.d4science.org/resource/';
-    var ARIADNE_QUERY_SIZE = 25;         // hits requested per repaired spelling
-    var ARIADNE_MAX_RESULTS = 40;        // cards after merging + relevance guard
-    var ARIADNE_MAX_QUERIES = 3;         // portal is generous, but stay polite
-    var SOURCE_ORDER = ['wikipedia', 'wikidata', 'osm', 'commons', 'dbpedia', 'archive', 'europeana', 'ariadne', 'cimec'];
+    var SOURCE_ORDER = ['wikipedia', 'wikidata', 'osm', 'commons', 'dbpedia', 'archive', 'europeana', 'cimec'];
     /* dominant type wins when the same finding arrives from several sources */
     var TYPE_PRIORITY = { place: 9, article: 8, structured: 7, document: 6, map: 5, image: 4, collection: 3, audio: 2, video: 2 };
     var TYPE_ORDER = ['article', 'structured', 'place', 'document', 'map', 'image', 'collection', 'audio', 'video'];
@@ -82,16 +61,16 @@
     var C = {
         ro: {
             title: 'Biblioteca din Babel',
-            subtitle: 'Căutare arheologică multi-sursă · 9 surse deschise',
+            subtitle: 'Căutare arheologică multi-sursă · 8 surse deschise',
             button: 'Caută o localitate',
             close: 'Închide',
-            intro: 'Introdu o localitate sau un sit (ex. Sarmizegetusa, Apulum). Căutarea pornește simultan în 9 surse deschise; rezultatele sunt agregate, deduplicate și marcate cu sursa de proveniență.',
-            sourcesPolicy: 'Surse: Wikipedia (ro/en) · Wikidata · OpenStreetMap · Wikimedia Commons · DBpedia · Archive.org · Europeana · ARIADNE · CIMEC/RAN',
+            intro: 'Introdu o localitate sau un sit (ex. Sarmizegetusa, Apulum). Căutarea pornește simultan în 8 surse deschise; rezultatele sunt agregate, deduplicate și marcate cu sursa de proveniență.',
+            sourcesPolicy: 'Surse: Wikipedia (ro/en) · Wikidata · OpenStreetMap · Wikimedia Commons · DBpedia · Archive.org · Europeana · CIMEC/RAN',
             locality: 'Localitate / sit arheologic',
             placeholder: 'ex. Sarmizegetusa, Apulum, Grădiștea Muncelului…',
-            run: 'Caută', searching: 'Interogăm cele 9 surse în paralel…',
+            run: 'Caută', searching: 'Interogăm cele 8 surse în paralel…',
             failed: 'Căutarea nu a putut fi finalizată.',
-            allSourcesFailed: 'Niciuna dintre cele 9 surse nu a răspuns. Verifică conexiunea la internet și reîncearcă.',
+            allSourcesFailed: 'Niciuna dintre cele 8 surse nu a răspuns. Verifică conexiunea la internet și reîncearcă.',
             retry: 'Reîncearcă', newSearch: 'Caută altceva',
             noResults: 'Nu am găsit niciun rezultat pentru',
             noResultsHelp: 'Încearcă o variantă de mai jos, un nume istoric (ex. Ulpia Traiana în loc de Sarmizegetusa) sau forma engleză / maghiară / germană a numelui.',
@@ -113,7 +92,7 @@
             heritageObject: 'Obiect de patrimoniu', digitalDocument: 'Document digital',
             src_wikipedia: 'Wikipedia', src_wikidata: 'Wikidata', src_osm: 'OpenStreetMap',
             src_commons: 'Wikimedia Commons', src_dbpedia: 'DBpedia', src_archive: 'Archive.org',
-            src_europeana: 'Europeana', src_ariadne: 'ARIADNE', src_cimec: 'CIMEC / RAN',
+            src_europeana: 'Europeana', src_cimec: 'CIMEC / RAN',
             sitArheologic: 'Fișă de sit arheologic',
             p_prehistory: 'Preistorie', p_bronze: 'Epoca bronzului', p_iron: 'Epoca fierului',
             p_dacian: 'Dacic', p_roman: 'Roman', p_migration: 'Epoca migrațiilor',
@@ -135,16 +114,16 @@
         },
         en: {
             title: 'Library of Babel',
-            subtitle: 'Multi-source archaeological search · 9 open sources',
+            subtitle: 'Multi-source archaeological search · 8 open sources',
             button: 'Search a locality',
             close: 'Close',
-            intro: 'Enter a locality or site (e.g. Sarmizegetusa, Apulum). The search runs simultaneously across 9 open sources; results are aggregated, de-duplicated and tagged with their source.',
-            sourcesPolicy: 'Sources: Wikipedia (ro/en) · Wikidata · OpenStreetMap · Wikimedia Commons · DBpedia · Archive.org · Europeana · ARIADNE · CIMEC/RAN',
+            intro: 'Enter a locality or site (e.g. Sarmizegetusa, Apulum). The search runs simultaneously across 8 open sources; results are aggregated, de-duplicated and tagged with their source.',
+            sourcesPolicy: 'Sources: Wikipedia (ro/en) · Wikidata · OpenStreetMap · Wikimedia Commons · DBpedia · Archive.org · Europeana · CIMEC/RAN',
             locality: 'Locality / archaeological site',
             placeholder: 'e.g. Sarmizegetusa, Apulum, Grădiștea Muncelului…',
-            run: 'Search', searching: 'Querying all 9 sources in parallel…',
+            run: 'Search', searching: 'Querying all 8 sources in parallel…',
             failed: 'The search could not be completed.',
-            allSourcesFailed: 'None of the 9 sources responded. Check your internet connection and try again.',
+            allSourcesFailed: 'None of the 8 sources responded. Check your internet connection and try again.',
             retry: 'Try again', newSearch: 'Search something else',
             noResults: 'No results found for',
             noResultsHelp: 'Try one of the variants below, a historical name (e.g. Ulpia Traiana instead of Sarmizegetusa) or the English / Hungarian / German form of the name.',
@@ -166,7 +145,7 @@
             heritageObject: 'Heritage object', digitalDocument: 'Digital document',
             src_wikipedia: 'Wikipedia', src_wikidata: 'Wikidata', src_osm: 'OpenStreetMap',
             src_commons: 'Wikimedia Commons', src_dbpedia: 'DBpedia', src_archive: 'Archive.org',
-            src_europeana: 'Europeana', src_ariadne: 'ARIADNE', src_cimec: 'CIMEC / RAN',
+            src_europeana: 'Europeana', src_cimec: 'CIMEC / RAN',
             sitArheologic: 'Archaeological site record',
             p_prehistory: 'Prehistoric', p_bronze: 'Bronze Age', p_iron: 'Iron Age',
             p_dacian: 'Dacian', p_roman: 'Roman', p_migration: 'Migration period',
@@ -855,240 +834,6 @@
         });
     }
 
-    /* ═══════════ 9. ARIADNE portal (d4science) — the European archaeological catalogue ═══════════
-     *
-     * The portal's public JSON API is CORS-open (`Access-Control-Allow-Origin: *`)
-     * and answers `GET /api/search?q=…&size=…` with
-     * `{ total:{value}, hits:[{id, data:{…}}] }`. A record carries title,
-     * description, spatial.placeName, temporal/nativePeriod.periodName,
-     * subjects, publisher/contributor, issued date and a landing page.
-     *
-     * THE SEARCH-ENGINE PROBLEM (reported 2026-10, reproduced against the live
-     * service): the Elasticsearch index behind the portal is matched as whole
-     * *raw* tokens and is NOT diacritics-folded. The portal's own type-ahead
-     * appends a wildcard (`q | q*`), so "Moldovene" suggests the record of
-     * Stejeriș (com. Moldovenești) — but the results page sends the literal
-     * query, so the complete name typed without diacritics
-     *
-     *     /api/search?q=Moldovenesti   → {"total":{"value":0}}   ← "No resources found"
-     *     /api/search?q=Moldovene      → 0 as well (no prefix in the results page)
-     *     /api/search?q=Moldovenești   → 36 records
-     *     /api/search?q=Moldovene*     → 81 records (the Stejeriș record is #1)
-     *
-     * The adapter therefore repairs the query instead of forwarding it:
-     *   (a) the canonical spelling resolved from the OSM gazetteer
-     *       ("Moldovenești"), which the portal indexes verbatim;
-     *   (b) a wildcard stem cut in front of the LAST diacritic of that
-     *       spelling ("Moldovene*"), which matches the raw index whatever the
-     *       user typed, and — for diacritics-free names — the last two
-     *       characters removed ("Turdas" → "Turda*");
-     *   (c) what the user actually typed.
-     * Answers are merged by resource id (the portal's own `id`), hits coming
-     * from a widened (b)/(c) query are kept only when the record really
-     * mentions the locality, and everything then goes through the module's
-     * usual cross-source aggregation and relevance guard.
-     */
-    var ARIADNE_TYPE_MAP = {
-        image: 'image', 'still image': 'image', photographic: 'image',
-        map: 'map', cartographic: 'map',
-        collection: 'collection',
-        sound: 'audio', audio: 'audio',
-        video: 'video', 'moving image': 'video',
-        '3d': 'image'
-    };
-    var RO_DIACRITICS = '\u0103\u00e2\u00ee\u0219\u015f\u021b\u0163\u0102\u00c2\u00ce\u0218\u015e\u021a\u0162';
-
-    function roDiacriticAt(word, i) { return RO_DIACRITICS.indexOf(String(word).charAt(i)) !== -1; }
-    function lastRoDiacritic(word) {
-        word = String(word || '');
-        for (var i = word.length - 1; i >= 0; i--) if (roDiacriticAt(word, i)) return i;
-        return -1;
-    }
-    /* One word → a token the portal's raw index is guaranteed to match, or
-     * null when the word is short enough to be sent verbatim. */
-    function ariadneWordStem(word) {
-        word = String(word || '');
-        if (word.length < 5) return null;
-        var cut = lastRoDiacritic(word);
-        /* accented spelling: everything before the last diacritic is raw text
-         * the index certainly contains — "Moldovenești" → "Moldovene*" */
-        if (cut >= 4) return word.slice(0, cut) + '*';
-        /* diacritics-free spelling (no gazetteer fix available): a short stem
-         * that survives the accent the index kept — "Moldovenesti" → "Moldoven*" */
-        if (word.length < 6) return null;
-        return word.slice(0, Math.max(4, word.length - 3)) + '*';
-    }
-    function ariadneStemQuery(text) {
-        var words = String(text == null ? '' : text).trim().split(/\s+/).filter(Boolean);
-        if (!words.length) return null;
-        var used = false, out = [];
-        words.forEach(function (w) {
-            var s = ariadneWordStem(w);
-            if (s) { out.push(s); used = true; } else { out.push(w); }
-        });
-        return used ? out.join(' ') : null;
-    }
-    /* The repaired query set actually sent to the portal (max 3 requests). */
-    function ariadneQueries(name, typed) {
-        var out = [];
-        function add(q) {
-            q = String(q == null ? '' : q).trim().replace(/\s+/g, ' ');
-            if (!q) return;
-            for (var i = 0; i < out.length; i++) if (out[i].toLowerCase() === q.toLowerCase()) return;
-            out.push(q);
-        }
-        add(name);
-        add(ariadneStemQuery(name));
-        add(typed);
-        add(ariadneStemQuery(typed));
-        return out.slice(0, ARIADNE_MAX_QUERIES);
-    }
-
-    /* ARIADNE answers with objects in the singular (`title:{text,language}`)
-     * and with arrays in the plural (`descriptionOther`, `spatial`, …). */
-    function ariadneFieldText(field) {
-        if (!field) return '';
-        if (typeof field === 'string') return field;
-        if (Array.isArray(field)) {
-            for (var i = 0; i < field.length; i++) {
-                var s = ariadneFieldText(field[i]);
-                if (s) return s;
-            }
-            return '';
-        }
-        return String(field.text || field.prefLabel || field.label || field.placeName || field.name || '');
-    }
-    function ariadneLabels(list) {
-        var out = [];
-        (Array.isArray(list) ? list : (list ? [list] : [])).forEach(function (x) {
-            var s = x && (x.prefLabel || x.label || x.name || (typeof x === 'string' ? x : ''));
-            if (s && out.indexOf(String(s)) === -1) out.push(String(s));
-        });
-        return out;
-    }
-    function ariadnePeriods(d) {
-        var names = [];
-        [d.temporal, d.nativePeriod].forEach(function (list) {
-            (Array.isArray(list) ? list : (list ? [list] : [])).forEach(function (t) {
-                var n = t && t.periodName;
-                if (n && names.indexOf(String(n)) === -1) names.push(String(n));
-            });
-        });
-        return names;
-    }
-    function ariadneCoords(d) {
-        var out = null;
-        (Array.isArray(d.spatial) ? d.spatial : (d.spatial ? [d.spatial] : [])).forEach(function (s) {
-            if (out || !s) return;
-            var g = s.geopoint || s.geometry || s.point;
-            if (!g) return;
-            var lat = Number(g.lat != null ? g.lat : g.y), lon = Number(g.lon != null ? g.lon : g.x);
-            if (isFinite(lat) && isFinite(lon)) out = { lat: lat, lng: lon };
-        });
-        return out;
-    }
-    function ariadneResult(hit) {
-        var d = (hit && hit.data) || {};
-        var title = ariadneFieldText(d.title) || ariadneFieldText(d.titleOther) ||
-            ariadneFieldText(d.is_about) || ariadneFieldText(d.spatial);
-        if (!title) return null;
-        var place = ariadneFieldText(d.spatial);
-        var providers = ariadneLabels(d.publisher).concat(ariadneLabels(d.contributor));
-        var subjects = ariadneLabels(d.nativeSubject).concat(ariadneLabels(d.derivedSubject));
-        var periods = ariadnePeriods(d);
-        var desc = ariadneFieldText(d.description) || ariadneFieldText(d.descriptionOther) ||
-            [place, subjects.slice(0, 4).join(', ')].filter(Boolean).join(' — ');
-        var type = ARIADNE_TYPE_MAP[String(d.resourceType || '').toLowerCase()] || 'document';
-        var issued = String(d.issued || d.wasCreated || d.modified || '');
-        var year = (issued.match(/\b(1\d{3}|20\d{2})\b/) || [])[1] ||
-            (String(title).match(/anul:?\s*(\d{4})/i) || [])[1] || null;
-        return {
-            title: String(title),
-            description: clampDesc(stripHtml(desc)),
-            type: type, source: 'ariadne',
-            url: ARIADNE_RESOURCE_BASE + encodeURIComponent(hit.id),
-            rank: 0, year: year || null,
-            coords: ariadneCoords(d),
-            meta: {
-                provider: providers[0] || null,
-                resourceType: d.resourceType || null,
-                place: place || null,
-                periods: periods,
-                subjects: subjects.slice(0, 6),
-                landingPage: d.landingPage || null
-            }
-        };
-    }
-
-    /* One repaired spelling → the portal's search API. */
-    function ariadneFetch(q) {
-        var u = new URL(ARIADNE_BASE + '/search');
-        u.search = new URLSearchParams({ q: q, size: String(ARIADNE_QUERY_SIZE) });
-        return fetchJson(u.href, 20000).then(function (d) {
-            if (d && d.error) {
-                var err = new Error((d.error && (d.error.message || d.error.msg)) || 'ARIADNE search error');
-                err.status = 502;
-                throw err;
-            }
-            return (d && Array.isArray(d.hits)) ? d.hits : [];
-        });
-    }
-    /* Wildcard hits are a superset ("Moldovene*" also reaches Moldoveni,
-     * Moldoveneasca …): keep only the ones that really mention the locality —
-     * the global relevance guard cannot do this job alone when the gazetteer
-     * could not confirm the place. */
-    function ariadneMentions(item, anchors) {
-        if (!anchors || !anchors.length) return true;
-        var hay = normKey([
-            item.title, item.description,
-            item.meta && item.meta.place,
-            item.meta && (item.meta.periods || []).join(' '),
-            item.meta && (item.meta.subjects || []).join(' ')
-        ].filter(Boolean).join(' '));
-        for (var i = 0; i < anchors.length; i++) {
-            if (anchors[i] && hay.indexOf(anchors[i]) !== -1) return true;
-        }
-        return false;
-    }
-    function sourceAriadne(typed, canonical, locality) {
-        var name = (locality && locality.name) || canonical || phraseName(typed);
-        var queries = ariadneQueries(name, phraseName(typed));
-        if (!queries.length) return Promise.resolve({ results: [], partial: false, queries: [] });
-        var anchors = [];
-        [name, phraseName(typed), canonical].forEach(function (n) {
-            var k = normKey(n || '');
-            if (k && k.length >= 3 && anchors.indexOf(k) === -1) anchors.push(k);
-        });
-        return Promise.all(queries.map(function (q) {
-            /* Promise.resolve().then(...) also turns a synchronous throw from
-             * an exotic environment into a normal per-source failure. */
-            return settle(Promise.resolve().then(function () { return ariadneFetch(q); }));
-        })).then(function (rs) {
-            var oks = rs.filter(function (r) { return r.ok; });
-            if (!oks.length) throw rs[0].error;
-            var seen = {}, results = [];
-            queries.forEach(function (q, i) {
-                var r = rs[i];
-                if (!r.ok) return;
-                (r.value || []).forEach(function (hit) {
-                    if (!hit || !hit.id || seen[hit.id]) return;
-                    var item = null;
-                    try { item = ariadneResult(hit); } catch (_) { item = null; }
-                    if (!item) return;
-                    if (i > 0 && !ariadneMentions(item, anchors)) return;
-                    seen[hit.id] = 1;
-                    item.rank = results.length;
-                    results.push(item);
-                });
-            });
-            return {
-                results: results.slice(0, ARIADNE_MAX_RESULTS),
-                partial: oks.length < rs.length,
-                queries: queries
-            };
-        });
-    }
-
     /* ══════════════════ parallel orchestration + aggregation ══════════════════ */
 
     function searchAll(query, lg, key, seq, onSource, textQuery, locality) {
@@ -1114,9 +859,6 @@
             { id: 'dbpedia', run: function () { return sourceDbpedia(tq); } },
             { id: 'archive', run: function () { return sourceArchive(tq); } },
             { id: 'europeana', run: function () { return sourceEuropeana(tq, key); } },
-            /* ARIADNE gets BOTH spellings: what the user typed (its results page
-             * needs a repaired query) and the gazetteer-corrected one. */
-            { id: 'ariadne', run: function () { return localityFix.then(function (loc) { return sourceAriadne(query, tq, loc); }); } },
             { id: 'cimec', run: function () { return localityFix.then(function (loc) { return sourceCimec(tq, loc); }); } }
         ];
         var tasks = runners.map(function (r) {
@@ -1239,10 +981,10 @@
          * (archaeological by definition) always stay. */
         order = order.filter(function (r) {
             if (r.type === 'place') return true;
-            /* archaeological catalogues (RAN, ARIADNE) are archaeological by
+            /* archaeological catalogues (RAN) are archaeological by
              * definition — their records must not vanish just because the
              * metadata carries no explicit period name */
-            if ((r.sources || []).some(function (s) { return s.id === 'cimec' || s.id === 'ariadne'; })) return true;
+            if ((r.sources || []).some(function (s) { return s.id === 'cimec'; })) return true;
             return r.periods.length > 0;
         });
         order.sort(function (a, b) { return b.score - a.score; });
@@ -1269,7 +1011,7 @@
     }
 
     /* ── local result cache (localStorage, TTL) ── */
-    function cacheKey(q, lg) { return 'babel.cache.v1.' + lg + '.' + slug(q); }
+    function cacheKey(q, lg) { return 'babel.cache.v2.' + lg + '.' + slug(q); }
     function cacheGet(q, lg) {
         try {
             if (typeof localStorage === 'undefined') return null;
@@ -1741,16 +1483,6 @@
         _noThrottle: function () { NOMINATIM_MIN_INTERVAL = 0; },
         _resolveCanonicalQuery: resolveCanonicalQuery,
         _resolveLocality: resolveLocality,
-        /* ARIADNE query repair — exposed so the regression test can pin the
-         * exact repaired spellings for the "Moldovenesti" class of searches. */
-        _ariadne: {
-            queries: ariadneQueries,
-            stemQuery: ariadneStemQuery,
-            wordStem: ariadneWordStem,
-            source: sourceAriadne,
-            toResult: ariadneResult,
-            mentions: ariadneMentions
-        },
         _export: { json: buildJsonExport, csv: buildCsvExport, rows: exportRows },
         _filters: function () { return uiFilters; }
     };

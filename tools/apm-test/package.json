@@ -1,0 +1,11 @@
+{
+  "name": "detectlab-apm-correction-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Local-only DOM and real PostgreSQL/PostGIS tests; never connects to production",
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.14",
+    "@electric-sql/pglite-postgis": "0.2.14",
+    "jsdom": "26.1.0"
+  }
+}

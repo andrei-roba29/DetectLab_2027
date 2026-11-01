@@ -1015,7 +1015,7 @@ test('APM off removes the selected point and radius; re-enabling restores them w
         centreMarker: null, radiusCircle: null, getMap: () => map,
         stopPick() { calls.push('stopPick'); }, cancelRun() { calls.push('cancelRun'); },
         cancelSiteLoad() { calls.push('cancelSiteLoad'); }, clearResult() { calls.push('clearResult'); },
-        renderSwitch() {}, updateGate() {}, loadAriadneSites() { calls.push('loadSites'); }
+        renderSwitch() {}, updateGate() {}, loadBuiltinSites() { calls.push('loadSites'); }
     };
     vm.createContext(ctx);
     for (const name of ['setEnabled', 'drawCentre', 'clearCentre']) {

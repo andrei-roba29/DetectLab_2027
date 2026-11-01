@@ -147,7 +147,7 @@ for (const mode of ['MANUAL', 'TRAIN']) test(mode + ': settings stay visually hi
         // Exercise the CSS guard as well as the hidden property, without relying on UA defaults.
         await page.addStyleTag({ content: '.apm-panel { display: block !important; }' });
         await page.evaluate(() => {
-            window.DetectLabApmProviders.createAriadneSiteProvider = () => ({ getSites: async () => [] });
+            window.DetectLabRomaniaApmSites = { createProvider: () => ({ getSites: async () => [] }) };
             window.DetectLabApmUi.open();
         });
         if (mode === 'TRAIN') await clickButtonByText(page, '.apm-tab', 'TRAIN');
