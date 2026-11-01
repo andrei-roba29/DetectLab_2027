@@ -918,7 +918,17 @@
 // v365: expanded bilingual desktop/PWA tutorial: 3D, LiDAR, APM Next-Gen,
 // historical-map alignment and current layer/slider workflows.
 // v366: restore the saved APM Next-Gen switch without reopening its window.
-const CACHE_NAME = 'detectlab-v366-apm-start-minimized';
+// v367: PWA Google sign-in hands the one-time code back by itself. The login
+//   form no longer shows the "one-time sign-in code" box with the Complete /
+//   Cancel buttons — the callback window posts the code to the app, and when
+//   the OS severed the opener it leaves it in same-origin storage that the app
+//   reads on focus, on visibilitychange and on the storage event. The temporary
+//   PKCE client still owns the verifier and never keeps a session of its own.
+//   The same shell stops re-sizing the fixed map shell while a text field has
+//   focus: the keyboard's visualViewport resize used to rewrite the !important
+//   pixel heights under the finger, so the OS closed the keyboard again.
+//   Re-tags js/pwa-google-auth.js, js/auth.js, index.html and CACHE_NAME.
+const CACHE_NAME = 'detectlab-v367-google-handoff';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1827,6 +1837,9 @@ const PRECACHE_URLS = [
   'js/supabase.js?v=20261101-google-popup',
   'js/pwa-google-auth.js?v=20261101-google-popup',
   'js/auth.js?v=20261101-google-popup',
+  // v367: the form no longer asks for a pasted code (see the CACHE_NAME note).
+  'js/pwa-google-auth.js?v=20261101-google-handoff',
+  'js/auth.js?v=20261101-google-handoff',
   // v286: the shell is sized from a measured pixel height (--pwa-viewport-h)
   // instead of any CSS viewport unit, and the temporary on-device band probe
   // is gone. Only index.html + this file changed; the entry below is the live

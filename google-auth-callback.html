@@ -10,14 +10,14 @@
   <main>
     <h1>Return to DetectLab</h1>
     <p id="status">Returning the sign-in result to the app…</p>
-    <div id="manual" hidden>
-      <p>Automatic return was unavailable. Copy this one-time code, return to the original installed DetectLab app, and paste it in the Google sign-in form. Do not share it. It only works for the sign-in you just started.</p>
-      <textarea id="code" readonly aria-label="One-time sign-in code" rows="4" style="width:100%;max-width:35em"></textarea>
-    </div>
   </main>
   <script>
     (function () {
       'use strict';
+      // Must match HANDOFF_KEY in js/pwa-google-auth.js. The installed app reads
+      // this record as soon as it is back in front, so the user never copies a
+      // code into the login form.
+      var HANDOFF_KEY = 'detectlab-google-handoff';
       var query = new URLSearchParams(location.search);
       var fragment = new URLSearchParams(location.hash.slice(1));
       var code = query.get('code');
@@ -26,31 +26,39 @@
       // Strip the code and provider errors immediately, before any external request.
       history.replaceState(null, '', location.pathname);
       var status = document.getElementById('status');
-      var acknowledged = false;
       if (!nonce || (!code && !error)) {
-        status.textContent = 'No sign-in result was received. Return to the installed app and try again.';
+        status.textContent = 'No sign-in result was received. Return to DetectLab and try again.';
         return;
       }
+      // Same-origin storage is the fallback when the OS gave this window its own
+      // opener: the app picks the record up when it comes back to the front.
+      try {
+        localStorage.setItem(HANDOFF_KEY, JSON.stringify({
+          nonce: nonce, code: code || null, error: !!error, at: Date.now()
+        }));
+      } catch (_) {}
+      var acknowledged = false;
       window.addEventListener('message', function (event) {
         if (event.origin !== location.origin || event.source !== window.opener || !event.data ||
             event.data.type !== 'detectlab-google-ack' || event.data.nonce !== nonce) return;
         acknowledged = true;
-        status.textContent = 'Result sent. Return to the original DetectLab app.';
       });
       try {
         if (window.opener) window.opener.postMessage({ type: 'detectlab-google-callback', nonce: nonce,
           code: code, error: !!error }, location.origin);
       } catch (_) {}
       setTimeout(function () {
-        if (acknowledged) return;
         if (error) {
-          status.textContent = 'Google sign-in was cancelled or failed. Return to the app and cancel or retry.';
+          status.textContent = 'Google sign-in was cancelled or failed. Return to DetectLab and try again.';
+        } else if (acknowledged) {
+          status.textContent = 'Signed in. Return to DetectLab.';
         } else {
-          status.textContent = 'Return to the original installed app to finish signing in.';
-          document.getElementById('code').value = code;
-          document.getElementById('manual').hidden = false;
+          status.textContent = 'Sign-in finished. Return to DetectLab to continue.';
         }
-      }, 1500);
+        // Closing is best-effort: some platforms ignore it, which is harmless
+        // now that the result is already waiting for the app.
+        setTimeout(function () { try { window.close(); } catch (_) {} }, 400);
+      }, 1200);
     })();
   </script>
 </body>
