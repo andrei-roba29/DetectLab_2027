@@ -125,71 +125,22 @@
             -ms-touch-action: manipulation !important;
         }
 
-        /* Standalone iOS occasionally shows only the keyboard accessory bar.
-           Keep a local text-entry fallback ABOVE every modal and the map, and
-           reserve room in scrollable forms without resizing the Leaflet map. */
-        #dlFallbackKeyboard[hidden], #dlKeyboardToggle[hidden] { display: none !important; }
-        #dlKeyboardToggle {
-            position: fixed;
-            z-index: 2147483646;
-            top: calc(8px + env(safe-area-inset-top, 0px));
-            right: 8px;
-            padding: 7px 10px;
-            border: 1px solid #b8d8f0;
-            border-radius: 8px;
-            background: #222734;
-            color: #fff;
-            font: 14px system-ui, sans-serif;
-            touch-action: manipulation !important;
+        /* Native iOS keyboard: WebKit cannot scroll a body locked by the map's
+           fullscreen shell. Release that lock BEFORE a text field gets focus.
+           Absolute keeps the map in the exact same place and with its measured
+           pixel size, but removes the fixed ancestor that traps search inputs.
+           No fake keys or padding at the bottom of the screen. */
+        html.is-pwa.dl-native-typing,
+        body.is-pwa.dl-native-typing {
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            height: auto !important;
+            min-height: 100% !important;
+            -webkit-overflow-scrolling: touch;
         }
-        #dlFallbackKeyboard {
-            position: fixed;
-            z-index: 2147483647;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            box-sizing: border-box;
-            padding: 8px 4px calc(8px + env(safe-area-inset-bottom, 0px));
-            background: #222734;
-            color: #fff;
-            box-shadow: 0 -4px 20px rgba(0,0,0,.5);
-            font: 16px system-ui, sans-serif;
-            -webkit-user-select: none;
-            user-select: none;
-            touch-action: manipulation !important;
+        body.is-pwa.dl-native-typing #map-section {
+            position: absolute !important;
         }
-        #dlFallbackKeyboard .dl-fallback-header,
-        #dlFallbackKeyboard .dl-fallback-row {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 4px;
-            margin-bottom: 5px;
-        }
-        #dlFallbackKeyboard .dl-fallback-header { justify-content: space-between; padding: 0 8px; }
-        #dlFallbackKeyboard .dl-fallback-key {
-            flex: 1;
-            min-width: 0;
-            height: 42px;
-            padding: 0 2px;
-            border: 0;
-            border-radius: 5px;
-            background: #566072;
-            color: #fff;
-            font: inherit;
-            touch-action: manipulation !important;
-        }
-        #dlFallbackKeyboard .dl-fallback-header .dl-fallback-key { flex: 0 0 72px; }
-        #dlFallbackKeyboard .dl-fallback-wide { flex: 5; }
-        body.is-pwa.dl-fallback-typing #authModal.show {
-            top: 0;
-            bottom: auto;
-            height: calc(100% - 265px - var(--dl-keyboard-bottom, 0px));
-            box-sizing: border-box;
-            overflow-y: auto;
-        }
-        body.is-pwa.dl-fallback-typing #authModal .auth-box { margin: auto; }
-        body.is-pwa.dl-fallback-typing #mapSearchWrap { z-index: 1100; }
 
         /* The auth card must fit and scroll in the visible area, including
            when the iOS keyboard reduces the visual viewport. */
@@ -200,9 +151,19 @@
             -webkit-overflow-scrolling: touch;
         }
         body.is-pwa #authModal.pwa-auth-editing {
-            top: var(--pwa-auth-viewport-top, 0px);
-            bottom: auto;
-            height: var(--pwa-auth-viewport-height, 100%);
+            /* Keep the opaque backdrop across the whole map. Only the card
+               fits the visible viewport; shrinking the backdrop itself left
+               a transparent/map strip underneath the iOS accessory bar. */
+            top: 0;
+            bottom: 0;
+            height: 100%;
+            box-sizing: border-box;
+            align-items: flex-start;
+            padding-top: calc(var(--pwa-auth-viewport-top, 0px) + 8px);
+        }
+        body.is-pwa #authModal.pwa-auth-editing .auth-box {
+            max-height: calc(var(--pwa-auth-viewport-height, 100%) - 16px);
+            margin: 0 auto;
         }
 
         /* Weather/account overlays remain vertically scrollable in PWA mode. */
@@ -5140,7 +5101,7 @@
         </div>
     </footer>
 
-    <script src="js/ios-input-focus.js?v=20261101-ios-keyboard-fallback"></script>
+    <script src="js/ios-input-focus.js?v=20261101-ios-native-keyboard"></script>
     <script src="js/translations.js?v=20261030-report-exclusions"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
@@ -5188,7 +5149,7 @@
          the profile button = unread event chats (events.js) + pending friend
          requests + unread messages, and the pop-up card that appears when a
          request or a message arrives. -->
-    <script src="js/friends.js?v=20261101-ios-keyboard-fallback"></script>
+    <script src="js/friends.js?v=20261101-ios-native-keyboard"></script>
     <!-- CORONA (Satellite imagery 60's) — the Corona Atlas tile-fetching logic
          (corona.cast.uark.edu/atlas) ported to Leaflet for the whole of Europe:
          the product catalogue (/corona/get_raster_names), one WMS 1.1.1 GetMap
@@ -5351,7 +5312,7 @@
     <script src="js/archeo-potential.js?v=20261101-train-source"></script>
     <script src="js/lidar-geo.js?v=20260811-latlon"></script>
     <script src="js/lidar-scanner.js?v=20261020-3d-analysis-points"></script>
-    <script src="js/library-of-babel.js?v=20261101-ios-keyboard-fallback"></script>
+    <script src="js/library-of-babel.js?v=20261101-ios-native-keyboard"></script>
     <!-- Premium "Archeological Report" / "Raport arheologic": PDF writer →
          PDF layout → the analysis layer itself (this order matters). -->
     <script src="js/pdf-writer.js?v=20260827-arch-report"></script>
@@ -5749,7 +5710,7 @@
     </div>
 
     <script src="js/pwa-google-auth.js?v=20261101-google-origin"></script>
-    <script src="js/auth.js?v=20261101-ios-keyboard-fallback"></script>
+    <script src="js/auth.js?v=20261101-ios-native-keyboard"></script>
     <script src="js/newsletter.js?v=20260916-newsletter"></script>
 
 
@@ -6166,8 +6127,10 @@
 
                 function updatePwaMapLayout() {
                     var leafletMap = window._dlMap || window.map;
-                    // The keyboard is up: measure again only after it is down.
+                    // The keyboard is up (or is still closing): never resize
+                    // the map under a focused iOS field or during its unlock.
                     if (isTypingTarget()) return;
+                    if (document.documentElement.classList.contains('dl-native-typing')) return;
                     // Skip viewport sync while zoom is animating or pinching.
                     if (leafletMap && (leafletMap._animatingZoom || (leafletMap.touchZoom && leafletMap.touchZoom._zooming))) {
                         setTimeout(updatePwaMapLayout, 300);
@@ -6199,8 +6162,12 @@
                 // Once the field is left the keyboard has closed (or is closing),
                 // so the shell can be measured and fitted again.
                 document.addEventListener('focusout', function() {
-                    setTimeout(updatePwaMapLayout, 250);
+                    setTimeout(updatePwaMapLayout, 700);
                 }, true);
+                window.addEventListener('dl:input-session-end', function () {
+                    updatePwaMapLayout();
+                    setTimeout(updatePwaMapLayout, 300);
+                });
 
                 // ── Re-fit after the OS settles the standalone viewport ──
                 // iOS finalises the screen height only AFTER the first paint
@@ -6566,7 +6533,7 @@
     </div>
 
 <script src="js/account-legacy.js?v=20260814-promo"></script>
-<script src="js/subscriptions.js?v=20261101-ios-keyboard-fallback"></script>
+<script src="js/subscriptions.js?v=20261101-ios-native-keyboard"></script>
 
 
 
