@@ -2,7 +2,7 @@
 //   PUPPETEER_MODULE_DIR=/path/to/node_modules node test-apm-next-browser.js
 // Without PUPPETEER_MODULE_DIR the checks are skipped (same convention as the other browser tests).
 //
-// What is real: Leaflet, the APM panel, the pick-on-map flow, the map legend, the layout CSS.
+// What is real: Leaflet, the APM panel, the pick-on-map flow, the in-panel legend, the layout CSS.
 // What is stubbed: the premium check (window._dlIsPremium), the model run (runManual returns a fixed
 // heatmap/outline fixture), and the app's own map click handlers (a stand-in handler written with the same guard line).
 // The app's real handlers in map-app.js etc. are not loaded here: the full page needs login, Supabase and
@@ -218,42 +218,28 @@ async function runWithResult(page) {
     await clickButtonByText(page, '.apm-panel button', 'Pick point on map');
     await mapClick(page, 200, 120);                                  // top-left area, not under the panel
     await clickButtonByText(page, '.apm-panel button', 'Run MANUAL model');
-    await page.waitForSelector('.apm-legend', { timeout: 5000 });
+    await page.waitForSelector('.apm-panel .apm-results:not([hidden]) .apm-result-scale .apm-heat-ramp', { timeout: 5000 });
     await sleep(100);
 }
 
-test('phone 390 px, panel open with a result: the map legend does not overlap the panel', async (ctx) => {
-    const { page, errors } = await openHarness(ctx.browser, 390, 844);
-    await runWithResult(page);
-    const panel = await rectOf(page, '.apm-panel');
-    const legend = await rectOf(page, '.apm-legend');
-    assert.ok(panel && panel.width > 0, 'panel visible');
-    assert.ok(legend, 'legend exists after a result');
-    assert.ok(!intersects(panel, legend) || legend.display === 'none',
-        'legend overlaps the panel: legend ' + JSON.stringify(legend) + ' panel ' + JSON.stringify(panel));
-    assert.deepStrictEqual(errors, [], 'no page errors');
-    await page.close();
-});
-
-test('phone 390 px, panel closed: the legend is visible again', async (ctx) => {
-    const { page } = await openHarness(ctx.browser, 390, 844);
-    await runWithResult(page);
-    await page.evaluate(() => window.DetectLabApmUi.close());
-    await sleep(50);
-    const legend = await rectOf(page, '.apm-legend');
-    assert.ok(legend && legend.display !== 'none' && legend.width > 0, 'legend visible with the panel closed');
-    await page.close();
-});
-
-test('desktop 1280 px, panel open with a result: legend visible and not overlapping the panel', async (ctx) => {
-    const { page } = await openHarness(ctx.browser, 1280, 800);
-    await runWithResult(page);
-    const panel = await rectOf(page, '.apm-panel');
-    const legend = await rectOf(page, '.apm-legend');
-    assert.ok(legend && legend.display !== 'none' && legend.width > 0, 'legend visible on desktop');
-    assert.ok(!intersects(panel, legend), 'no overlap on desktop');
-    await page.close();
-});
+for (const [width, height] of [[390, 844], [1280, 800]]) {
+    test(width + ' px: legend stays inside the APM window and never appears on the map', async (ctx) => {
+        const { page, errors } = await openHarness(ctx.browser, width, height);
+        await runWithResult(page);
+        const scale = '.apm-panel .apm-result-scale';
+        assert.strictEqual(await page.$('.apm-map-legend'), null, 'no map legend control');
+        assert.ok(await page.$(scale + ' .apm-heat-ramp'), 'panel retains the heat scale');
+        assert.ok(await page.$(scale + ' .apm-legend-row'), 'panel retains the hotspot key');
+        await page.evaluate(() => window.DetectLabApmUi.close());
+        assert.strictEqual(await page.$('.apm-map-legend'), null, 'closing does not put a legend on the map');
+        assert.strictEqual(await page.$eval(scale, el => el.getClientRects().length), 0, 'legend hides with its window');
+        await page.evaluate(() => window.DetectLabApmUi.open());
+        assert.ok(await page.$eval(scale, el => el.getClientRects().length > 0), 'legend returns inside the reopened window');
+        assert.strictEqual(await page.$('.apm-map-legend'), null);
+        assert.deepStrictEqual(errors, [], 'no page errors');
+        await page.close();
+    });
+}
 
 test('hybrid output renders coloured heat tiles and unfilled very-high-only outlines; replaces and clears both', async (ctx) => {
     const { page, errors } = await openHarness(ctx.browser, 1280, 800);

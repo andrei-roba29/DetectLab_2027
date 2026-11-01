@@ -892,7 +892,7 @@
 // ArcGIS MapServer publishes (js/lidar-photo-filter.js, js/map-app.js).
 // v347: CENAGIS historical sheets get a longer probe and a third try before
 // they are switched off (js/wms-health.js).
-const CACHE_NAME = 'detectlab-v349-lidar-geographic-mask';
+const CACHE_NAME = 'detectlab-v353-apm-spatial-exclusions';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -935,21 +935,22 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
   // v301: Next-Gen APM (MANUAL) — see the header note above.
-  'css/next-gen-apm.css?v=20261101-dock-leafleet-level',
+  'css/next-gen-apm.css?v=20261101-panel-only-legend',
   'js/apm-next/apm-core.js?v=20261101-robust-train',
   'js/apm-next/apm-raster.js?v=20261101-robust-train',
-  'js/apm-next/apm-heatmap.js?v=20261101-robust-train',
+  'js/apm-next/apm-heatmap.js?v=20261101-spatial-exclusions',
   'js/apm-next/apm-heatmap.js',
   'js/apm-next/apm-sites.js?v=20261101-robust-train',
   'js/apm-next/romania-periods.config.js?v=20261101-romania-ran',
   'js/apm-next/apm-providers.js?v=20261101-romania-ran',
   'js/apm-next/apm-romania-sites.js?v=20261101-romania-ran',
-  'js/apm-next/apm-pipeline.js?v=20261101-robust-train',
-  'js/apm-next/apm-ui.js?v=20261101-robust-train',
-  'js/apm-next/apm-i18n.js?v=20261101-robust-train',
-  'js/apm-next/apm-worker.js?v=20261101-robust-train',
+  'js/apm-next/apm-pipeline.js?v=20261101-spatial-exclusions',
+  'js/apm-next/apm-ui.js?v=20261101-spatial-exclusions',
+  'js/apm-next/apm-i18n.js?v=20261101-spatial-exclusions',
+  'js/apm-next/apm-worker.js?v=20261101-spatial-exclusions',
   'js/apm-next/apm-worker.js',
   'js/apm-next/apm-polygonise.js',
+  'js/apm-next/apm-polygonise.js?v=20261101-spatial-exclusions',
   'js/apm-next/apm-core.js',
   'js/apm-next/apm-raster.js',
   'js/apm-next/apm-sites.js',
@@ -1081,7 +1082,7 @@ const PRECACHE_URLS = [
   'js/rvt-panel.js?v=2',
   'js/rvt-panel.js?v=20261030-area-first',
   'js/map-window-dock.js?v=20261101-robust-train',
-  'js/rvt-panel.js?v=20261101-robust-train',
+  'js/rvt-panel.js?v=20261101-settings-opacity',
   'css/rvt-panel.css?v=20261101-robust-train',
   'js/map-app.js?v=20261030-lidar-touch-fix',
   'css/rvt-panel.css?v=1',
@@ -1695,7 +1696,7 @@ const PRECACHE_URLS = [
   // v138: archeo potential canvas must not swallow detectorist pin taps after
   // the layer is switched off (click-through pane + renderer detach).
   'js/archeo-potential.js?v=20261017-archeo-3d-projection',
-  'js/archeo-potential.js?v=20261030-report-exclusions',
+  'js/archeo-potential.js?v=20261101-spatial-exclusions',
   'js/lidar-scanner.js?v=20260922-distance-mirror-close',
   'js/archeo-report.js?v=20260922-distance-mirror-close',
   'js/archeo-report.js?v=20261030-report-exclusions',

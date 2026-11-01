@@ -14,10 +14,10 @@
 importScripts(
     'apm-core.js',
     'apm-raster.js',
-    'apm-heatmap.js',
+    'apm-heatmap.js?v=20261101-spatial-exclusions',
     '../d3.min.js',
     '../vendor/polygon-clipping.umd.min.js',
-    'apm-polygonise.js',
+    'apm-polygonise.js?v=20261101-spatial-exclusions',
     '../rbush.min.js'
 );
 
@@ -102,6 +102,7 @@ importScripts(
 
     function handleSetAnalysis(m) {
         var g = m.grid, w = g.w, h = g.h, n = w * h;
+        if (m.exclusionMask && m.exclusionMask.length !== n) throw new Error('Invalid spatial exclusion mask');
         var sp = R.gridSpacingM(g);
         var t = R.terrain(m.elev, w, h, sp.dx, sp.dy, { smooth: m.smooth, nodata: m.nodata });
         var inCircle = R.circleMask(g, m.circle.lat, m.circle.lon, m.circle.radiusM);
@@ -115,7 +116,7 @@ importScripts(
         var altPct = new Float32Array(n), soilPct = new Float32Array(n);
         var valid = new Uint8Array(n);
         for (i = 0; i < n; i++) {
-            if (!inCircle[i] || !t.valid[i]) continue;
+            if (!inCircle[i] || !t.valid[i] || (m.exclusionMask && m.exclusionMask[i])) continue;
             valid[i] = 1;
             altPct[i] = R.percentileOf(altRef, m.elev[i]);
             soilPct[i] = R.percentileOf(soilRef, t.curv[i]);
@@ -133,6 +134,7 @@ importScripts(
         });
         state.analysis = {
             grid: g, spacing: sp, slope: t.slope, aspect: t.aspect, curv: t.curv, valid: valid,
+            exclusionMask: m.exclusionMask || null,
             inCircle: inCircle, altPct: altPct, soilPct: soilPct, waterDist: waterDist
         };
         stats.spacingM = { dx: sp.dx, dy: sp.dy };
@@ -178,9 +180,9 @@ importScripts(
         var fc = P.polygonise(res.score, state.analysis.grid, m.thresholds, {
             minAreaM2: m.minAreaM2 == null ? 2500 : m.minAreaM2,
             smoothIters: m.smoothIters == null ? 1 : m.smoothIters,
-            highestOnly: true
+            highestOnly: true, exclusionMask: state.analysis.exclusionMask
         });
-        var heatmap = DetectLabApmHeatmap.buildRaster(res.score, state.analysis.grid, m.thresholds, 512);
+        var heatmap = DetectLabApmHeatmap.buildRaster(res.score, state.analysis.grid, m.thresholds, 512, state.analysis.exclusionMask);
         reply(m.id, { geojson: fc, heatmap: heatmap, thresholds: m.thresholds,
             areaKm2: P.areaByScores(res.score, state.analysis.grid, m.thresholds), scoreStats: res.stats }, [heatmap.rgba.buffer]);
     }

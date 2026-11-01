@@ -30,7 +30,7 @@
     /** Bounded RGBA display raster. Invalid/negative scores are transparent, zero is valid.
      * Area-average each display block, with coverage alpha for masked edges. No per-run stretching.
      */
-    function buildRaster(score, grid, thresholds, maxDimension) {
+    function buildRaster(score, grid, thresholds, maxDimension, exclusionMask) {
         var scale = Math.min(1, (maxDimension || 512) / Math.max(grid.w, grid.h));
         var w = Math.max(1, Math.round(grid.w * scale)), h = Math.max(1, Math.round(grid.h * scale));
         var rgba = new Uint8Array(w * h * 4), ramp = stops(thresholds);
@@ -38,12 +38,13 @@
             var y0 = Math.floor(y * grid.h / h), y1 = Math.floor((y + 1) * grid.h / h);
             for (var x = 0; x < w; x++) {
                 var x0 = Math.floor(x * grid.w / w), x1 = Math.floor((x + 1) * grid.w / w);
-                var sum = 0, valid = 0;
+                var sum = 0, valid = 0, blocked = false;
                 for (var j = y0; j < y1; j++) for (var i = x0; i < x1; i++) {
+                    if (exclusionMask && exclusionMask[j * grid.w + i]) blocked = true;
                     var v = score[j * grid.w + i];
                     if (Number.isFinite(v) && v >= 0) { sum += v; valid++; }
                 }
-                if (!valid) continue;
+                if (!valid || blocked) continue;
                 var colour = colourAt(sum / valid, ramp), offset = 4 * (y * w + x);
                 rgba[offset] = colour[0]; rgba[offset + 1] = colour[1]; rgba[offset + 2] = colour[2];
                 rgba[offset + 3] = Math.round(180 * valid / ((y1 - y0) * (x1 - x0)));
@@ -52,6 +53,7 @@
         return { w: w, h: h, west: grid.west, north: grid.north,
             dLon: grid.dLon * grid.w / w, dLat: grid.dLat * grid.h / h,
             rgba: rgba, thresholds: thresholds, ramp: ramp, aggregation: 'mean-score / valid-coverage alpha',
+            exclusionMask: exclusionMask || null,
             sourceWidth: grid.w, sourceHeight: grid.h };
     }
 
@@ -59,6 +61,12 @@
     function sampleRGBA(raster, lon, lat, out, offset) {
         var u = (lon - raster.west) / raster.dLon, v = (raster.north - lat) / raster.dLat;
         if (u < 0 || v < 0 || u >= raster.w || v >= raster.h) return;
+        // Bilinear texture filtering must not colour a forbidden source cell.
+        if (raster.exclusionMask) {
+            var sx = Math.floor(u * raster.sourceWidth / raster.w);
+            var sy = Math.floor(v * raster.sourceHeight / raster.h);
+            if (raster.exclusionMask[sy * raster.sourceWidth + sx]) return;
+        }
         var fx = Math.max(0, Math.min(raster.w - 1, u - 0.5));
         var fy = Math.max(0, Math.min(raster.h - 1, v - 0.5));
         var x0 = Math.floor(fx), y0 = Math.floor(fy), dx = fx - x0, dy = fy - y0;

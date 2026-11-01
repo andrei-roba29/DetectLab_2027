@@ -13,10 +13,13 @@ class Node {
 }
 const body = new Node('div'); body.hidden=true;
 const header = new Node('div'); header.textContent='Test LiDAR';
-const toggle = {checked:false,click(){this.checked=true;}};
+let toggle = {checked:false,click(){this.checked=true;}};
+const opacityEvents = [];
+const range = {id:'lidarNlAhnOpacitySlider', value:'70', max:'100',
+    dispatchEvent(event) { opacityEvents.push({type:event.type, bubbles:event.bubbles, value:this.value}); }};
 const row = new Node('div'); row.firstElementChild=header;
 row.querySelector = s => s==='.rvt-row-button' ? header.children.find(c=>c.className==='rvt-row-button') :
-    s==='input[id$="OpacitySlider"]' ? {id:'lidarNlAhnOpacitySlider',value:'70'} :
+    (s==='input[id$="OpacitySlider"]' || s==='input[type="range"]') ? range :
     s==='input[type="checkbox"]' ? toggle : null;
 const container=new Node('div');
 const frame=new Node('div');
@@ -31,7 +34,7 @@ const window={_dlMap:map,L:{},DLPhotoFilter:photo,DetectLabWindowDock:dock,addEv
 const config=JSON.parse(fs.readFileSync('rvt_service/methods.json'));
 const source=fs.readFileSync('js/rvt-panel.js','utf8');
 const ctx={window,document,L:{GridLayer:{extend:()=>function(){}}},MutationObserver:class{observe(){}},
-    fetch:()=>Promise.resolve({ok:true,json:()=>Promise.resolve({config,layers:{}})}),Event:class{},console,Map,Set,URLSearchParams,setTimeout,clearTimeout};
+    fetch:()=>Promise.resolve({ok:true,json:()=>Promise.resolve({config,layers:{}})}),Event:class{constructor(type, options){this.type=type;Object.assign(this, options);}},console,Map,Set,URLSearchParams,setTimeout,clearTimeout};
 vm.runInNewContext(source,ctx);
 assert.equal(frame.children[0].id, 'rvt-panel', 'settings are outside the Leaflet touch-action boundary');
 assert.equal(container.children.length, 0, 'settings do not inherit Leaflet map gestures');
@@ -48,6 +51,8 @@ const text=n=>n.textContent+' '+n.children.map(text).join(' ');
     await new Promise(resolve=>setImmediate(resolve));
     click();
     assert(toggle.checked,'inactive LiDAR is enabled');
+    assert.equal(range.value, '100', 'opening settings maximizes layer opacity');
+    assert.deepEqual(opacityEvents[0], {type:'input', bubbles:true, value:'100'}, 'normal opacity handler is notified');
     assert.equal(chosen,1); assert(!body.hidden);
     assert(text(body).includes('Tap the centre')); assert(!text(body).includes('Custom settings'));
     body.children[0].children[1].onclick();
@@ -62,10 +67,19 @@ const text=n=>n.textContent+' '+n.children.map(text).join(' ');
     callback(null); assert(body.hidden, 'completed preparation does not reopen a minimized window');
     dockEntries['lidar-settings'](); delete dockEntries['lidar-settings'];
     assert(!body.hidden && text(body).includes('Custom settings'),'restoring shows prepared settings');
-    click(); assert.equal(chosen,3); assert(!text(body).includes('Custom settings'),'reopening requires a new selection');
+    range.value = '35';
+    click(); assert.equal(range.value, '100', 'reopening an enabled layer resets reduced opacity'); assert.equal(chosen,3); assert(!text(body).includes('Custom settings'),'reopening requires a new selection');
     body.children[0].children[2].onclick(); assert(body.hidden); assert(cancelled>0); assert(stops>0);
     callback(null); assert(body.hidden,'cancelled selection cannot reopen settings');
+    for (const id of ['albaniaOpacity_dtm', 'danishOpacity_dtm', 'lidarHdOpacitySlider']) {
+        range.id = id; range.value = '0';
+        toggle = null; // Also cover rows without a visibility switch.
+        const before = opacityEvents.length;
+        click();
+        assert.equal(range.value, '100', id + ' opens fully opaque');
+        assert.equal(opacityEvents.length, before + 1, id + ' notifies its opacity handler');
+    }
     const html=fs.readFileSync('index.html','utf8'), sw=fs.readFileSync('sw.js','utf8');
-    for(const tag of ['js/rvt-panel.js?v=20261030-shared-dock','js/lidar-photo-filter.js?v=20261030-no-photo-toast']) assert(html.includes(tag)&&sw.includes(tag));
+    for(const tag of ['js/rvt-panel.js?v=20261101-settings-opacity','js/lidar-photo-filter.js?v=20261101-lidar-geographic-mask']) assert(html.includes(tag)&&sw.includes(tag));
     console.log('OK — LiDAR settings require a successfully prepared area; failure, retry and cancellation work.');
 })().catch(err=>{console.error(err);process.exitCode=1;});

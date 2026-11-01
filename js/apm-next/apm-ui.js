@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261101-robust-train';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261101-spatial-exclusions';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
@@ -48,7 +48,7 @@
         trainSession: { worker: null, analysisKey: null, provenance: null, stats: null, waterClasses: [] }
     };
 
-    var map = null, layer = null, centreMarker = null, radiusCircle = null, legendControl = null, legendEl = null, downweightedLayer = null;
+    var map = null, layer = null, centreMarker = null, radiusCircle = null, downweightedLayer = null;
     var els = {}, ui = { panel: null, btn: null };
     var i18nBindings = [];          // [{ el, key, attr }] refreshed on language change
 
@@ -123,7 +123,6 @@
         i18nBindings.forEach(applyBinding);
         renderPoint();
         renderModeTabs();
-        renderLegend();
         if (state.result) renderResult(state.result);
         renderPeriods();
         updateGate();
@@ -152,8 +151,11 @@
     function setEnabled(on) {
         state.enabled = !!on;
         try { root.localStorage.setItem(SWITCH_KEY, on ? 'on' : 'off'); } catch (e) { /* ignore */ }
-        if (!on) { stopPick(); cancelRun(); cancelSiteLoad(); clearResult(); }
-        else if (state.mode === 'train' && state.centre && !state.records) loadAriadneSites();
+        if (!on) { stopPick(); cancelRun(); cancelSiteLoad(); clearResult(); clearCentre(); }
+        else {
+            drawCentre();
+            if (state.mode === 'train' && state.centre && !state.records) loadAriadneSites();
+        }
         renderSwitch();
         updateGate();
         if (ui.panel) {
@@ -258,7 +260,7 @@
 
     function drawCentre() {
         var m = getMap();
-        if (!m || !state.centre || !root.L) return;
+        if (!state.enabled || !m || !state.centre || !root.L) return;
         if (centreMarker) m.removeLayer(centreMarker);
         if (radiusCircle) m.removeLayer(radiusCircle);
         var ll = [state.centre.lat, state.centre.lon];
@@ -561,7 +563,6 @@
         els.results.hidden = true;
         els.exportBtn.disabled = true;
         els.clearBtn.disabled = true;
-        renderLegend();
     }
 
     function drawResult(res) {
@@ -594,7 +595,6 @@
         layer = root.L.layerGroup(layers);
         if (m && layer.addTo) layer.addTo(m);
         applyOpacity();
-        renderLegend();
         renderResult(res);
         renderDownweightedSites(res);
         els.exportBtn.disabled = false;
@@ -646,27 +646,6 @@
         container.appendChild(h('div', { class: 'apm-heat-labels' }, [h('span', { text: T('result.lower') }), h('span', { text: T('result.higher') })]));
         container.appendChild(h('div', { class: 'apm-legend-row' }, [h('span', { class: 'apm-hotspot-swatch' }), h('span', { text: T('result.hotspotsOnly') })]));
         if (res && res.thresholds) container.appendChild(h('div', { class: 'apm-note', text: T('result.hotspotCutoff', { v: Number(thresholds.veryhigh).toPrecision(3) }) }));
-    }
-
-    function renderLegend() {
-        var m = getMap();
-        if (!legendEl) {
-            legendEl = h('div', { class: 'apm-legend apm-map-legend' });
-        }
-        legendEl.textContent = '';
-        legendEl.appendChild(h('div', { class: 'apm-legend-title', text: T('result.legend') }));
-        appendHeatLegend(legendEl, state.result);
-        // The map legend is shown only while a result is on the map.
-        if (m && root.L && root.L.control && state.result) {
-            if (!legendControl) {
-                legendControl = root.L.control({ position: 'bottomright' });
-                legendControl.onAdd = function () { return legendEl; };
-                legendControl.addTo(m);
-            }
-        } else if (m && legendControl) {
-            legendControl.remove();
-            legendControl = null;
-        }
     }
 
     /* Keys starting with "info." are plain notes (shown in the same list, not counted as warnings). */
@@ -1070,7 +1049,6 @@
         renderPeriods();
         renderModeTabs();
         renderPoint();
-        renderLegend();
         return panel;
     }
 
@@ -1107,7 +1085,6 @@
     function setPanelVisible(open) {
         ui.panel.hidden = !open;
         ui.panel.setAttribute('aria-hidden', String(!open));
-        // On phones the map legend steps aside only while settings are actually visible.
         document.body.classList.toggle('apm-panel-open', open);
         if (ui.btn) ui.btn.setAttribute('aria-expanded', String(open));
     }

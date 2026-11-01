@@ -41,7 +41,7 @@
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
     <link rel="stylesheet" href="css/tutorial.css?v=20261025-layer-glass">
     <link rel="stylesheet" href="css/offline-maps.css?v=20261025-layer-glass">
-    <link rel="stylesheet" href="css/next-gen-apm.css?v=20261101-dock-leafleet-level">
+    <link rel="stylesheet" href="css/next-gen-apm.css?v=20261101-panel-only-legend">
     <style>
         /* PWA Specific Styles */
         body.is-pwa .nav-links {
@@ -5265,7 +5265,7 @@
     <link rel="stylesheet" href="css/rvt-panel.css?v=20261101-robust-train">
     <script src="js/lidar-photo-filter.js?v=20261101-lidar-geographic-mask" defer></script>
     <script src="js/map-window-dock.js?v=20261101-robust-train"></script>
-    <script src="js/rvt-panel.js?v=20261101-robust-train" defer></script>
+    <script src="js/rvt-panel.js?v=20261101-settings-opacity" defer></script>
     <!-- Danish layers: panel rows, basemap-control buttons and the lazy
          Leaflet layers, all built from js/danish-layers.config.js. -->
     <script src="js/danish-layers.js?v=20261028-kulturarv-sublayers"></script>
@@ -5339,18 +5339,18 @@
     <script src="js/leaflet-heat.js?v=20260916-analysis-dock"></script>
     <!-- Next-Gen APM (MANUAL + TRAIN, Premium): js/apm-next/ holds the scoring core,
          raster/polygon helpers, providers and the pipeline; apm-ui.js adds its
-         own floating button and panel. Independent of the legacy archeo layer. -->
+         own floating button and panel. Shares mandatory spatial exclusions with Archaeological Potential Sites. -->
     <script src="js/apm-next/apm-core.js?v=20261101-robust-train"></script>
     <script src="js/apm-next/apm-raster.js?v=20261101-robust-train"></script>
-    <script src="js/apm-next/apm-heatmap.js?v=20261101-robust-train"></script>
+    <script src="js/apm-next/apm-heatmap.js?v=20261101-spatial-exclusions"></script>
     <script src="js/apm-next/apm-sites.js?v=20261101-robust-train"></script>
     <script src="js/apm-next/romania-periods.config.js?v=20261101-romania-ran"></script>
     <script src="js/apm-next/apm-providers.js?v=20261101-romania-ran"></script>
     <script src="js/apm-next/apm-romania-sites.js?v=20261101-romania-ran"></script>
-    <script src="js/apm-next/apm-i18n.js?v=20261101-robust-train"></script>
-    <script src="js/apm-next/apm-pipeline.js?v=20261101-robust-train"></script>
-    <script src="js/apm-next/apm-ui.js?v=20261101-robust-train"></script>
-    <script src="js/archeo-potential.js?v=20261030-report-exclusions"></script>
+    <script src="js/apm-next/apm-i18n.js?v=20261101-spatial-exclusions"></script>
+    <script src="js/apm-next/apm-pipeline.js?v=20261101-spatial-exclusions"></script>
+    <script src="js/apm-next/apm-ui.js?v=20261101-spatial-exclusions"></script>
+    <script src="js/archeo-potential.js?v=20261101-spatial-exclusions"></script>
     <script src="js/lidar-geo.js?v=20260811-latlon"></script>
     <script src="js/lidar-scanner.js?v=20261020-3d-analysis-points"></script>
     <script src="js/library-of-babel.js?v=20261023-babel-ariadne"></script>
