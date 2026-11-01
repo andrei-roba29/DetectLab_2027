@@ -30,7 +30,9 @@ const photo={get:()=>null, active:()=>true, choose(key, method, values, cb){chos
 const document={createElement:t=>new Node(t),querySelectorAll:()=>[row],getElementById:()=>null};
 const dockEntries = {};
 const dock = { minimize(id, label, restore) { dockEntries[id] = restore; }, remove(id) { delete dockEntries[id]; } };
-const window={_dlMap:map,L:{},DLPhotoFilter:photo,DetectLabWindowDock:dock,addEventListener(){}};
+const settingsListeners = {};
+const window={_dlMap:map,L:{},DLPhotoFilter:photo,DetectLabWindowDock:dock,
+    addEventListener(type, fn) { (settingsListeners[type] = settingsListeners[type] || []).push(fn); }};
 const config=JSON.parse(fs.readFileSync('rvt_service/methods.json'));
 const source=fs.readFileSync('js/rvt-panel.js','utf8');
 const ctx={window,document,L:{GridLayer:{extend:()=>function(){}}},MutationObserver:class{observe(){}},
@@ -79,7 +81,24 @@ const text=n=>n.textContent+' '+n.children.map(text).join(' ');
         assert.equal(range.value, '100', id + ' opens fully opaque');
         assert.equal(opacityEvents.length, before + 1, id + ' notifies its opacity handler');
     }
+    // Leaving the 3D view resets the LiDAR area and its settings back to normal
+    // (carrying them across the 2D ⇄ 3D hand-off crashed the installed PWA).
+    const chosenBefore = chosen;
+    click();
+    callback(null);
+    assert.equal(chosen, chosenBefore + 1, 'the area is prepared again before the 3D round trip');
+    const stopsBefore = stops;
+    (settingsListeners['detectlab:3d-closed'] || []).forEach(fn => fn({type:'detectlab:3d-closed'}));
+    assert(text(body).includes('3D view was closed'), 'the panel asks for the area again');
+    assert(!text(body).includes('Custom settings'), 'the prepared settings are gone');
+    assert(stops > stopsBefore, 'the photo effect is stopped with the 3D view');
+    assert(stops > 0);
+    click();
+    assert.equal(chosen, chosenBefore + 2, 'a new area can be chosen after the reset');
+    assert(!text(body).includes('Custom settings'), 'the reset did not keep a stale area');
+    callback(null);
+    assert(text(body).includes('Custom settings'), 'settings work again after the reset');
     const html=fs.readFileSync('index.html','utf8'), sw=fs.readFileSync('sw.js','utf8');
-    for(const tag of ['js/rvt-panel.js?v=20261101-settings-opacity','js/lidar-photo-filter.js?v=20261101-lidar-geographic-mask']) assert(html.includes(tag)&&sw.includes(tag));
+    for(const tag of ['js/rvt-panel.js?v=20261101-lidar-settings-reset','js/lidar-photo-filter.js?v=20261101-lidar-settings-reset']) assert(html.includes(tag)&&sw.includes(tag));
     console.log('OK — LiDAR settings require a successfully prepared area; failure, retry and cancellation work.');
 })().catch(err=>{console.error(err);process.exitCode=1;});

@@ -9,10 +9,10 @@ const script = fs.readFileSync('js/window-resize.js', 'utf8');
 const css = fs.readFileSync('css/window-resize.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 const sw = fs.readFileSync('sw.js', 'utf8');
-for (const asset of ['css/window-resize.css?v=20261101-window-resize', 'js/window-resize.js?v=20261101-window-resize']) {
+for (const asset of ['css/window-resize.css?v=20261101-layer-no-grip', 'js/window-resize.js?v=20261101-layer-no-grip']) {
     assert(html.includes(asset) && sw.includes(asset), 'new asset is loaded and precached');
 }
-assert(/sel === '\.transp-panel' && el\.classList\.contains\('dl-window-resized'\)/.test(html), 'PWA fitting preserves the chosen height');
+assert(!/'\\.transp-panel'/.test(script), 'the layers window is never given a resize grip');
 assert(/touch-action:\s*none\s*!important/.test(css), 'touch drag is not taken over by scrolling');
 assert(/overflow-y:\s*auto\s*!important/.test(css), 'content remains scrollable');
 
@@ -36,8 +36,10 @@ assert(/overflow-y:\s*auto\s*!important/.test(css), 'content remains scrollable'
     [layer, rvt, auth].forEach(mockHeight);
     window.eval(script);
     window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
-    const handle = layer.querySelector('.dl-window-resize-handle');
-    assert(handle && rvt.querySelector('.dl-window-resize-handle') && auth.querySelector('.dl-window-resize-handle'));
+    assert(!layer.querySelector('.dl-window-resize-handle'), 'the layers window carries no drag handle');
+    assert(!layer.classList.contains('dl-window-resized'), 'the layers window is left un-resized');
+    const handle = rvt.querySelector('.dl-window-resize-handle');
+    assert(handle && auth.querySelector('.dl-window-resize-handle'));
     assert.equal(handle.getAttribute('role'), 'separator');
     assert.equal(handle.getAttribute('aria-orientation'), 'horizontal');
     assert(!window.document.querySelector('#accountPanel > .dl-window-resize-handle'), 'PWA account window has no nested handle');
@@ -51,21 +53,22 @@ assert(/overflow-y:\s*auto\s*!important/.test(css), 'content remains scrollable'
     }
     pointer(handle, 'pointerdown', 100);
     pointer(window, 'pointermove', 200);
-    assert.equal(layer.style.height, '240px', 'dragging down shrinks the window');
-    assert(layer.classList.contains('dl-window-compact'), 'small windows get the compact content layout');
-    assert.equal(layer.style.getPropertyPriority('height'), 'important', 'PWA heights are overridden');
+    assert.equal(rvt.style.height, '240px', 'dragging down shrinks the window');
+    assert(rvt.classList.contains('dl-window-compact'), 'small windows get the compact content layout');
+    assert.equal(rvt.style.getPropertyPriority('height'), 'important', 'PWA heights are overridden');
     assert.equal(handle.getAttribute('aria-valuenow'), '240');
     pointer(window, 'pointerup', 200);
     pointer(window, 'pointermove', 250);
-    assert.equal(layer.style.height, '240px', 'releasing the drag stops resizing');
+    assert.equal(rvt.style.height, '240px', 'releasing the drag stops resizing');
     handle.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
-    assert.equal(layer.style.height, '256px', 'keyboard increases height');
+    assert.equal(rvt.style.height, '256px', 'keyboard increases height');
     handle.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
-    assert.equal(layer.style.height, '96px', 'minimum preserves a usable scrollable window');
+    assert.equal(rvt.style.height, '96px', 'minimum preserves a usable scrollable window');
     handle.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
-    assert.equal(layer.style.height, '544px', 'height is bounded by the map frame');
-    assert(!layer.classList.contains('dl-window-compact'), 'expanding restores the normal layout');
-    assert(layer.querySelector('button'), 'existing controls survive resizing');
+    assert.equal(rvt.style.height, '544px', 'height is bounded by the map frame');
+    assert(!rvt.classList.contains('dl-window-compact'), 'expanding restores the normal layout');
+    assert(rvt.querySelector('button'), 'existing controls survive resizing');
+    assert(!layer.style.height && !layer.classList.contains('dl-window-compact'), 'the layers window keeps its docked geometry while dialogs resize');
     rvt.innerHTML = '<button>Re-rendered settings</button>';
     const created = window.document.createElement('div');
     created.className = 'offline-library';
@@ -74,5 +77,5 @@ assert(/overflow-y:\s*auto\s*!important/.test(css), 'content remains scrollable'
     assert.equal(rvt.querySelectorAll('.dl-window-resize-handle').length, 1, 'grip returns after rerender');
     assert.equal(created.querySelectorAll('.dl-window-resize-handle').length, 1, 'dynamically added windows get a grip');
     dom.window.close();
-    console.log('Window resize: mouse/touch pointer, keyboard, limits, dynamic windows and PWA wiring OK.');
+    console.log('Window resize: pointer, keyboard, limits, dynamic windows, PWA wiring and a grip-free layers window OK.');
 })().catch(err => { console.error(err); process.exitCode = 1; });

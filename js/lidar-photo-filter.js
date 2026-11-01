@@ -7,7 +7,8 @@
     const tilePixels = new Map(), canvases = new Map();
     const blurCache = new WeakMap();
     const MAX_TILES = root.innerWidth && root.innerWidth < 700 ? 48 : 96;
-    const controls = {exposure:0, highlights:0, shadows:0, contrast:0, brightness:0, sharpness:0, opacity:100};
+    const DEFAULT_CONTROLS = {exposure:0, highlights:0, shadows:0, contrast:0, brightness:0, sharpness:0, opacity:100};
+    const controls = {...DEFAULT_CONTROLS};
     const snapshot = () => session && session.ready && {key:session.key, center:{lat:session.center.lat,lng:session.center.lng}, radiusKm:1,
         zoom:session.zoom, method:session.method, tiles:tilePixels.size};
     function announce(text) { root.dispatchEvent(new CustomEvent('dl:photo-filter', {detail:{status:text,session:snapshot()}})); }
@@ -38,6 +39,20 @@
         }
         return tiles;
     }
+    /* How many tiles one whole level of the disc holds (the same footprint
+       tileCoordinates walks, without building it). */
+    function tileCount(center, z) {
+        const earth = 40075016.68557849, circumference = earth * Math.cos(center.lat * Math.PI / 180);
+        const px = 1000 / (circumference / (256 * 2 ** z));
+        const p = map.project(center, z), minX = Math.floor((p.x-px)/256), maxX = Math.floor((p.x+px)/256);
+        const minY = Math.floor((p.y-px)/256), maxY = Math.floor((p.y+px)/256);
+        let n = 0;
+        for (let x=minX;x<=maxX;x++) for(let y=minY;y<=maxY;y++) {
+            if (x < 0 || y < 0 || x >= 2**z || y >= 2**z) continue;
+            n++;
+        }
+        return n;
+    }
     /* Only the levels the provider really serves are requested. A LAKI III or
        Ro5m MapServer publishes a window of levels (CS/DJ/GJ/MH: 9–17, Ro5m:
        7–15); asking for z0…minLOD-1 or above maxLOD returns no tile, and one
@@ -47,11 +62,38 @@
         for (let z=minZoom; z<=maxZoom; z++) tiles.push(...tileCoordinates(center,z));
         return tiles;
     }
+    /* The deepest level the provider actually publishes. `maxZoom` of a
+       Leaflet tile layer is only the display ceiling (Leaflet upscales above
+       it); `maxNativeZoom` is what the tile pyramid really holds. */
+    function nativeCeiling(layer) {
+        const options = (layer && layer.layer && layer.layer.options) || {};
+        const candidates = [options.maxNativeZoom, layer && layer.maxzoom, options.maxZoom];
+        for (const value of candidates) {
+            const n = Number(value);
+            if (Number.isFinite(n) && n > 0) return Math.min(22, n);
+        }
+        return 18;
+    }
+    /* The depth of the prepared area belongs to the LAYER, never to the view
+       the centre was picked from.
+       Reported (2026-11-01): choosing the 1 km area from a country-wide view
+       (z10) and then flying in left the disc a blur — the tiles that carried
+       the photo effect were the tile of the zoom the map had WHEN the area was
+       picked, blown up step by step. `map.getZoom()` seeded this choice, so a
+       z10 pick downloaded one 100 m/px tile (the disc is 19 px wide there) and
+       nothing else: the effect was already soft at z12 and unusable at z16.
+       The plan now starts from the provider's own native ceiling and walks
+       down only as far as the tile budget requires, so the same tap gives the
+       same disc whether it was made from z10 or from z17. Levels above the
+       prepared depth are not upscaled any more either: PhotoLayer fetches the
+       exact level on demand for the tiles on screen (see createTile). */
     function chooseZoom(center, layer) {
         const lo = Math.max(0, layer.minzoom || 0);
-        const hi = Math.min(18, layer.maxzoom || 18);
-        let z = Math.max(lo, Math.min(hi, Math.floor(map.getZoom())));
-        while (z > lo && zoomTiles(center,z,lo).length > MAX_TILES) z--;
+        const hi = Math.max(lo, nativeCeiling(layer));
+        let total = 0;
+        for (let level=lo; level<=hi; level++) total += tileCount(center, level);
+        let z = hi;
+        while (z > lo && total > MAX_TILES) { total -= tileCount(center, z); z--; }
         return z;
     }
     const keyOf = t => [t.z,t.x,t.y].join('/');
@@ -150,7 +192,13 @@
         maskFrame = requestAnimationFrame(() => {
             maskFrame = 0;
             if (!session || !overlay) return;
-            const visible = map.getZoom() >= session.zoom - 1;
+            /* Every level from the layer's own minimum up to the prepared
+             * depth carries cached pixels, so the effect is shown across that
+             * whole range: a disc picked from z10 is visible at z10 and stays
+             * sharp on the way in (levels above the depth are fetched on
+             * demand). Below the provider's minimum the layer itself has no
+             * tiles, so there is nothing to mask or show. */
+            const visible = map.getZoom() >= (session.minzoom || 0) - 1;
             const container = overlay.getContainer();
             if (container) container.style.display = visible ? '' : 'none';
             if (visible !== maskVisible) {
@@ -186,6 +234,21 @@
         overlay=null; session=null; tilePixels.clear(); canvases.clear();
         if (marker) { map.removeLayer(marker); marker=null; }
         root.dispatchEvent(new CustomEvent('dl:photo-filter', {detail:{status:'Image effect off',session:null}}));
+    }
+    /* Leaving the 3D view puts the LiDAR area back to normal: the prepared
+     * effect, its adjustments and its decoded tile cache are dropped. That
+     * cache is the reason this exists — a fully prepared disc holds up to 96
+     * (desktop) or 48 (phone) tiles of 256×256 RGBA in memory, ~25 MB / 12 MB,
+     * and keeping it alive across the 2D ⇄ 3D hand-off left it sitting next to
+     * a WebGL deck that had just been torn down. In the installed PWA that is
+     * what crashed the app on the way back to the 2D map, so the effect is
+     * reset (not merely hidden) when 3D closes. */
+    function reset() {
+        const had = !!session;
+        stop();
+        Object.assign(controls, DEFAULT_CONTROLS);
+        if (had) announce('The 3D view was closed — the LiDAR area and its settings are reset.');
+        return had;
     }
     function blurs(source, radius) {
         const out=new Float32Array(256*256);
@@ -260,10 +323,60 @@
         }
         canvas.getContext('2d').putImageData(image,0,0);
     }
+    /* A stand-in for a tile whose own level is still on its way: the deepest
+     * cached ancestor, scaled, exactly the composite the 3D path paints. Used
+     * only above the prepared depth, so a newly uncovered screenful never
+     * shows a transparent hole over the (masked) original LiDAR while the
+     * provider answers. */
+    function composeParents(canvas, coords) {
+        const ctx=canvas.getContext('2d');
+        for (let step=1; step<=6 && coords.z-step>=0; step++) {
+            const z=coords.z-step, scale=2**step;
+            const parent={z,x:Math.floor(coords.x/scale),y:Math.floor(coords.y/scale)};
+            const pixels=tilePixels.get(keyOf(parent));
+            if (!pixels) continue;
+            const part=document.createElement('canvas'); part.width=part.height=256;
+            paint(part,pixels,parent);
+            const size=256/scale;
+            ctx.drawImage(part,(coords.x-parent.x*scale)*size,(coords.y-parent.y*scale)*size,size,size);
+            return true;
+        }
+        return false;
+    }
     const PhotoLayer=L.GridLayer.extend({createTile(coords,done) {
         const canvas=document.createElement('canvas'); canvas.width=canvas.height=256;
-        const original=tilePixels.get(keyOf(coords));
-        if (original) { paint(canvas,original,coords); canvases.set(keyOf(coords),{canvas,coords}); }
+        const key=keyOf(coords);
+        const original=tilePixels.get(key);
+        if (original) {
+            paint(canvas,original,coords); canvases.set(key,{canvas,coords});
+            queueMicrotask(()=>done(null,canvas));
+            return canvas;
+        }
+        if (session && coords.z > session.zoom) {
+            /* Deeper than the prepared disc: ask the provider for THIS level
+             * instead of letting Leaflet blow up the deepest prepared tile
+             * (which is what turned a far-away pick into a blur). The cached
+             * parent is painted first so the circle is never empty. */
+            const current=session;
+            const clip=tileMask(coords);
+            /* A tile that cannot touch the circle (the grid is bigger than the
+             * disc) is left transparent instead of asking the provider for
+             * imagery that would be clipped away anyway. */
+            if (clip && Math.hypot(clip.x-128, clip.y-128) > clip.radius + 182) {
+                queueMicrotask(()=>done(null,canvas));
+                return canvas;
+            }
+            composeParents(canvas,coords);
+            canvases.set(key,{canvas,coords});
+            const controller=new AbortController(); canvas._rvtAbort=controller;
+            fetchPixels(current.entry,coords,controller.signal).then(pixels=>{
+                if (session!==current || controller.signal.aborted) { done(null,canvas); return; }
+                tilePixels.set(key,pixels);
+                paint(canvas,pixels,coords);
+                done(null,canvas);
+            }).catch(()=>done(null,canvas)); // keep the parent composite on failure
+            return canvas;
+        }
         queueMicrotask(()=>done(null,canvas)); return canvas;
     }});
     let paintGeneration=0;
@@ -294,7 +407,7 @@
         const zoom=chooseZoom(center,entry);
         const tiles=zoomTiles(center,zoom,Math.max(0,entry.minzoom||0));
         const serial=++generation, controller=new AbortController();
-        session={key,entry,center,zoom,method,controller}; Object.assign(controls,values||{});
+        session={key,entry,center,zoom,minzoom:Math.max(0,entry.minzoom||0),method,controller}; Object.assign(controls,values||{});
         marker=L.circle(center,{radius:1000,color:'#efbb75',weight:2,fill:false,interactive:false,pane:'rvt-photo-marker-pane'}).addTo(map);
         marker._dl3dSkip=true; // Selection chrome is not imagery.
         announce('Fetching image tiles: 0/' + tiles.length + ' (zoom ' + zoom + ')');
@@ -311,10 +424,23 @@
         await Promise.all(Array.from({length:Math.min(4,tiles.length)},worker));
         if (serial!==generation) return false;
         if (failures) { stop(); throw Error(failures + ' of ' + tiles.length + ' image tiles failed; no partial filter was applied'); }
-        overlay=new PhotoLayer({pane:'rvt-photo-pane',tileSize:256,minZoom:0,maxNativeZoom:zoom,maxZoom:22,keepBuffer:1});
+        /* maxNativeZoom is the provider's ceiling, not the prepared depth: it
+         * lets Leaflet ask for the exact level above the disc and hands those
+         * tiles to createTile's on-demand fetch. Above the ceiling nothing
+         * sharper exists, so Leaflet overzooms the deepest real tile — the
+         * same thing the live LiDAR layer under it does. */
+        const ceiling=Math.max(zoom,nativeCeiling(entry));
+        overlay=new PhotoLayer({pane:'rvt-photo-pane',tileSize:256,minZoom:0,maxNativeZoom:ceiling,maxZoom:22,keepBuffer:1});
         overlay._dl3dSkip=true; // 3D has its own separately prepared image/terrain deck.
         overlay.addTo(map);
-        overlay.on('tileunload', e=>canvases.delete(keyOf(e.coords)));
+        overlay.on('tileunload', e=>{
+            const key=keyOf(e.coords);
+            if (e.tile && e.tile._rvtAbort) e.tile._rvtAbort.abort();
+            canvases.delete(key);
+            /* Only the prepared levels stay in memory; a level fetched on
+             * demand is dropped with the tile that needed it. */
+            if (e.coords.z > zoom) tilePixels.delete(key);
+        });
         session.entry.layer.on?.('tileload', onPhotoTileLoad);
         session.entry.layer.on?.('tileunload', onPhotoTileUnload);
         maskOrigin(); session.ready=true; announce('Photo effect ready: ' + tiles.length + ' tiles in a 1 km radius (not real RVT)');
@@ -342,8 +468,16 @@
         const current = session;
         const canvas=document.createElement('canvas'); canvas.width=canvas.height=256;
         const ctx=canvas.getContext('2d');
-        // The cache contains both the native zoom and its parent. For lower
-        // zooms, composite the cached parent tiles into their correct positions.
+        // The cache contains the native prepared zoom, its parents, and any
+        // level fetched on demand for a close-in 2D view: use an exact hit.
+        const exact=tilePixels.get([z,x,y].join('/'));
+        if (exact) {
+            paint(canvas,exact,{z,x,y});
+            const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+            if (!blob || session !== current || !info3d(layer,mask)) throw Error('Image area changed during rendering');
+            return blob.arrayBuffer();
+        }
+        // For lower zooms, composite the cached parent tiles into their correct positions.
         const sourceZoom = z < current.zoom ? current.zoom - 1 : current.zoom;
         const scale = 2 ** (z-sourceZoom);
         for (const [key, pixels] of tilePixels) {
@@ -395,7 +529,9 @@
     else markerPane.className=(markerPane.className?markerPane.className+' ':'')+'leaflet-zoom-hide';
     map.on('layerremove',event=>{ if (session && event.layer===session.entry.layer) stop(); });
     map.on('zoomend moveend resize', settleMasks);
-    root.DLPhotoFilter={active,choose,prepare,update,stop,get:snapshot,preview,info3d,tile3d,
+    root.DLPhotoFilter={active,choose,prepare,update,stop,reset,get:snapshot,preview,info3d,tile3d,
         source3d: () => session && session.ready ? session.entry.layer : null,
-        _test:{effect,tileCoordinates,chooseZoom,zoomTiles,tileMask}};
+        _test:{effect,tileCoordinates,chooseZoom,zoomTiles,tileMask,nativeCeiling,tileCount,controls}};
+    /* The 3D viewer announces every close (js/map3d-terrain.js close()). */
+    if (typeof root.addEventListener === 'function') root.addEventListener('detectlab:3d-closed', reset);
 })(window);

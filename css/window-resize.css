@@ -32,9 +32,6 @@
 }
 /* Top-attached, full-height panels now resize upward from the bottom edge.
    Only the resized panel changes geometry; the map and backdrops stay put. */
-.map-frame .transp-panel.dl-window-resized,
-body.is-pwa .map-frame .transp-panel.dl-window-resized,
-.map-frame.is-fullscreen .transp-panel.dl-window-resized,
 #friendsManagerPanel.dl-window-resized,
 .fr-chat-panel.dl-window-resized,
 #eventsManagerPanel.dl-window-resize-centered { translate: 0 var(--dl-resize-shift, 0px); }

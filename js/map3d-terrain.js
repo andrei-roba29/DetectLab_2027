@@ -4458,7 +4458,23 @@
         /* Back in 2D: the refresh action leaves the group and the Leaflet
          * corner is visible again, so the anchor is remeasured. */
         queueAnchorSync();
+        /* The prepared LiDAR Settings area does not survive the hand-off.
+         * Its decoded tile cache (tens of MB) plus a deck that has just
+         * released its WebGL memory is what crashed the installed PWA on the
+         * way back to the map, so the effect is reset rather than hidden:
+         * js/lidar-photo-filter.js and js/rvt-panel.js listen for this and put
+         * the area, its adjustments and their panels back to normal. */
+        announce3dClosed();
         return true;
+    }
+
+    /** Best-effort notice that the 3D view closed (see close()). */
+    function announce3dClosed() {
+        try {
+            var Ctor = root.CustomEvent || (typeof CustomEvent === 'function' ? CustomEvent : null);
+            if (!Ctor || typeof root.dispatchEvent !== 'function') return;
+            root.dispatchEvent(new Ctor('detectlab:3d-closed', { detail: {} }));
+        } catch (e) { /* a missing CustomEvent never blocks the 2D map */ }
     }
 
     function toggle() {

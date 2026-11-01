@@ -3,8 +3,10 @@
     'use strict';
 
     // Target the visible window, not its backdrop or map-sized positioning host.
+    // The layers window (.transp-panel / #transpPanel) is deliberately absent:
+    // it is anchored top→bottom of the map frame and gets no resize grip.
     var selector = [
-        '.transp-panel', '#iosBldSettingsPanel', '#iosfreeModalInner',
+        '#iosBldSettingsPanel', '#iosfreeModalInner',
         '.country-dock-panel', '.hist-shift-panel', '.om-panel',
         '.offline-map-panel', '.offline-library', '.apm-panel', '#rvt-body',
         '#map3d-focus .m3d-focus-card', '.om-modal-card', '.layer-info-box',
