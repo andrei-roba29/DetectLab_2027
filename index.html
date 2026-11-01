@@ -111,6 +111,20 @@
             font-size: 16px !important;
         }
 
+        /* A tap on a text field must never be cancelled by a gesture rule and
+           the field itself must stay selectable: on iOS a non-selectable or
+           touch-action-restricted field can take focus without ever raising the
+           on-screen keyboard (the map container sets user-select:none, and the
+           search box lives inside it). */
+        body.is-pwa input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]),
+        body.is-pwa textarea,
+        body.is-pwa select {
+            -webkit-user-select: text !important;
+            user-select: text !important;
+            touch-action: manipulation !important;
+            -ms-touch-action: manipulation !important;
+        }
+
         /* Weather/account overlays remain vertically scrollable in PWA mode. */
         body.is-pwa #weatherPanel,
         body.is-pwa .pwa-account-overlay,
