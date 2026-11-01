@@ -7,7 +7,8 @@
     const tilePixels = new Map(), canvases = new Map();
     const blurCache = new WeakMap();
     const MAX_TILES = root.innerWidth && root.innerWidth < 700 ? 48 : 96;
-    const controls = {exposure:0, highlights:0, shadows:0, contrast:0, brightness:0, sharpness:0, opacity:100};
+    const DEFAULT_CONTROLS = {exposure:0, highlights:0, shadows:0, contrast:0, brightness:0, sharpness:0, opacity:100};
+    const controls = {...DEFAULT_CONTROLS};
     const snapshot = () => session && session.ready && {key:session.key, center:{lat:session.center.lat,lng:session.center.lng}, radiusKm:1,
         zoom:session.zoom, method:session.method, tiles:tilePixels.size};
     function announce(text) { root.dispatchEvent(new CustomEvent('dl:photo-filter', {detail:{status:text,session:snapshot()}})); }
@@ -233,6 +234,21 @@
         overlay=null; session=null; tilePixels.clear(); canvases.clear();
         if (marker) { map.removeLayer(marker); marker=null; }
         root.dispatchEvent(new CustomEvent('dl:photo-filter', {detail:{status:'Image effect off',session:null}}));
+    }
+    /* Leaving the 3D view puts the LiDAR area back to normal: the prepared
+     * effect, its adjustments and its decoded tile cache are dropped. That
+     * cache is the reason this exists — a fully prepared disc holds up to 96
+     * (desktop) or 48 (phone) tiles of 256×256 RGBA in memory, ~25 MB / 12 MB,
+     * and keeping it alive across the 2D ⇄ 3D hand-off left it sitting next to
+     * a WebGL deck that had just been torn down. In the installed PWA that is
+     * what crashed the app on the way back to the 2D map, so the effect is
+     * reset (not merely hidden) when 3D closes. */
+    function reset() {
+        const had = !!session;
+        stop();
+        Object.assign(controls, DEFAULT_CONTROLS);
+        if (had) announce('The 3D view was closed — the LiDAR area and its settings are reset.');
+        return had;
     }
     function blurs(source, radius) {
         const out=new Float32Array(256*256);
@@ -513,7 +529,9 @@
     else markerPane.className=(markerPane.className?markerPane.className+' ':'')+'leaflet-zoom-hide';
     map.on('layerremove',event=>{ if (session && event.layer===session.entry.layer) stop(); });
     map.on('zoomend moveend resize', settleMasks);
-    root.DLPhotoFilter={active,choose,prepare,update,stop,get:snapshot,preview,info3d,tile3d,
+    root.DLPhotoFilter={active,choose,prepare,update,stop,reset,get:snapshot,preview,info3d,tile3d,
         source3d: () => session && session.ready ? session.entry.layer : null,
-        _test:{effect,tileCoordinates,chooseZoom,zoomTiles,tileMask,nativeCeiling,tileCount}};
+        _test:{effect,tileCoordinates,chooseZoom,zoomTiles,tileMask,nativeCeiling,tileCount,controls}};
+    /* The 3D viewer announces every close (js/map3d-terrain.js close()). */
+    if (typeof root.addEventListener === 'function') root.addEventListener('detectlab:3d-closed', reset);
 })(window);

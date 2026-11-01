@@ -159,3 +159,44 @@ Checked by `node test-lidar-photo-filter.js` (the plan ignores `map.getZoom()`
 and stays inside the budget) and the new `node test-lidar-photo-deep-zoom.js`
 (real prepare at z10 → depth 16, deeper tile requested by its own level, tiles
 outside the disc never requested, prepared levels drawn from memory).
+
+## Leaving 3D resets the area and its settings
+
+**Report (2026-11-01):** *"when applying settings to a certain LiDAR area, then
+seeing it in 3D and going back to 2D, the applied filter and setting should be
+reset back to normal, because it crashed the PWA app."*
+
+The effect used to survive the hand-off. That is a lot of memory to keep: a
+prepared disc holds up to 96 decoded 256×256 RGBA tiles on desktop (73 at a
+1 km, z16 disc) or 48 on a phone — 19 MB / 12 MB of `ImageData`, on top of the
+photo overlay's canvases — and it was all still held while MapLibre's deck had
+been built *and* torn down. On an installed PWA (iOS especially) the returning
+2D map then had to repaint its own tiles while that cache was still allocated,
+and the app died on the way back.
+
+**Now the prepared area does not outlive the 3D view.** `close()` in
+`js/map3d-terrain.js` announces the hand-off once, after the deck is gone:
+
+```js
+root.dispatchEvent(new CustomEvent('detectlab:3d-closed', { detail: {} }));
+```
+
+Two listeners answer it:
+
+| listener | what it puts back |
+| --- | --- |
+| `js/lidar-photo-filter.js` → `reset()` | `stop()` the photo effect (overlay removed, the original LiDAR tiles un-masked, marker gone), **clear the decoded tile cache**, and every photo adjustment back to its default |
+| `js/rvt-panel.js` → `resetSettings()` | `areaReady` false, the RVT float overlay removed, the float tile store and section line dropped, the stored photo/RVT settings for every layer deleted, and the window back on “Choose LiDAR area” with an explanation |
+
+So after a 3D round trip the LiDAR sublayer looks exactly like a normal layer
+again, and the next opening of **LiDAR Settings** starts from a clean slate:
+choose the area again, adjust again. Nothing is reset when the 3D view is never
+opened (cancelling the 3D entry dialog leaves the prepared area alone — `close()`
+returns before announcing), and the image-effect bridge *into* 3D is untouched:
+the pixels are still there for the deck while 3D is open.
+
+Checked by `node test-lidar-photo-deep-zoom.js` (the `detectlab:3d-closed`
+listener drops the session, removes the overlay and restores the defaults),
+`node test-lidar-area-first.js` (the panel returns to “choose the area again”,
+the effect is stopped and a new area can be prepared) and
+`node test-map3d-terrain.js` (the viewer announces the hand-off from `close()`).

@@ -65,6 +65,7 @@ GridLayer.extend = function (proto) {
 const listeners = {};
 const window = {
     _dlMap: map,
+    addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); },
     innerWidth: 1280,                       // desktop budget: 96 tiles
     L: { GridLayer, circle: () => ({ addTo() { return this; } }) },
     dispatchEvent(event) { if (process.env.DEBUG_PHOTO) console.log('  ·', event.detail && event.detail.status); },
@@ -139,8 +140,23 @@ const api = window.DLPhotoFilter;
     overlayInstance().createTile({ z: 16, x: Math.floor(p.x / 256), y: Math.floor(p.y / 256) }, () => {});
     assert.equal(fetched.length, cached, 'prepared levels are drawn from memory');
 
-    api.stop();
-    console.log('LiDAR area depth: the disc belongs to the layer, deeper levels are fetched on demand.');
+    /* [5] Leaving the 3D view resets the area: the effect is dropped, the
+     * decoded tile cache is released and the adjustments go back to defaults.
+     * Keeping them across the hand-off crashed the installed PWA. */
+    assert.ok(api.get(), 'the area is still prepared before 3D closes');
+    assert.equal(typeof api.reset, 'function', 'the area can be reset');
+    let removed = 0;
+    const removeLayer = map.removeLayer;
+    map.removeLayer = function (layer) { removed++; return removeLayer && removeLayer.call(map, layer); };
+    (listeners['detectlab:3d-closed'] || []).forEach(fn => fn({ type: 'detectlab:3d-closed' }));
+    assert.equal(api.get(), null, 'a 3D close drops the prepared area');
+    assert.ok(removed >= 1, 'the photo overlay leaves the 2D map');
+    const defaults = { exposure: 0, highlights: 0, shadows: 0, contrast: 0, brightness: 0, sharpness: 0, opacity: 100 };
+    assert.deepEqual({ ...api._test.controls }, defaults, 'the adjustments go back to their defaults');
+    assert.ok(removed >= 1);
+    map.removeLayer = removeLayer;
+
+    console.log('LiDAR area depth: layer-owned plan, on-demand deep tiles, and a reset when 3D closes.');
 })().catch(err => { console.error(err); process.exitCode = 1; });
 
 function overlayInstance() {

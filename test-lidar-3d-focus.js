@@ -52,7 +52,7 @@ const focusSource = read('js/lidar-3d-focus.js');
 /* Every build that changes the LiDAR 3D focus path bumps its own tag. */
 const TAG = '20261031-lidar-dock-minimized';
 const TAG_MIRROR = '20261030-lidar-photo-3d';
-const TAG_VIEWER = '20261031-3d-bearing-handoff';
+const TAG_VIEWER = '20261101-lidar-settings-reset';
 const TAG_CSS = '20261031-lidar-dock-minimized';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,

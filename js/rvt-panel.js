@@ -482,6 +482,29 @@
         if (retry) { const button = el('button', 'Choose area again'); button.type = 'button';
             button.onclick = beginAreaSelection; body.appendChild(button); }
     }
+    /* Leaving the 3D view resets the LiDAR settings back to normal — the same
+     * reset js/lidar-photo-filter.js applies to its photo effect (see reset()
+     * there). The prepared area, the RVT float overlay, the cached tiles, the
+     * section line and every adjustment go back to their defaults, and the
+     * window asks for the area again. Carrying them across a 2D ⇄ 3D hand-off
+     * kept tens of MB of tiles alive next to a deck that had just released its
+     * WebGL memory, which is what crashed the installed PWA. */
+    function resetSettings() {
+        selectionSerial++;
+        if (cancelSelection) { cancelSelection(); cancelSelection = null; }
+        /* The filter resets itself on the same event; this is the idempotent
+         * second half in case it was not loaded or already restarted. */
+        try { window.DLPhotoFilter?.stop?.(); } catch (error) { /* ignore */ }
+        areaReady = false; busy = false; requestId++;
+        tileStore.clear();
+        if (overlay) { map.removeLayer(overlay); overlay = null; }
+        for (const name of attributions) map.attributionControl?.removeAttribution(name);
+        attributions.clear();
+        Object.keys(photoSettings).forEach(key => delete photoSettings[key]);
+        Object.keys(settings).forEach(key => delete settings[key]);
+        try { stopProfile(); } catch (error) { /* the line tool may not exist yet */ }
+        if (!body.hidden || minimized) selectionMessage('The 3D view was closed. The LiDAR area and its settings were reset — choose the area again.', true);
+    }
     function beginAreaSelection() {
         const serial = ++selectionSerial;
         if (cancelSelection) cancelSelection();
@@ -541,6 +564,7 @@
     mounts.forEach(id => { const mount = document.getElementById(id); if (!mount) return;
         new MutationObserver(attachButtons).observe(mount,{childList:true,subtree:true}); });
     attachButtons();
+    window.addEventListener('detectlab:3d-closed', resetSettings);
     window.addEventListener('dl:photo-filter', event=>{
         if (areaReady && isPhoto() && event.detail.status === 'Image effect off') {
             areaReady = false; if (!body.hidden || minimized) selectionMessage('The layer or image effect was turned off. Choose an area again.', true);

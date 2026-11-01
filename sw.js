@@ -907,7 +907,10 @@
 // depth instead of the zoom the centre was picked from, and levels above it
 // are fetched on demand, so picking the area from a country view no longer
 // leaves a blurred disc when the user flies in.
-const CACHE_NAME = 'detectlab-v360-lidar-deep-zoom';
+// v361: leaving the 3D view resets the LiDAR Settings area — the photo effect,
+// its decoded tile cache and every adjustment go back to normal, because
+// carrying them across the 2D ⇄ 3D hand-off crashed the installed PWA.
+const CACHE_NAME = 'detectlab-v361-lidar-settings-reset';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1101,6 +1104,7 @@ const PRECACHE_URLS = [
   'js/rvt-panel.js?v=20261030-area-first',
   'js/map-window-dock.js?v=20261101-robust-train',
   'js/rvt-panel.js?v=20261101-settings-opacity',
+  'js/rvt-panel.js?v=20261101-lidar-settings-reset',
   'css/rvt-panel.css?v=20261101-robust-train',
   'js/map-app.js?v=20261030-lidar-touch-fix',
   'css/rvt-panel.css?v=1',
@@ -1140,6 +1144,7 @@ const PRECACHE_URLS = [
   'js/map3d-terrain.js?v=20261030-lidar-photo-3d',
   'js/map3d-terrain.js?v=20261030-3d-analysis-dock',
   'js/map3d-terrain.js?v=20261031-3d-bearing-handoff',
+  'js/map3d-terrain.js?v=20261101-lidar-settings-reset',
   'js/map-app.js?v=20261026-lidar-whole-or-disc',
   'js/lidar-3d-focus.js?v=20261026-lidar-whole-or-disc',
   'js/map3d-terrain.js?v=20261024-gesture-only-camera',
@@ -1900,7 +1905,8 @@ const PRECACHE_URLS = [
   'js/map-app.js?v=20261101-ro-region-sheets',
   'js/lidar-photo-filter.js?v=20261101-lidar-service-levels',
   'js/lidar-photo-filter.js?v=20261101-lidar-geographic-mask',
-  'js/lidar-photo-filter.js?v=20261101-lidar-deep-zoom'
+  'js/lidar-photo-filter.js?v=20261101-lidar-deep-zoom',
+  'js/lidar-photo-filter.js?v=20261101-lidar-settings-reset'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

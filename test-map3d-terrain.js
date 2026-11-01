@@ -79,11 +79,11 @@ const mirrorSource = read('js/map3d-mirror.js');
 const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261019-tile-order';              /* MapLibre itself (coveringTiles patch) */
-const TAG_3D = '20261021-lidar-canvas-tiles';    /* mirror (canvas tiles)          */
-const TAG_VIEWER = '20261026-desktop-basemap'; /* viewer (js)                         */
-const TAG_CSS = '20261026-pwa-3d-button-size';       /* viewer skin (css)              */
-const TAG_FOCUS = '20261020-lidar-disc-route';  /* LiDAR focus (3D, one disc)     */
-const TAG_REGISTRY = '20261024-uk-historical-maps'; /* shared registry (UK historical maps) */
+const TAG_3D = '20261030-lidar-photo-3d';       /* mirror (canvas tiles)          */
+const TAG_VIEWER = '20261101-lidar-settings-reset'; /* viewer (js)                     */
+const TAG_CSS = '20261031-lidar-dock-minimized';      /* viewer skin (css)              */
+const TAG_FOCUS = '20261031-lidar-dock-minimized'; /* LiDAR focus (3D, one disc)   */
+const TAG_REGISTRY = '20261030-walachia';       /* shared registry (historical maps) */
 
 // ══════════════════════════════════════════════════════════════
 // 1. Static wiring — the viewer must be reachable in the app
@@ -943,6 +943,14 @@ const TAG_REGISTRY = '20261024-uk-historical-maps'; /* shared registry (UK histo
         'the bar has a phone layout');
     assert(/#map3d-surface \.maplibregl-popup/.test(skin),
         'popups opened from a 3D feature are styled like the 2D ones');
+    /* The prepared LiDAR Settings area is dropped with the 3D view: its decoded
+     * image cache surviving next to a deck that had just released its WebGL
+     * memory crashed the installed PWA on the way back to the 2D map. */
+    const closeFn = viewer.match(/function close\(\) \{[\s\S]*?\n    \}/);
+    assert(closeFn && closeFn[0].indexOf('announce3dClosed();') !== -1,
+        'closing 3D announces the hand-off so the LiDAR area can be reset');
+    assert(/function announce3dClosed\(\) \{[\s\S]*?detectlab:3d-closed[\s\S]*?\n    \}/.test(viewer),
+        'the hand-off is a detectlab:3d-closed event (js/lidar-photo-filter.js, js/rvt-panel.js reset on it)');
     console.log('  ✓ the 3D view keeps the 2D chrome usable and hides only the 2D-only controls');
 
     console.log('\n✅ test-map3d-terrain.js passed all checks successfully.');
