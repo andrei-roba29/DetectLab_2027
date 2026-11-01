@@ -92,7 +92,7 @@
         return decode(bytes);
     }
     const maskedTiles = new Map();
-    let maskFrame = 0;
+    let maskFrame = 0, maskVisible = null;
     function clearMask() {
         for(const [node, prior] of maskedTiles) {
             node.style.maskImage=prior.maskImage; node.style.webkitMaskImage=prior.webkitMaskImage;
@@ -100,42 +100,51 @@
         }
         maskedTiles.clear();
     }
-    function clipOrigin() {
-        if (!session) return null;
-        const mapBounds = map.getContainer().getBoundingClientRect(),
-              p = map.latLngToContainerPoint(session.center);
-        const radius = map.project(session.center, map.getZoom()).distanceTo(
-            map.project([session.center.lat + 1000 / 111200, session.center.lng], map.getZoom()));
-        return { left: mapBounds.left + p.x, top: mapBounds.top + p.y, radius };
+    /* The hole punched in the original LiDAR tiles must be expressed in each
+     * tile's OWN pixel space, not in screen space. Leaflet keeps several zoom
+     * levels alive at once and animates them with CSS scale/rotate on ancestor
+     * containers; a screen-space rect read during/after a gesture (and above
+     * all after a 2D⇄3D hand-off, where the map can come back rotated) is not
+     * the tile's local origin. Painting the gradient from that rect made the
+     * clipped circle slide away from the selection and twitch on every pan /
+     * zoom. Projecting the centre into the tile's own zoom level is invariant
+     * under those transforms: the mask scales and rotates with the tile and
+     * stays glued to the prepared area. */
+    function tileMask(coords) {
+        if (!session || !coords) return null;
+        const z = Number(coords.z);
+        if (!Number.isFinite(z)) return null;
+        const size = session.entry.layer.getTileSize?.() || { x: 256, y: 256 };
+        const tw = size.x || 256, th = size.y || 256;
+        const centre = map.project(session.center, z);
+        const metresPerPixel = 40075016.68557849 * Math.cos(session.center.lat * Math.PI / 180) / (256 * 2 ** z);
+        return {
+            x: centre.x - Number(coords.x) * tw,
+            y: centre.y - Number(coords.y) * th,
+            radius: (1000 / metresPerPixel) * (tw / 256)
+        };
     }
-    function applyClip(node, clip) {
-        const r = node.getBoundingClientRect();
-        if (!r.width || !r.height) return;
+    function applyClip(node, mask) {
+        if (!node || !mask) return;
         if (!maskedTiles.has(node)) maskedTiles.set(node, {
             maskImage: node.style.maskImage, webkitMaskImage: node.style.webkitMaskImage,
             maskRepeat: node.style.maskRepeat, webkitMaskRepeat: node.style.webkitMaskRepeat
         });
-        const x = clip.left - r.left, y = clip.top - r.top;
-        const value = `radial-gradient(circle ${clip.radius}px at ${x}px ${y}px, transparent calc(100% - 1px), black 100%)`;
+        const value = `radial-gradient(circle ${mask.radius}px at ${mask.x}px ${mask.y}px, transparent calc(100% - 1px), black 100%)`;
         node.style.maskImage = value; node.style.webkitMaskImage = value;
         node.style.maskRepeat = 'no-repeat'; node.style.webkitMaskRepeat = 'no-repeat';
     }
     function maskOrigin() {
         if (!session || !overlay) return;
-        const clip = clipOrigin();
         const tiles = session.entry.layer._tiles || {};
         for (const tile of Object.values(tiles)) {
-            const node = tile?.el; if (node) applyClip(node, clip);
+            const node = tile?.el; if (node) applyClip(node, tileMask(tile.coords));
         }
     }
-    /* The clip is painted on the base-layer tile nodes. Their geometry only
-     * settles once Leaflet finishes a zoom or a pan: the move/zoom events fire
-     * while the tiles are still at their old positions, so recomputing there
-     * used to read a stale rect and offset the mask circle from the tiles —
-     * visible as a twitch around the LiDAR area after every zoom, and much
-     * worse after a 2D⇄3D round trip, where cameraTo2D() places the tiles
-     * once and then settles. Recompute on settled events only (throttled to a
-     * single pass per frame), and clip each tile as soon as it loads. */
+    /* Only the overlay's visibility depends on the current zoom; the masks
+     * themselves are geographic and need no pan/zoom recomputation. New tiles
+     * are clipped as they load, so a settled pass only has to flip visibility
+     * when the zoom crosses the prepared level's threshold. */
     function settleMasks() {
         if (maskFrame) return;
         maskFrame = requestAnimationFrame(() => {
@@ -144,14 +153,17 @@
             const visible = map.getZoom() >= session.zoom - 1;
             const container = overlay.getContainer();
             if (container) container.style.display = visible ? '' : 'none';
-            visible ? maskOrigin() : clearMask();
+            if (visible !== maskVisible) {
+                maskVisible = visible;
+                visible ? maskOrigin() : clearMask();
+            }
         });
     }
     function onPhotoTileLoad(event) {
         if (!session || !overlay || event.layer !== session.entry.layer) return;
         const node = event.tile; if (!node) return;
-        const clip = clipOrigin();
-        applyClip(node, clip);
+        if (maskVisible === false) return;
+        applyClip(node, tileMask(event.coords));
     }
     function onPhotoTileUnload(event) {
         if (!session || event.layer !== session.entry.layer) return;
@@ -169,7 +181,7 @@
             session.entry.layer.off?.('tileload', onPhotoTileLoad);
             session.entry.layer.off?.('tileunload', onPhotoTileUnload);
         }
-        clearMask();
+        clearMask(); maskVisible=null;
         if (overlay) map.removeLayer(overlay);
         overlay=null; session=null; tilePixels.clear(); canvases.clear();
         if (marker) { map.removeLayer(marker); marker=null; }
@@ -283,7 +295,7 @@
         const tiles=zoomTiles(center,zoom,Math.max(0,entry.minzoom||0));
         const serial=++generation, controller=new AbortController();
         session={key,entry,center,zoom,method,controller}; Object.assign(controls,values||{});
-        marker=L.circle(center,{radius:1000,color:'#efbb75',weight:2,fill:false,interactive:false,pane:'rvt-photo-pane'}).addTo(map);
+        marker=L.circle(center,{radius:1000,color:'#efbb75',weight:2,fill:false,interactive:false,pane:'rvt-photo-marker-pane'}).addTo(map);
         marker._dl3dSkip=true; // Selection chrome is not imagery.
         announce('Fetching image tiles: 0/' + tiles.length + ' (zoom ' + zoom + ')');
         let next=0,done=0,failures=0;
@@ -369,9 +381,21 @@
     }
     map.createPane('rvt-photo-pane'); map.getPane('rvt-photo-pane').style.zIndex=615;
     map.getPane('rvt-photo-pane').style.pointerEvents='none';
+    /* The selection outline lives in its own pane that Leaflet hides for the
+     * duration of a zoom animation. The SVG renderer's zoom transform is not
+     * rotation-aware, so after a 3D round trip (bearing ≠ 0) the outline used
+     * to swing away from the area mid-zoom and snap back at the end. The
+     * processed tiles and their geographic mask keep the area visible and
+     * stable throughout; the outline simply reappears glued to it once the
+     * zoom settles. */
+    map.createPane('rvt-photo-marker-pane');
+    const markerPane=map.getPane('rvt-photo-marker-pane');
+    markerPane.style.zIndex=616; markerPane.style.pointerEvents='none';
+    if (markerPane.classList) markerPane.classList.add('leaflet-zoom-hide');
+    else markerPane.className=(markerPane.className?markerPane.className+' ':'')+'leaflet-zoom-hide';
     map.on('layerremove',event=>{ if (session && event.layer===session.entry.layer) stop(); });
     map.on('zoomend moveend resize', settleMasks);
     root.DLPhotoFilter={active,choose,prepare,update,stop,get:snapshot,preview,info3d,tile3d,
         source3d: () => session && session.ready ? session.entry.layer : null,
-        _test:{effect,tileCoordinates,chooseZoom,zoomTiles}};
+        _test:{effect,tileCoordinates,chooseZoom,zoomTiles,tileMask}};
 })(window);

@@ -892,7 +892,7 @@
 // ArcGIS MapServer publishes (js/lidar-photo-filter.js, js/map-app.js).
 // v347: CENAGIS historical sheets get a longer probe and a third try before
 // they are switched off (js/wms-health.js).
-const CACHE_NAME = 'detectlab-v348-lidar-service-levels';
+const CACHE_NAME = 'detectlab-v349-lidar-geographic-mask';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1879,7 +1879,8 @@ const PRECACHE_URLS = [
   'js/map-app.js?v=20261030-roman-layer-cleanup',
   'js/map-app.js?v=20261030-walachia',
   'js/map-app.js?v=20261101-lidar-service-levels',
-  'js/lidar-photo-filter.js?v=20261101-lidar-service-levels'
+  'js/lidar-photo-filter.js?v=20261101-lidar-service-levels',
+  'js/lidar-photo-filter.js?v=20261101-lidar-geographic-mask'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──
