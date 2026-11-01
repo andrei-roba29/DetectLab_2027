@@ -939,7 +939,9 @@
 //   focus: the keyboard's visualViewport resize used to rewrite the !important
 //   pixel heights under the finger, so the OS closed the keyboard again.
 //   Re-tags js/pwa-google-auth.js, js/auth.js, index.html and CACHE_NAME.
-const CACHE_NAME = 'detectlab-v369-ios-keyboard';
+// v370: iOS can leave a field focused with only the keyboard accessory bar;
+// re-arm it on a second direct tap, without interrupting an open keyboard.
+const CACHE_NAME = 'detectlab-v370-ios-keyboard-retry';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1241,11 +1243,11 @@ const PRECACHE_URLS = [
   'js/translations.js?v=20260918-report-evidence',
   '.',
   'index.html',
-  'js/ios-input-focus.js?v=20261101-ios-keyboard',
-  'js/auth.js?v=20261101-ios-keyboard',
-  'js/friends.js?v=20261101-ios-keyboard',
-  'js/library-of-babel.js?v=20261101-ios-keyboard',
-  'js/subscriptions.js?v=20261101-ios-keyboard',
+  'js/ios-input-focus.js?v=20261101-ios-keyboard-retry',
+  'js/auth.js?v=20261101-ios-keyboard-retry',
+  'js/friends.js?v=20261101-ios-keyboard-retry',
+  'js/library-of-babel.js?v=20261101-ios-keyboard-retry',
+  'js/subscriptions.js?v=20261101-ios-keyboard-retry',
   // v183: the full-screen ArcGIS SceneView atlas (kept as an optional 3D
   // experience, opened in a new tab from the map header / top nav).
   'europe-roman-atlas.html?embed=1',
