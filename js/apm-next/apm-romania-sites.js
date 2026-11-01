@@ -1,15 +1,119 @@
-/* Romania's RAN-backed site provider. Uses only the premium-gated Supabase RPC; no browser table reads. */
-(function(root,factory){var api=factory(root.DetectLabRomaniaApmConfig|| (typeof require==='function'?require('./romania-periods.config.js'):{}));if(typeof module==='object'&&module.exports)module.exports=api;else root.DetectLabRomaniaApmSites=api;})(typeof self!=='undefined'?self:this,function(config){'use strict';
-  // Simplified national outline, hand-generalised from Natural Earth Admin-0 Romania (1:10m).
-  // Boundary test is deliberately approximate; final inclusion is applied to sampled background points.
-  var RO=[[20.26,44.20],[20.26,46.13],[20.75,46.62],[21.45,46.28],[22.10,47.95],[23.10,48.10],[24.00,47.95],[25.20,48.20],[26.62,48.26],[27.15,47.55],[28.20,46.85],[29.70,45.45],[29.70,44.80],[28.20,43.70],[27.00,43.65],[26.10,43.70],[25.10,43.70],[24.10,43.70],[23.00,43.70],[22.60,44.20],[21.50,44.20],[20.26,44.20]];
-  function inside(lat,lon){var x=lon,y=lat,c=false;for(var i=0,j=RO.length-1;i<RO.length;j=i++){var a=RO[i],b=RO[j];if(((a[1]>y)!==(b[1]>y))&&(x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0]))c=!c;}return c;}
-  function norm(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();}
-  function infer(name){var n=norm(name),at=n.indexOf(' de la '),desc=at>=0?n.slice(0,at):n, low=at<0,matches=[];config.periods.forEach(function(p){p.keywords.forEach(function(k){k=norm(k);if(desc.indexOf(k)>=0)matches.push({p:p,k:k});});});matches.sort(function(a,b){return b.k.length-a.k.length;});if(matches.length){var p=matches[0].p;return {periodLabel:p.label,periodStart:p.start,periodEnd:p.end,periodSource:'name-keyword',confidence:low?'low':'approximate',periodConfidence:low?0.35:0.65,periodConfigSource:p.source};}return {periodLabel:'unknown',periodStart:null,periodEnd:null,periodSource:'unknown',confidence:'unknown',periodConfidence:0};}
-  function isExcluded(name){var n=norm(name);return config.excludeNamePatterns.some(function(k){return n.indexOf(norm(k))>=0;});}
-  function dedupe(rows){var out=[];rows.forEach(function(r){var duplicate=out.some(function(q){return norm(q.name)===norm(r.name)&&distanceM(q,r)<=5;});if(!duplicate)out.push(r);});return out;}
-  function distanceM(a,b){var R=6371000,p=Math.PI/180,d1=(b.lat-a.lat)*p,d2=(b.lon-a.lon)*p;return 2*R*Math.asin(Math.sqrt(Math.sin(d1/2)**2+Math.cos(a.lat*p)*Math.cos(b.lat*p)*Math.sin(d2/2)**2));}
-  function provider(){return {id:'romania-repertory',label:'Romanian National Archaeological Repertory',source:'National Archaeological Repertory (RAN), Supabase archaeological_sites_a; licence OPEN QUESTION',available:true,getSites:async function(center,radiusKm){var started=Date.now(),radius=Math.min(50,Math.max(0,Number(radiusKm)||50));if(!inside(center.lat,center.lon)){var empty=[];empty._meta={outsideRomania:true,message:'Outside Romania; use CSV upload for a local data source.',truncated:false};return empty;}var sb=root.supabaseClient;if(!sb||typeof sb.rpc!=='function')throw new Error('Supabase client unavailable');var res=await sb.rpc('apm_sites_within',{p_lat:center.lat,p_lon:center.lon,p_radius_km:radius,p_include_empty_coord:!!config.includeEmptyCoord});if(res.error)throw new Error(res.error.message||'APM server query failed');var payload=res.data||{},rows=Array.isArray(payload)?payload:(payload.rows||[]);var exact=rows.filter(function(r){return String(r.coord_flag||'').trim().toUpperCase()==='DA'||(config.includeEmptyCoord&&!String(r.coord_flag||'').trim());});var excludedPosition=rows.length-exact.length;var excludedType=0,unknown=0;var mapped=exact.map(function(r){var name=r.name||'';if(isExcluded(name)){excludedType++;return null;}var period=infer(name);if(period.periodLabel==='unknown')unknown++;return Object.assign({id:String(r.object_id),lat:Number(r.lat),lon:Number(r.lon),siruta:r.siruta||null,coord_flag:r.coord_flag||null,type:'settlement',positionAccuracy:5,approximatePosition:false,source:'romania-repertory'},period);}).filter(Boolean);mapped=dedupe(mapped);mapped._meta={truncated:!!payload.truncated,excludedPosition:excludedPosition,excludedType:excludedType,unknownPeriod:unknown,total:rows.length,returned:mapped.length,outsideRomania:false,areaCrossesBorder:radius>0&&nearBorder(center,radius),elapsedMs:Date.now()-started,warning:radius>0&&nearBorder(center,radius)?'The 50 km training area extends outside Romania; only Romanian sites are available.':''};if(root.DetectLabApmProviders&&root.DetectLabApmProviders.logStep)root.DetectLabApmProviders.logStep({step:'sites',provider:'romania-repertory',outcome:'success',returned:mapped.length,truncated:!!payload.truncated,elapsedMs:Date.now()-started});return mapped;}};}
-  function nearBorder(c,r){return !inside(c.lat,c.lon)||c.lat-r/111<43.6||c.lat+r/111>48.3||c.lon-r/(111*Math.max(.2,Math.cos(c.lat*Math.PI/180)))<20.2||c.lon+r/(111*Math.max(.2,Math.cos(c.lat*Math.PI/180)))>29.8;}
-  return {createProvider:provider,insideRomania:inside,normaliseName:norm,inferPeriod:infer,isExcludedType:isExcluded,dedupe:dedupe};
+/* Romania TRAIN: one shared Supabase client, one RPC, no site-source fallback. */
+(function (root, factory) {
+    var config = typeof module === 'object' && module.exports ? require('./romania-periods.config.js') : root.DetectLabRomaniaApmConfig;
+    var api = factory(root, config);
+    if (typeof module === 'object' && module.exports) module.exports = api;
+    else root.DetectLabRomaniaApmSites = api;
+})(typeof window !== 'undefined' ? window : (typeof self !== 'undefined' ? self : globalThis), function (root, config) {
+    'use strict';
+    // Natural Earth Admin-0, 1:110m, public domain. Generalised national outline, not a legal boundary.
+    // https://github.com/nvkelso/natural-earth-vector/blob/master/geojson/ne_110m_admin_0_countries.geojson
+    var RO = [[28.233554, 45.488283], [28.679779, 45.304031], [29.149725, 45.464925], [29.603289, 45.293308], [29.626543, 45.035391], [29.141612, 44.82021], [28.837858, 44.913874], [28.558081, 43.707462], [27.970107, 43.812468], [27.2424, 44.175986], [26.065159, 43.943494], [25.569272, 43.688445], [24.100679, 43.741051], [23.332302, 43.897011], [22.944832, 43.823785], [22.65715, 44.234923], [22.474008, 44.409228], [22.705726, 44.578003], [22.459022, 44.702517], [22.145088, 44.478422], [21.562023, 44.768947], [21.483526, 45.18117], [20.874313, 45.416375], [20.762175, 45.734573], [20.220192, 46.127469], [21.021952, 46.316088], [21.626515, 46.994238], [22.099768, 47.672439], [22.710531, 47.882194], [23.142236, 48.096341], [23.760958, 47.985598], [24.402056, 47.981878], [24.866317, 47.737526], [25.207743, 47.891056], [25.945941, 47.987149], [26.19745, 48.220881], [26.619337, 48.220726], [26.924176, 48.123264], [27.233873, 47.826771], [27.551166, 47.405117], [28.12803, 46.810476], [28.160018, 46.371563], [28.054443, 45.944586], [28.233554, 45.488283]];
+    function insideRomania(lat, lon) {
+        var inside = false;
+        for (var i = 0, j = RO.length - 1; i < RO.length; j = i++) {
+            var a = RO[i], b = RO[j];
+            if (((a[1] > lat) !== (b[1] > lat)) && lon < (b[0] - a[0]) * (lat - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+        }
+        return inside;
+    }
+    function normaliseName(s) {
+        return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+    function descriptivePart(name) {
+        var n = normaliseName(name), at = n.indexOf(' de la ');
+        return { text: at < 0 ? n : n.slice(0, at), lowerConfidence: at < 0 };
+    }
+    function inferPeriod(name) {
+        var part = descriptivePart(name);
+        for (var i = 0; i < config.periods.length && !(part.lowerConfidence && config.ambiguousWholeNames.indexOf(part.text) >= 0); i++) {
+            var p = config.periods[i];
+            if (p.patterns.some(function (pattern) { return new RegExp('(?:^|[^a-z0-9])(?:' + pattern + ')(?=$|[^a-z0-9])').test(part.text); })) {
+                return { periodLabel: p.label, periodStart: p.start, periodEnd: p.end, periodSource: 'name-keyword',
+                    confidence: part.lowerConfidence ? 'low' : 'approximate', periodConfidence: part.lowerConfidence ? 0.35 : 0.65, periodConfigSource: p.source };
+            }
+        }
+        return { periodLabel: 'unknown', periodStart: null, periodEnd: null, periodSource: 'unknown', confidence: 'unknown', periodConfidence: 0 };
+    }
+    function isExcludedType(name) {
+        var text = descriptivePart(name).text;
+        return config.excludeNamePatterns.some(function (pattern) { return new RegExp('(?:^|[^a-z0-9])(?:' + pattern + ')').test(text); });
+    }
+    function distanceM(a, b) {
+        var p = Math.PI / 180, dlat = (b.lat - a.lat) * p, dlon = (b.lon - a.lon) * p;
+        return 12742000 * Math.asin(Math.min(1, Math.sqrt(Math.sin(dlat / 2) ** 2 + Math.cos(a.lat * p) * Math.cos(b.lat * p) * Math.sin(dlon / 2) ** 2)));
+    }
+    function dedupe(rows) {
+        var out = [], byName = new Map();
+        rows.forEach(function (r) {
+            var key = normaliseName(r.name), group = byName.get(key) || [];
+            if (!group.some(function (q) { return distanceM(r, q) <= 5; })) {
+                out.push(r); group.push(r); byName.set(key, group);
+            }
+        });
+        return out;
+    }
+    // Distance to every outline segment in a local metric projection, not a rectangular envelope.
+    function areaCrossesBorder(center, radiusKm) {
+        var xscale = 111320 * Math.cos(center.lat * Math.PI / 180), yscale = 111320;
+        return !insideRomania(center.lat, center.lon) || RO.some(function (a, i) {
+            var b = RO[(i + 1) % RO.length];
+            var ax = (a[0] - center.lon) * xscale, ay = (a[1] - center.lat) * yscale;
+            var bx = (b[0] - center.lon) * xscale, by = (b[1] - center.lat) * yscale;
+            var dx = bx - ax, dy = by - ay, t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / (dx * dx + dy * dy || 1)));
+            return Math.hypot(ax + t * dx, ay + t * dy) <= radiusKm * 1000;
+        });
+    }
+    function createProvider(options) {
+        options = options || {};
+        return {
+            id: 'romania-repertory', label: 'Romanian National Archaeological Repertory',
+            source: 'Supabase archaeological_sites_a', available: true,
+            getSites: async function (center, radiusKm) {
+                var radius = Math.min(50, Math.max(0, Number(radiusKm == null ? 50 : radiusKm)));
+                if (!Number.isFinite(center.lat) || !Number.isFinite(center.lon) || !Number.isFinite(radius)) throw new Error('Invalid training coordinates or radius');
+                if (!insideRomania(center.lat, center.lon)) {
+                    var empty = [];
+                    empty._meta = { outsideRomania: true, message: 'Built-in site data covers Romania only. Upload CSV.', truncated: false };
+                    return empty;
+                }
+                var sb = options.client || root.supabaseClient;
+                if (!sb || typeof sb.rpc !== 'function') throw new Error('Supabase client unavailable. Upload CSV or retry.');
+                var timer, request = sb.rpc('apm_sites_within', { p_lat: center.lat, p_lon: center.lon, p_radius_km: radius, p_include_empty_coord: !!config.includeEmptyCoord });
+                try {
+                    var res = await Promise.race([request, new Promise(function (_, reject) {
+                        timer = setTimeout(function () { reject(new Error('Romania database request timed out. Upload CSV or retry.')); }, options.timeoutMs || 20000);
+                    })]);
+                    if (res.error) throw new Error(res.error.message || 'Romania database request failed');
+                    var payload = res.data;
+                    if (!payload || !Array.isArray(payload.rows)) throw new Error('Invalid Romania database response. Upload CSV or retry.');
+                    var excludedType = 0, excludedBorder = 0;
+                    var exact = payload.rows.filter(function (r) {
+                        var flag = String(r.coord_flag || '').trim().toUpperCase();
+                        return flag === 'DA' || (config.includeEmptyCoord && !flag);
+                    });
+                    var mapped = exact.map(function (r) {
+                        var lat = Number(r.lat), lon = Number(r.lon);
+                        if (!Number.isFinite(lat) || !Number.isFinite(lon) || (!insideRomania(lat, lon) || distanceM(center, {lat: lat, lon: lon}) > radius * 1000)) { excludedBorder++; return null; }
+                        if (isExcludedType(r.name)) { excludedType++; return null; }
+                        return Object.assign({ id: String(r.object_id), name: r.name || '', lat: lat, lon: lon, siruta: r.siruta,
+                            coord_flag: r.coord_flag, type: 'settlement', positionAccuracy: null, positionAccepted: true,
+                            approximatePosition: false, source: 'romania-repertory' }, inferPeriod(r.name));
+                    }).filter(Boolean);
+                    var beforeDedupe = mapped.length;
+                    mapped = dedupe(mapped);
+                    mapped._protectionRecords = exact.filter(function (r) { return insideRomania(Number(r.lat), Number(r.lon)); });
+                    mapped._meta = { outsideRomania: false, truncated: !!payload.truncated, total: payload.total_in_area == null ? null : payload.total_in_area,
+                        excludedPosition: payload.excluded_approximate == null ? null : payload.excluded_approximate,
+                        excludedUnknownPosition: payload.excluded_unknown_coord == null ? null : payload.excluded_unknown_coord,
+                        excludedGeometry: payload.excluded_geometry || 0, excludedType: excludedType, excludedBorder: excludedBorder,
+                        duplicate: beforeDedupe - mapped.length, unknownPeriod: mapped.filter(function (r) { return r.periodSource === 'unknown'; }).length,
+                        returned: mapped.length, includeEmptyCoord: !!config.includeEmptyCoord, areaCrossesBorder: areaCrossesBorder(center, radius) };
+                    return mapped;
+                } finally { clearTimeout(timer); }
+            }
+        };
+    }
+    return { createProvider: createProvider, insideRomania: insideRomania, normaliseName: normaliseName,
+        descriptivePart: descriptivePart, inferPeriod: inferPeriod, isExcludedType: isExcludedType, dedupe: dedupe, areaCrossesBorder: areaCrossesBorder };
 });

@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261101-spatial-exclusions';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261101-train-source';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
@@ -32,12 +32,13 @@
         centre: null,               // { lat, lon } picked on the map
         picking: false,
         radiusKm: 5,
+        siteInput: 'builtin', csvAllowed: false,
         records: null,              // provider records for the current TRAIN centre
         restoredRobustIndices: [],
         sitesToken: null,
         sitesLoading: false,
         sitesRetrievedAt: null,
-        periodChosen: false,       // require an explicit period or All periods before TRAIN
+        periodChosen: false,       // becomes true at load; All periods is the default
         period: null,               // { key, label, start, end } or null = all periods (if chosen)
         periods: [],                // groupPeriods() output for the chosen centre
         curveText: null,            // editable curve text per curve name
@@ -154,7 +155,7 @@
         if (!on) { stopPick(); cancelRun(); cancelSiteLoad(); clearResult(); clearCentre(); }
         else {
             drawCentre();
-            if (state.mode === 'train' && state.centre && !state.records) loadAriadneSites();
+            if (state.mode === 'train' && state.centre && !state.records) loadBuiltinSites();
         }
         renderSwitch();
         updateGate();
@@ -280,9 +281,11 @@
         renderPoint();
         drawCentre();
         cancelSiteLoad();
+        state.siteInput = 'builtin'; state.csvAllowed = false;
+        if (els.csvRow) els.csvRow.hidden = true;
         state.records = null; state.periodChosen = false; state.period = null; state.siteCount = null;
         loadPeriods();
-        if (state.mode === 'train') loadAriadneSites();
+        if (state.mode === 'train') loadBuiltinSites();
         updateGate();
     }
 
@@ -366,13 +369,13 @@
         return out;
     }
 
-    /* ── TRAIN: Ariadne and periods ──────────────────────────────────────────── */
+    /* ── TRAIN: Romania RPC or explicit CSV input ──────────────────────────────────────────── */
 
     /** Site count for the chosen centre and period, with the warning / block thresholds (TRAIN). */
     function renderSiteCount() {
         if (!els.countNote) return;
         if (!state.records || !state.centre) { els.countNote.textContent = ''; els.countNote.className = 'apm-note'; state.siteCount = null; return; }
-        var pool = sites().filterSites(state.records, { center: state.centre, radiusKm: 50, period: state.period });
+        var pool = sites().filterSites(state.records, { center: state.centre, radiusKm: 50, period: state.period, dedupeM: state.siteInput === 'csv' ? 50 : -1 });
         var n = pool.sites.length;
         state.siteCount = n;
         var st = pipe().trainSiteStatus(n, 10, 30);
@@ -391,13 +394,15 @@
         state.sitesLoading = false;
     }
 
-    function loadAriadneSites() {
+    function loadBuiltinSites() {
         if (!state.centre || !isRunnable() || state.busy) return;
         cancelSiteLoad();
         var token = { cancelled: false };
         state.sitesToken = token;
         state.sitesLoading = true;
         state.records = null; state.siteCount = null; state.periodChosen = false; state.period = null; state.restoredRobustIndices = [];
+        state.siteInput = 'builtin'; state.csvAllowed = false;
+        if (els.csvRow) els.csvRow.hidden = true;
         loadPeriods();
         setStatus(T('train.loading'), 'busy');
         updateGate();
@@ -408,18 +413,46 @@
             state.periodChosen = true; // TRAIN defaults to All periods; narrower periods are optional.
             if (records._meta && records._meta.outsideRomania) {
                 state.records = [];
+                state.csvAllowed = true; els.csvRow.hidden = false;
                 setStatus(T('train.outsideRomania'), 'error');
             }
             loadPeriods();
-            if (!(records._meta && records._meta.outsideRomania)) setStatus(T('train.choosePeriod'), 'ok');
+            if (!(records._meta && records._meta.outsideRomania)) setStatus(T('train.periodApplied'), 'ok');
         }).catch(function (err) {
-            if (!token.cancelled) setStatus(T('train.loadError', { msg: errText(err) }), 'error');
+            if (!token.cancelled) {
+                state.csvAllowed = true; els.csvRow.hidden = false;
+                setStatus(T('train.loadError', { msg: errText(err) }), 'error');
+            }
         }).then(function () {
             if (state.sitesToken !== token) return;
             state.sitesToken = null;
             state.sitesLoading = false;
             updateGate();
         });
+    }
+
+    // Explicit user action only. Never invoked automatically after a database error.
+    async function onCsvUpload(event) {
+        var file = event.target.files && event.target.files[0];
+        if (!file || !state.csvAllowed || state.busy || !state.centre) return;
+        cancelSiteLoad();
+        state.records = null; state.siteCount = null; loadPeriods(); updateGate();
+        var token = { cancelled: false };
+        state.sitesToken = token;
+        try {
+            var parsed = sites().parseSitesCsv(await file.text(), 'csv');
+            if (token.cancelled) return;
+            if (parsed.report.errors.length) throw new Error(parsed.report.errors.join(' '));
+            var records = await prov().createCsvSiteProvider(parsed.records, file.name).getSites(state.centre, TRAIN_AREA_KM);
+            if (token.cancelled) return;
+            state.records = records; state.siteInput = 'csv'; state.period = null; state.periodChosen = true;
+            state.sitesRetrievedAt = new Date().toISOString();
+            loadPeriods(); updateGate(); setStatus(T('train.csvLoaded', { n: records.length }), 'ok');
+        } catch (error) {
+            if (!token.cancelled) setStatus(errText(error), 'error');
+        } finally {
+            if (state.sitesToken === token) state.sitesToken = null;
+        }
     }
 
     function loadPeriods() {
@@ -441,8 +474,8 @@
         els.period.appendChild(h('option', { value: 'all', text: T('train.allPeriods') }));
         state.periods.forEach(function (g, i) {
             var dates = g.start != null && g.end != null ? ' · ' + formatYear(g.start) + ' – ' + formatYear(g.end) : '';
-            var label = g.label + dates + ' (' + g.count + ')' + (g.undated ? ' — ' + T('train.noNumericDates') : '');
-            els.period.appendChild(h('option', { value: String(i), disabled: !g.selectable, text: label }));
+            var label = g.label + dates + ' (' + g.count + ')' + (g.count < 10 ? ' — ' + T('train.countBlock', { n: g.count, min: 10 }) : g.count < 30 ? ' — ' + T('train.countWarn', { n: g.count, rec: 30 }) : '') + (g.undated ? ' — ' + T('train.noNumericDates') : '');
+            els.period.appendChild(h('option', { value: String(i), disabled: !g.selectable || g.count < 10, text: label }));
         });
         var sel = state.periodChosen ? 'all' : '';
         if (state.period) {
@@ -454,6 +487,18 @@
         els.periodHint.textContent = state.records ? T(state.periodChosen ? 'train.periodApplied' : 'train.periodHelp') : '';
         els.periodRow.hidden = !state.records;
         els.sitesCount.textContent = state.records ? T('train.loaded', { n: state.records.length }) : '';
+        var meta = state.records && state.records._meta;
+        if (els.siteSummary) {
+            var unknown = T('train.countUnavailable');
+            els.siteSummary.textContent = meta && !meta.outsideRomania ? T('train.summary', {
+                total: meta.total == null ? unknown : meta.total,
+                approximate: meta.excludedPosition == null ? unknown : meta.excludedPosition,
+                empty: meta.excludedUnknownPosition == null ? unknown : meta.excludedUnknownPosition,
+                geometry: meta.excludedGeometry, type: meta.excludedType, unknown: meta.unknownPeriod
+            }) + (meta.truncated ? ' ' + T('train.truncated') : '') +
+                (meta.areaCrossesBorder ? ' ' + T('warn.romaniaBorder') : '') +
+                (meta.includeEmptyCoord ? ' ' + T('train.emptyIncluded') : '') : '';
+        }
     }
 
     function formatYear(y) { return y <= 0 ? (1 - y) + ' BCE' : y + ' CE'; }
@@ -489,10 +534,10 @@
                 params = {
                     centre: state.centre,
                     records: state.records,
-                    siteSource: { id: 'romania-repertory', label: 'Romanian National Archaeological Repertory',
-                        selectedPeriod: state.period || 'all', url: 'Supabase archaeological_sites_a RPC',
-                        retrievedAt: state.sitesRetrievedAt, positionAccuracy: 'COORD=DA exact-position records only' },
-                    backgroundAllowed: function (lat, lon) { return root.DetectLabRomaniaApmSites.insideRomania(lat, lon); },
+                    siteSource: { id: state.siteInput === 'csv' ? 'csv' : 'romania-repertory', label: state.siteInput === 'csv' ? 'Uploaded CSV' : 'Romanian National Archaeological Repertory',
+                        selectedPeriod: state.period || 'all', url: state.siteInput === 'csv' ? null : 'Supabase archaeological_sites_a RPC',
+                        retrievedAt: state.sitesRetrievedAt, positionAccuracy: state.siteInput === 'csv' ? 'CSV supplied accuracy' : 'COORD=DA; empty opt-in=' + !!root.DetectLabRomaniaApmConfig.includeEmptyCoord },
+                    backgroundAllowed: state.siteInput === 'csv' ? null : function (lat, lon) { return root.DetectLabRomaniaApmSites.insideRomania(lat, lon); },
                     period: state.period,
                     radiusKm: TRAIN_AREA_KM,
                     minSlopeDeg: parseFloat(els.minSlope.value),
@@ -942,8 +987,11 @@
         els.curvesBox = h('div', { class: 'apm-curves' }, [h('div', { class: 'apm-note', key: 'curves.help' })].concat(curveBlocks, [els.curveNote]));
 
         // TRAIN inputs
-        els.loadSites = bind(h('button', { type: 'button', class: 'apm-btn apm-small', onclick: loadAriadneSites }), 'train.reload');
+        els.loadSites = bind(h('button', { type: 'button', class: 'apm-btn apm-small', onclick: loadBuiltinSites }), 'train.reload');
         els.sitesCount = h('span', { class: 'apm-note' });
+        els.csvInput = h('input', { type: 'file', accept: '.csv,text/csv', onchange: onCsvUpload });
+        els.csvRow = h('label', { class: 'apm-field', hidden: true }, [h('span', { key: 'train.csvUpload' }), els.csvInput]);
+        els.siteSummary = h('div', { class: 'apm-note', role: 'status' });
         els.period = h('select', { class: 'apm-select', onchange: function () { onPeriodChanged(); updateGate(); } });
         els.periodRow = h('label', { class: 'apm-field' }, [h('span', { key: 'train.period' }), els.period]);
         els.periodRow.hidden = true;
@@ -951,7 +999,7 @@
         els.countNote = h('div', { class: 'apm-note', role: 'status' });
         els.trainBox = h('div', { class: 'apm-train' }, [
             h('div', { class: 'apm-note', key: 'train.sourceNote' }),
-            els.loadSites, els.sitesCount, els.periodRow, els.periodHint, els.countNote,
+            els.loadSites, els.csvRow, els.sitesCount, els.siteSummary, els.periodRow, els.periodHint, els.countNote,
             h('div', { class: 'apm-note', key: 'train.area' })
         ]);
 
@@ -1077,7 +1125,7 @@
         if (state.centre) drawCentre();
         if (mode === 'train') {
             if (state.records) loadPeriods();
-            else if (!state.sitesLoading) loadAriadneSites();
+            else if (!state.sitesLoading) loadBuiltinSites();
         }
         updateGate();
     }

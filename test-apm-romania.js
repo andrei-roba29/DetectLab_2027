@@ -1,2 +1,9 @@
-const assert=require('node:assert/strict');const {classify,normalise}=require('./js/apm-next/apm-romania-config.js');const provider=require('./js/apm-next/apm-romania-provider.js');
-assert.equal(normalise('Așezarea   COTOFENI'),'asezarea cotofeni');assert.equal(classify('Asezarea Cotofeni de la Romanesti').periodLabel,'Eneolitic');assert.equal(classify('Situl arheologic de la Roman - centru').periodLabel,null);assert.equal(classify('Cetatea Oradea - Palatul Princiar').periodLabel,null);assert.equal(classify('Necropola romana de la Alba').type,'excluded');assert.equal(provider.insideRomania(46,25),true);assert.equal(provider.insideRomania(51,10),false);console.log('Romania inference/provider unit checks pass');
+const assert = require('node:assert/strict');
+const api = require('./js/apm-next/apm-romania-sites.js');
+assert.equal(api.normaliseName('Așezarea   COTOFENI'), 'asezarea cotofeni');
+assert.equal(api.inferPeriod('Asezarea Cotofeni de la Romanesti').periodLabel, 'Eneolitic / Chalcolitic');
+assert.equal(api.inferPeriod('Situl arheologic de la Roman - centru').periodLabel, 'unknown');
+assert.equal(api.isExcludedType('Necropola romana de la Alba'), true);
+assert.equal(api.insideRomania(46,25), true);
+assert.equal(api.insideRomania(51,10), false);
+console.log('Canonical Romania inference/provider checks pass');

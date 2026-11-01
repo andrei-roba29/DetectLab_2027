@@ -34,7 +34,9 @@
             return Promise.reject(new Error('Spatial exclusion service is unavailable. Please reload and try again.'));
         }
         return root.computeArcheoExclusionMask(analysis.grid, analysis.circle.lat, analysis.circle.lon,
-            analysis.circle.radiusM, { isCancelled: function () { return !!(params.token && params.token.cancelled); } })
+            analysis.circle.radiusM, { isCancelled: function () { return !!(params.token && params.token.cancelled); },
+                siteRecords: params.records ? (params.records._protectionRecords || params.records) : undefined,
+                cacheOnly: !!params.records })
             .then(function (result) {
                 checkToken(params.token);
                 if (!result || !result.mask || result.mask.length !== analysis.grid.w * analysis.grid.h) {
@@ -383,7 +385,7 @@
                 var wr=waterReason(p.lon,p.lat,water||{},cfg);
                 if(wr)reason=wr;
                 else if(!p.valid)reason='no-data';
-                else {var key=Number(p.lat).toFixed(8)+','+Number(p.lon).toFixed(8);if(seen[key])reason='duplicate';else seen[key]=true;}
+                else {var key=Number(p.lat).toFixed(8)+','+Number(p.lon).toFixed(8)+'|'+String(p.name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();if(seen[key])reason='duplicate';else seen[key]=true;}
             }
             if(!reason){kept.push(p);return;}
             var k=reason==='outside-dem'?'outsideDem':reason==='no-data'?'noData':reason==='large-water-polygon'?'largeWaterPolygon':reason;
@@ -434,7 +436,7 @@
      * Returns { pool, periods, dropped } — periods are offered to the user.
      */
     function sitePool(records, centre) {
-        var pool = sites.filterSites(records, { center: centre, radiusKm: TRAIN_AREA_KM, period: null });
+        var pool = sites.filterSites(records, { center: centre, radiusKm: TRAIN_AREA_KM, period: null, dedupeM: records._meta && !records._meta.outsideRomania ? -1 : 50 });
         return { pool: pool.sites, periods: sites.groupPeriods(pool.sites), dropped: pool.dropped };
     }
 
@@ -461,6 +463,8 @@
         var centre = params.centre;
         var siteMeta = params.records && params.records._meta;
         if (siteMeta && siteMeta.areaCrossesBorder) warnings.push(M('warn.romaniaBorder', {}, 'The 50 km training area crosses Romania’s border; background samples are restricted to Romania and sites outside the dataset are unavailable.'));
+        if (siteMeta && siteMeta.truncated) warnings.push(M('train.truncated', {}, 'The server returned a truncated site subset.'));
+        if (siteMeta && siteMeta.includeEmptyCoord) warnings.push(M('train.emptyIncluded', {}, 'Unknown-position records are opted in.'));
         var radiusM = params.radiusKm * 1000;
         var areaM = TRAIN_AREA_KM * 1000;
         var sel = sites.filterSites(params.records, { center: centre, radiusKm: TRAIN_AREA_KM, period: params.period, dedupeM: -1 });
@@ -472,14 +476,12 @@
             err.code = 'too_few_sites';
             return Promise.reject(err);
         }
-        var unknownAccuracy = sel.sites.filter(function (s) { return s.source === 'ariadne' && s.positionAccuracy == null; }).length;
-        if (unknownAccuracy) warnings.push(M('warn.ariadneAccuracy', { n: unknownAccuracy }, 'ARIADNE points have unverified position accuracy.'));
         if (nSites < warnSites) warnings.push(M('warn.fewSites', { n: nSites, rec: warnSites }, 'Only ' + nSites + ' sites.'));
 
         var bg = sampleBackground(centre, areaM, params.bgCount || 5000, sel.sites, BG_EXCLUDE_M, params.rnd, params.backgroundAllowed);
         var pts = sel.sites.map(function (s) {
             var mpd = core.metresPerDegree(centre.lat);
-            return { id: s.id, lat: s.lat, lon: s.lon, x: (s.lon - centre.lon) * mpd.lon, y: (s.lat - centre.lat) * mpd.lat, isSite: true };
+            return { id: s.id, name: s.name, lat: s.lat, lon: s.lon, x: (s.lon - centre.lon) * mpd.lon, y: (s.lat - centre.lat) * mpd.lat, isSite: true };
         }).concat(bg.map(function (b) { return { lat: b.lat, lon: b.lon, x: b.x, y: b.y, isSite: false }; }));
 
         var bbox = core.circleBBox(centre.lat, centre.lon, areaM + 1000);
@@ -571,7 +573,6 @@
             });
         }).then(function (t) {
             checkToken(params.token);
-            session.trainCache = { S:t.built.S, waterClasses:t.built.waterClasses, minSlopeDeg:params.minSlopeDeg, robustConfig:TRAIN_ROBUST_CONFIG, minAreaM2:params.minAreaM2, built:t.built, hardExcluded:t.hardExcluded, siteCount:sel.sites.length, unknownAccuracy:unknownAccuracy, dropped:sel.dropped, warnings:t.warnings.concat(warnings), restoredIndices:[] };
             // Prediction window (search circle + buffer) with the same DEM provider.
             progress('prog.window', 80);
             var wb = core.circleBBox(centre.lat, centre.lon, radiusM + BUFFER_M);
@@ -617,9 +618,9 @@
                     provenance: session.provenance,
                     warnings: t.warnings.concat(warnings),
                     diagnostics: {
+                        siteData: siteMeta || null,
                         sitesUsed: t.built.counts.sites,
                         sitesInAreaBeforeExclusions: periodCount,
-                        sitesWithUnknownAccuracy: unknownAccuracy,
                         hardExcluded: t.hardExcluded.excluded,
                         hardExcludedTotal: t.hardExcluded.total,
                         positionMedianRadiusM: TRAIN_ROBUST_CONFIG.positionRadiusM,

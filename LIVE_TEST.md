@@ -30,3 +30,12 @@ Time: about 10 minutes. You need a premium account.
 - Water `failed` on EU-Hydro with a CORS message, followed by Overpass: EEA water is blocked for your domain.
 
 Do not enable the Drainage Network option for this test. Do not change the Strahler map.
+
+
+## Romania TRAIN deployment verification (2026-11-01)
+
+With user approval, migration `20261101163027_apm_romania_train_correction` was applied to production on 2026-11-01. Its SQL file remains under `backend/migrations/manual/`, outside automatic startup discovery. SQL role/JWT-claim checks passed; real browser/signed-token/payment tests below remain pending. See `test-results/production-deployment.json`.
+
+After approved staging deployment, verify premium, free, expired and logged-out sessions. Romania TRAIN must call only `apm_sites_within` for site data, using the existing client. Check browser Network for no other site-data host, explicit error/CSV behaviour on denied and timed-out requests, CSV-only behaviour outside Romania, counts, truncation and border warnings. Test legitimate payment and newsletter writes after the proposed profile-column privilege hardening.
+
+TRAIN protection masks use the selected dataset and cached land restrictions only; unknown restriction cells remain unscored. No legacy heritage or land-tile download may be triggered by TRAIN. See `TRAIN_CORRECTION_REPORT.md` for local mocked-network and local PostgreSQL/PostGIS proof; those tests do not replace staging RLS/auth/performance checks.

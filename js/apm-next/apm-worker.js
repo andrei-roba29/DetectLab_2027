@@ -14,10 +14,10 @@
 importScripts(
     'apm-core.js',
     'apm-raster.js',
-    'apm-heatmap.js?v=20261101-spatial-exclusions',
+    'apm-heatmap.js?v=20261101-train-source',
     '../d3.min.js',
     '../vendor/polygon-clipping.umd.min.js',
-    'apm-polygonise.js?v=20261101-spatial-exclusions',
+    'apm-polygonise.js?v=20261101-train-source',
     '../rbush.min.js'
 );
 

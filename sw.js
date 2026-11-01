@@ -915,7 +915,7 @@
 // no longer appears at random on country views, and its red coverage rectangle
 // is the real sheet footprint (js/map-app.js). The notice names
 // the Supabase-hosted map data by its real scope, not as "Finnish" (js/wms-health.js).
-const CACHE_NAME = 'detectlab-v362-walachia-coverage';
+const CACHE_NAME = 'detectlab-v363-romania-train-only';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -964,19 +964,19 @@ const PRECACHE_URLS = [
   'js/window-resize.js?v=20261101-layer-no-grip',
   'js/apm-next/apm-core.js?v=20261101-robust-train',
   'js/apm-next/apm-raster.js?v=20261101-robust-train',
-  'js/apm-next/apm-heatmap.js?v=20261101-spatial-exclusions',
+  'js/apm-next/apm-heatmap.js?v=20261101-train-source',
   'js/apm-next/apm-heatmap.js',
-  'js/apm-next/apm-sites.js?v=20261101-robust-train',
-  'js/apm-next/romania-periods.config.js?v=20261101-romania-ran',
-  'js/apm-next/apm-providers.js?v=20261101-romania-ran',
-  'js/apm-next/apm-romania-sites.js?v=20261101-romania-ran',
-  'js/apm-next/apm-pipeline.js?v=20261101-spatial-exclusions',
-  'js/apm-next/apm-ui.js?v=20261101-spatial-exclusions',
-  'js/apm-next/apm-i18n.js?v=20261101-spatial-exclusions',
-  'js/apm-next/apm-worker.js?v=20261101-spatial-exclusions',
+  'js/apm-next/apm-sites.js?v=20261101-train-source',
+  'js/apm-next/romania-periods.config.js?v=20261101-train-source',
+  'js/apm-next/apm-providers.js?v=20261101-train-source',
+  'js/apm-next/apm-romania-sites.js?v=20261101-train-source',
+  'js/apm-next/apm-pipeline.js?v=20261101-train-source',
+  'js/apm-next/apm-ui.js?v=20261101-train-source',
+  'js/apm-next/apm-i18n.js?v=20261101-train-source',
+  'js/apm-next/apm-worker.js?v=20261101-train-source',
   'js/apm-next/apm-worker.js',
   'js/apm-next/apm-polygonise.js',
-  'js/apm-next/apm-polygonise.js?v=20261101-spatial-exclusions',
+  'js/apm-next/apm-polygonise.js?v=20261101-train-source',
   'js/apm-next/apm-core.js',
   'js/apm-next/apm-raster.js',
   'js/apm-next/apm-sites.js',
@@ -1017,7 +1017,7 @@ const PRECACHE_URLS = [
   'css/styles.css?v=20261026-viewport-heritage',
   'js/map-app.js?v=20261026-lidar-hillshade-zoom',
   'js/translations.js?v=20261024-uk-historical-maps',
-  'js/subscriptions.js?v=20261024-uk-historical-maps',
+  'js/subscriptions.js?v=20261101-profile-entitlement',
   'js/offline-maps.js?v=20261024-uk-historical-maps',
   'js/vertical-opacity-control.js?v=20261024-uk-historical-maps',
   'css/styles.css?v=20261024-asig-catalogue',
@@ -1326,7 +1326,7 @@ const PRECACHE_URLS = [
   'js/library-of-babel.js?v=20260831-babel-cimec',
   'js/library-of-babel.js?v=20260831-babel-periods-lexicon',
   'js/library-of-babel.js?v=20260917-babel-epochs',
-  'js/library-of-babel.js?v=20261023-babel-ariadne',
+  'js/library-of-babel.js?v=20261101-babel-eight',
   'js/vertical-opacity-control.js',
   'js/vertical-opacity-control.js?v=20260812',
   'js/vertical-opacity-control.js?v=20260918-layer-initials',
@@ -1725,7 +1725,7 @@ const PRECACHE_URLS = [
   // v138: archeo potential canvas must not swallow detectorist pin taps after
   // the layer is switched off (click-through pane + renderer detach).
   'js/archeo-potential.js?v=20261017-archeo-3d-projection',
-  'js/archeo-potential.js?v=20261101-spatial-exclusions',
+  'js/archeo-potential.js?v=20261101-train-source',
   'js/lidar-scanner.js?v=20260922-distance-mirror-close',
   'js/archeo-report.js?v=20260922-distance-mirror-close',
   'js/archeo-report.js?v=20261030-report-exclusions',

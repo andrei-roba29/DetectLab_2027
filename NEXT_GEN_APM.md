@@ -25,7 +25,7 @@ Both MANUAL and TRAIN show a **continuous, semi-transparent score heatmap**, wit
 
 1. Click **APM** (bottom-left). The switch (stored as `localStorage.detectlab_apm_next`, default off) must be on, and the account must be premium. Otherwise the panel shows a gate message and Run is disabled.
 2. Click **Pick point on map**. The APM settings window disappears completely and stays hidden while you pan or zoom. Select a point on the map to set the search-area centre; only then do the settings return. A dashed circle shows the search radius. Attempts to reopen the settings during selection are ignored; an explicit close or switching APM off still cancels selection.
-3. Choose **MANUAL** or **TRAIN**. For TRAIN, wait for classified settlements to load, then answer **Which settlement period would you like to analyse?** Pick a local occupation period, including a named period without numeric dates, or explicitly choose **All periods**. Each option shows the usable settlement count. TRAIN stays disabled until a choice is made and at least 10 settlements match. No CSV is required. Use **Reload ARIADNE points** to retry a failed request or refresh the data.
+3. Choose MANUAL or TRAIN. TRAIN loads only the Romania Supabase RPC and defaults to All periods. Outside Romania, upload CSV. Database errors offer an explicit CSV upload, never an automatic fallback. Period options show counts; fewer than 10 sites blocks TRAIN, fewer than 30 warns.
 4. Run. Results show area per class, the sources actually used (label, version, resolution), warnings in the chosen language, and (TRAIN) model diagnostics. **Export hotspot GeoJSON** writes only the highest-potential polygons with provenance, thresholds, rendering metadata and diagnostics.
 
 ## Premium gate: what `_dlIsPremium()` returns
@@ -34,7 +34,7 @@ Defined in `js/subscriptions.js` as `window._dlIsPremium = isPremium`. `isPremiu
 
 - returns `false` when there is no current user (`window._authUser()` returns nothing, i.e. logged out);
 - for a logged-in user with `plan === 'premium'` and a `premiumExpiresAt` in the future, returns `true`;
-- otherwise checks the local record for that user id (`localStorage` key with the prefix `LS_PREFIX`) and returns `true` only if it is premium and unexpired;
+- otherwise returns false; browser-local records do not grant entitlement;
 - returns `false` for free users and for expired premium.
 
 It always returns a boolean. The panel reads it through a wrapper that also returns `false` when the function is missing or throws.
@@ -130,18 +130,7 @@ The proxy is not built, and no request is changed until a user enables it.
 
 ## TRAIN input
 
-The panel uses [ARIADNE Browse / Where](https://ariadne-portal.d4science.org/browse/where?forceReload=true&mapq=true&q=).
-
-- Source contract checked against the public [portal implementation](https://github.com/ARIADNE-Infrastructure/portal): `server/classes/Elastic/Query.php`, `QuerySettings.php`, `server/html/api/index.php` and `client/src/component/BrowseWhere/FullMap.vue`.
-- Requests go to `https://ariadne-portal.d4science.org/api/search` with `bbox=north,west,south,east`, `resourceType=Site/monument`, a settlement `derivedSubject` filter, `size=50`, and one-based `page`. The portal source declares CORS `*`; no proxy or credentials are required. `mapq` is deliberately omitted because it returns heatmap aggregations rather than individual hits for large searches.
-- Two subject-filtered queries are unioned: `inhabited places` (AAT 300008347, with descendants expanded by the portal), plus `settlements (sites of small communities)` (AAT 300444153, explicitly supported by the portal’s label fallback). **There is no unfiltered all-site fallback.** The adapter also validates controlled settlement subjects using a compact snapshot of the portal’s inhabited-place vocabulary; cemeteries, standalone monuments and unclassified records are not accepted based on title/description mentions. Records missing these classifications are deliberately omitted.
-- All pages of each scoped query are read sequentially, with a 20 s request timeout. Missing/invalid responses, incomplete paging, and per-query counts over the portal's 10,000-hit window fail visibly; no partial dataset is used for training.
-- Only `spatial.geopoint` is used. Bounding boxes, polygons and heatmap centroids are **not** invented as site locations. Non-site resources are excluded. Points outside the actual 50 km circle are removed after the bounding-box query.
-- Each `temporal` entry is retained as a separate occupation phase (`from`, `until`, `periodName`, `uri`). The period picker is populated only from usable settlement locations inside the 50 km circle, after accuracy filtering and spatial de-duplication. Duplicate locations retain the union of their phases. Selecting a listed period filters by that exact phase identity, even when numeric years are absent. Explicit numeric interval filters compare against individual phases, never the envelope between earliest and latest occupation; gaps are not invented habitation. Publication dates are never used as archaeological dates. Unlabelled and undated records are available only under All periods.
-- Points with `spatialPrecision` or `coordinatePrecision` flags are excluded as approximate, following the portal map’s approximate-marker convention. Metric position accuracy is not supplied in this search contract and remains `null`. ARIADNE sites are allowed with a visible warning, also retained in results/GeoJSON. This is an explicit relaxation of the old CSV-only 100 m rule. CSV helper functions remain for compatibility/testing and still reject unknown accuracy. Site source, subject scope, retrieval timestamp, chosen period and accuracy policy are included in result provenance.
-- Changing the centre invalidates the previous site pool and period selection; late responses from older requests are ignored. Failed loads can be retried. Below **10** usable sites, TRAIN is blocked; below **30**, reliability is warned about.
-
-**Verification limitation:** live requests to the Ariadne host are blocked by this sandbox's network allowlist. Automated tests use realistic API fixtures, not claims of a successful live portal run. Existing DEM/water endpoint limitations still apply.
+See [Romania TRAIN implementation](ROMANIA_APM_TRAIN_IMPLEMENTATION.md). Built-in data covers Romania only; elsewhere upload CSV.
 
 ## Approximation error (distance to water)
 
@@ -159,14 +148,6 @@ Notes:
 - Relative error is not stated for points closer than 100 m to water, because the ratio becomes meaningless there. An earlier figure of "0.2 %" and a 9.6 % maximum at 5 km came from that near-zero case and is withdrawn.
 - The tests check these bounds (`test-apm-next.js`, *approximation error vs exact haversine*). The brute-force tests check the implementation against a same-metric reference with per-point latitude scaling.
 
-## ARIADNE regression tests
-
-- `node test-apm-ariadne.js`: eleven provider/conversion tests, using contract-shaped fixtures without network.
-- With externally installed `jsdom` available through `NODE_PATH`, the same command also runs a real-panel DOM integration test for automatic loading, explicit period choice (including named-only periods), period thresholds, passing records/source/period to TRAIN, retry, centre changes, stale responses and disabling the feature.
-- `node test-apm-next.js`: 60 APM tests, including the real MANUAL/TRAIN worker producing heat textures and highest-only contours.
-- `node test-apm-heatmap.js`: seven pure rendering tests: continuous/threshold-anchored ramp, transparent no-data, bounded textures, geographic interpolation, highest-only contours, no-hotspot output and raster areas.
-- `test-apm-next-browser.js`: 14 checks pass in Chromium with real Leaflet, real heatmap canvases and synthetic pipeline results. Local NSS/NSPR libraries bundled with `@sparticuz/chromium` were extracted to run Chromium here; no application dependency was added.
-
 ## Files
 
 | Path | Role |
@@ -176,11 +157,9 @@ Notes:
 | `js/apm-next/apm-polygonise.js` | Score grid → highest-only production contours and classified raster areas; legacy all-class helper. Worker only. |
 | `js/apm-next/apm-heatmap.js` | Bounded score-to-RGBA display raster, continuous ramp, geographic canvas-tile projection. |
 | `js/apm-next/apm-worker.js` | Web Worker: `setAnalysis`, `score`, `train`, sampling. |
-| `js/apm-next/apm-sites.js` | ARIADNE hit conversion, legacy CSV parsing, filters, period grouping, BCE years. |
 | `js/apm-next/apm-providers.js` | DEM candidates, GetCapabilities parsing, water sources, Strahler map, proxy switch, step and request log. |
 | `js/apm-next/apm-pipeline.js` | `runManual`, `runTrain`, DEM and water decisions, keyed warnings, site-count status. |
 | `js/apm-next/apm-i18n.js` | Romanian and English panel, period-selection and hybrid-map strings. |
-| `js/apm-next/apm-ui.js` | Panel, pick on map, switch, premium gate, legend, curves, automatic TRAIN ARIADNE loading/retry, results, diagnostics. |
 | `css/next-gen-apm.css` | `.apm-*` styles. |
 | `samples/apm-next-SYNTHETIC-sample-sites.csv` | Synthetic TRAIN sample (36 rows). |
 | `test-apm-next.js` | Node test suite: `node test-apm-next.js` (60 tests). |
@@ -208,7 +187,7 @@ On screens up to 600 px wide the map legend (bottom-right) is hidden while the A
 
 ## TRAIN robust site handling
 
-After terrain/environment sampling, TRAIN hard-excludes sites on sea/water polygons, outside the DEM, on no-data cells, and exact duplicate coordinates, recording each reason. Site altitude, slope, aspect and terrain-texture samples use a circular median neighbourhood with configurable `positionRadiusM=60 m`, never smaller than a DEM cell; water distance remains at the exact point. The motivation is to reduce small geocoding/DEM cell-position errors without blurring the water-distance signal.
+After terrain/environment sampling, TRAIN hard-excludes sites on sea/water polygons, outside the DEM, on no-data cells, and exact duplicate coordinates with the same normalised name, recording each reason. Site altitude, slope, aspect and terrain-texture samples use a circular median neighbourhood with configurable `positionRadiusM=60 m`, never smaller than a DEM cell; water distance remains at the exact point. The motivation is to reduce small geocoding/DEM cell-position errors without blurring the water-distance signal.
 
 Robust fitting uses a plain initial fit, then robust median/MAD standardized feature distances across site samples, Tukey-style soft site weights, and a refit. It skips below 20 valid sites; weights stay positive; no more than 20% are down-weighted. A compact flagged cluster of at least 8 sites and more than 15% of the set is preserved/reported as a possible second pattern. Spatial block CV repeats that robust process inside each training fold and scores every held-out site; panel diagnostics show robust and plain AUC/Kvamme. Grey map markers have reason tooltips and individual/restore-all actions; refits use cached samples and do not reload data.
 
@@ -216,13 +195,13 @@ Synthetic fixture performance: for 45 rule-following sites plus 5 uniformly rand
 
 The defaults are in one object, `DetectLabApmCore.robustTrainConfig` (`js/apm-next/apm-core.js`): position radius 60 m (at least one DEM cell), minimum 20 sites, maximum 20% down-weighted, Tukey weight floor 0.08, outlier distance 3.25 MAD-scaled units, and alternate-pattern cluster minimum 8 / >15% with radius 1 standardized unit. CV optimizer tolerance is relaxed to 1e-4 to meet the browser budget; the full-data optimizer uses the same tolerance. These are configurable starting points, not calibrated archaeological thresholds. A local synthetic benchmark with 1,000 sites plus 3,000 backgrounds completed the fit/CV path in about 1.8 s; actual browser hardware and bigger site pools may differ.
 
-## Romania TRAIN source status (2026-11)
-
-TRAIN now uses the premium-gated Supabase RPC for the Romanian national archaeological repertory (`archaeological_sites_a`), not Ariadne. Exact positions are filtered server-side (`COORD='DA'`); empty/NU are excluded. The editable approximate name-inference rules, source citations, excluded-name patterns, rough Natural Earth Romania outline, attribution/OPEN QUESTION licence note, and deployment caveats are documented in [ROMANIA_APM_TRAIN_IMPLEMENTATION.md](ROMANIA_APM_TRAIN_IMPLEMENTATION.md). Live schema, index and RLS metadata were inspected; the database migration was applied on 2026-11-01. The requested 100-row attachment was not available in the checkout. A single Cluj 50 km SQL plan used the new GiST index (about 145 ms execution); this is not a broad performance benchmark. Authenticated premium/free-user RPC behavior has not been exercised. The old Ariadne implementation notes below are historical and do not describe the current provider.
-
 ## Known limitations
 
 - Distances use a local equirectangular approximation (see the error table above).
 - The EEA39 test is a coarse bounding approximation.
 - Curves are editable in MANUAL only. In TRAIN they are learned from the sites.
 - The panel's position next to the app's other controls is not verified in the real app.
+
+## Romania TRAIN correction (2026-11-01)
+
+See [implementation and deployment gates](ROMANIA_APM_TRAIN_IMPLEMENTATION.md) and [verification report](TRAIN_CORRECTION_REPORT.md). The manual SQL was applied to production with user approval as migration `20261101163027_apm_romania_train_correction`; frontend deployment still requires the PR/static-host release. Historical test numbers elsewhere in this document are not evidence for this correction.

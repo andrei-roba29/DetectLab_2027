@@ -85,9 +85,9 @@
         if (u.plan === 'premium' && u.premiumExpiresAt) {
             return new Date(u.premiumExpiresAt).getTime() > Date.now();
         }
-        var rec = localStorageRecord(u.id);
-        return !!(rec && rec.plan === 'premium' && rec.premiumExpiresAt &&
-            new Date(rec.premiumExpiresAt).getTime() > Date.now());
+        // Cached browser records are not an entitlement. The RPC repeats this
+        // profile rule server-side against protected database columns.
+        return false;
     }
 
     // Shared read-only entitlement check for standalone Premium tools.

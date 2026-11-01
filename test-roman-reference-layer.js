@@ -84,7 +84,7 @@ assert(html.includes('js/map-app.js?v=20261101-walachia-coverage'), 'index.html 
 assert(sw.includes('js/map-app.js?v=20261101-walachia-coverage'), 'current map-app script is in the service-worker cache');
 assert(html.includes('js/roman-roads.js?v=20261015-roman-roads'), 'index.html loads the Roman-roads canvas layer');
 assert(sw.includes('js/roman-roads.js?v=20261015-roman-roads'), 'the Roman-roads layer is in the service-worker cache');
-assert(sw.includes('js/subscriptions.js?v=20261024-uk-historical-maps'), 'premium guard script is in the service-worker cache');
+assert(sw.includes('js/subscriptions.js?v=20261101-profile-entitlement'), 'premium guard script is in the service-worker cache');
 assert(sw.includes('css/styles.css?v=20261024-asig-catalogue'), 'DARE marker CSS is in the service-worker cache');
 console.log('  ✓ Premium guards and PWA asset versions verified');
 

@@ -1339,6 +1339,8 @@
                 var error = new Error('Cancelled'); error.code = 'cancelled'; throw error;
             }
         }
+        // TRAIN supplies its authoritative records and never loads legacy heritage.
+        if (!Array.isArray(opts.siteRecords)) {
         // Start the app's shared lazy download without enabling heritage on the map.
         if (typeof window._loadLocalLayerData === 'function') {
             window._loadLocalLayerData().catch(function () { /* readiness/timeout checked below */ });
@@ -1354,13 +1356,22 @@
             waited += CONFIG.SITES_DATA_POLL_MS;
         }
         if (window._detectlabApiFailed) throw new Error('Heritage exclusion data could not be loaded. Please reload and try again.');
+        }
         checkCancelled();
         var dx = grid.dLon * 111320 * Math.cos(centerLat * Math.PI / 180);
         var dy = grid.dLat * 111320;
         var halfDiagonal = Math.hypot(dx, dy) / 2;
         // Include sites just beyond the search circle whose buffers reach into it.
         var clearance = CONFIG.SITE_RADIUS_M + CONFIG.SITE_BUFFER_M + halfDiagonal;
-        var ctx = collectSitesInRadius(centerLat, centerLng, radiusM + clearance, centerLat, true);
+        var ctx;
+        if (Array.isArray(opts.siteRecords)) {
+            ctx = { polygons: [], sites: opts.siteRecords.filter(function (r) {
+                return Number.isFinite(Number(r.lat)) && Number.isFinite(Number(r.lon));
+            }).map(function (r) {
+                var p = projectToLocalMeters(Number(r.lat), Number(r.lon), centerLat);
+                return { x: p.x, y: p.y, lat: Number(r.lat), lng: Number(r.lon), oid: r.id, props: {} };
+            }) };
+        } else ctx = collectSitesInRadius(centerLat, centerLng, radiusM + clearance, centerLat, true);
         ctx.center = projectToLocalMeters(centerLat, centerLng, centerLat);
         ctx.radius = radiusM;
         ctx.siteRadius = CONFIG.SITE_RADIUS_M;
@@ -1368,7 +1379,7 @@
         ctx.siteIndex = createGridIndex(1200, 1200);
         ctx.sites.forEach(function (site) { ctx.siteIndex.insert(site.x, site.y, site); });
         var latR = radiusM / 111320, lngR = radiusM / Math.max(1, 111320 * Math.cos(centerLat * Math.PI / 180));
-        await prewarmUatTiles({ minLat: centerLat - latR, maxLat: centerLat + latR,
+        if (!opts.cacheOnly) await prewarmUatTiles({ minLat: centerLat - latR, maxLat: centerLat + latR,
             minLng: centerLng - lngR, maxLng: centerLng + lngR });
         checkCancelled();
         var mask = new Uint8Array(grid.w * grid.h);
