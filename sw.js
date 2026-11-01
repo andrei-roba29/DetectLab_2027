@@ -939,9 +939,9 @@
 //   focus: the keyboard's visualViewport resize used to rewrite the !important
 //   pixel heights under the finger, so the OS closed the keyboard again.
 //   Re-tags js/pwa-google-auth.js, js/auth.js, index.html and CACHE_NAME.
-// v373: keep the iOS standalone map in document flow, rather than moving
-// the fixed, physical-screen-sized shell during every keyboard gesture.
-const CACHE_NAME = 'detectlab-v373-ios-flow-keyboard';
+// v374: installed iOS text fields get fallback keys without another bottom
+// spacer or a separate keyboard-toggle button; cache the new helper offline.
+const CACHE_NAME = 'detectlab-v374-ios-inline-fallback';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1244,6 +1244,7 @@ const PRECACHE_URLS = [
   '.',
   'index.html',
   'js/ios-input-focus.js?v=20261101-ios-flow-keyboard',
+  'js/ios-fallback-keyboard.js?v=20261101-ios-inline-fallback',
   'js/auth.js?v=20261101-ios-flow-keyboard',
   'js/friends.js?v=20261101-ios-flow-keyboard',
   'js/library-of-babel.js?v=20261101-ios-flow-keyboard',
