@@ -190,9 +190,13 @@ function premiumRows(h) {
 test('desktop: Banat keeps covered leaves and hides Bucovina and unrelated areas', () => {
     const h = setup({ local: new MapMock(BANAT) });
     // WWII, Mitteleuropa and Reymann also cover Banat. Excluding them would break intersects semantics.
+    // Valahia does NOT: it is the historical Wallachia (the south of today's
+    // Romania, Danube → Carpathians), so a Banat viewport west of Oltenia must
+    // not list it.
     assert.equal(h.row('otherMapsRow').parentElement.id, 'histSubLayers');
     assert.equal(highlighted(h, 'otherMapsRow'), true, 'free Other maps is available');
-    assert.deepEqual(premiumRows(h), ['banatRow', 'mitteleuropaRow', 'reymannRow', 'walachiaRow', 'ww2Row']);
+    assert.deepEqual(premiumRows(h), ['banatRow', 'mitteleuropaRow', 'reymannRow', 'ww2Row']);
+    assert.equal(highlighted(h, 'walachiaRow'), false);
     assert.equal(highlighted(h, 'bucovinaRow'), false);
     assert.equal(highlighted(h, 'satellite60sRow'), true);
     assert.equal(h.row('histPremiumExpandIcon').classList.contains(ARROW_CLASS), false);
@@ -205,9 +209,11 @@ test('PWA: _dlMap takes precedence over a stale local map and window.map', () =>
     const legacy = new MapMock(ALL);
     const h = setup({ exposed: active, local, legacy, pwa: true });
     // Galicia 1855, Chrzanowski, KDR Großblatt, Mitteleuropa, Reymann, WIG 100k also span the Bucovina viewport.
-    // The UK-only maps are hidden (no GB/IE intersection).
+    // The UK-only maps are hidden (no GB/IE intersection); Valahia is the
+    // southern half of the country and has no business in a northern viewport.
     assert.equal(highlighted(h, 'otherMapsRow'), true);
-    assert.deepEqual(premiumRows(h), ['bucovinaRow', 'chrzanowskiRow', 'galicia1855Row', 'kdrGbRow', 'mitteleuropaRow', 'reymannRow', 'walachiaRow', 'wig100kRow', 'ww2Row']);
+    assert.deepEqual(premiumRows(h), ['bucovinaRow', 'chrzanowskiRow', 'galicia1855Row', 'kdrGbRow', 'mitteleuropaRow', 'reymannRow', 'wig100kRow', 'ww2Row']);
+    assert.equal(highlighted(h, 'walachiaRow'), false);
     assert.equal(active.reads, 1);
     assert.equal(local.reads + legacy.reads, 0);
     assert.equal(h.row('histPremiumExpandIcon').classList.contains(ARROW_CLASS), false);

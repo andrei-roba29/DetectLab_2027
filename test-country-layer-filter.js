@@ -48,12 +48,12 @@ const CA_BBOX = [-141.0, 41.0, -52.0, 83.0];    // Canada (group availability fa
 assert(/#transpPanel\.country-filter-active \.country-layer-unavailable\s*\{\s*display:\s*none\s*!important/.test(css),
     'styles.css hides rows marked country-layer-unavailable while the filter is active');
 assert(html.includes('css/styles.css?v=20261029-romania-5m'), 'index.html loads the re-versioned styles.css');
-assert(html.includes('js/map-app.js?v=20261101-lidar-service-levels'), 'index.html loads the updated map-app.js');
-assert(html.includes('js/historical-eu-maps.js?v=20261031-cenagis-retry'), 'index.html loads the country-attribution catalog');
+assert(html.includes('js/map-app.js?v=20261101-ro-region-sheets'), 'index.html loads the updated map-app.js');
+assert(html.includes('js/historical-eu-maps.js?v=20261101-ro-hist-sheets'), 'index.html loads the country-attribution catalog');
 assert(html.includes('js/globe-country-picker.js?v=20261017-outline-zoom-settle'), 'index.html loads the re-versioned picker');
 ['css/styles.css?v=20261029-romania-5m',
- 'js/map-app.js?v=20261101-lidar-service-levels',
- 'js/historical-eu-maps.js?v=20261031-cenagis-retry',
+ 'js/map-app.js?v=20261101-ro-region-sheets',
+ 'js/historical-eu-maps.js?v=20261101-ro-hist-sheets',
  'js/globe-country-picker.js?v=20261017-outline-zoom-settle'].forEach(function (p) {
     assert(sw.includes("'" + p + "'"), 'sw.js precaches ' + p);
 });
@@ -434,6 +434,82 @@ function groupRowOf(document, iconId) {
     window.unfilterLayersForCountry();
     assert.equal(unavailable(document, 'cenagisMapRow_fixture'), false, 'dynamic catalog row restored on exit');
     console.log('  ✓ dynamic CENAGIS catalog participates in country filtering and keeps the single parent group available');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   5b. Romania selected: the Central-European sheets whose published
+       rectangle overshoots their real data are gone; the region-gated
+       sheets (WIG 1:100k → far north, Valahia → southern half) only
+       appear while their region is the subject of the view
+   ══════════════════════════════════════════════════════════════ */
+const RO_BBOX = [20.26, 43.62, 29.72, 48.27];   // Romania
+const VIEWPORT_UNAVAILABLE = 'viewport-layer-unavailable';
+{
+    const { window, document, context } = setupPanel();
+    // The gate stores the ISO before it calls the filter (same hand-off).
+    window._detectlabSelectedCountry = 'RO';
+    window._detectlabCountryLayer = {
+        eachLayer(cb) {
+            cb({
+                feature: { properties: { ISO_A2: 'RO' } },
+                getBounds() { return latLngBounds([[RO_BBOX[1], RO_BBOX[0]], [RO_BBOX[3], RO_BBOX[2]]]); }
+            });
+        }
+    };
+    // The locked view opens on the country fit: the whole country is visible.
+    context.map.bounds = latLngBounds([[RO_BBOX[1], RO_BBOX[0]], [RO_BBOX[3], RO_BBOX[2]]]);
+    window.filterLayersForCountry('RO');
+
+    // Mitteleuropa / Chrzanowski / Reymann / KDR 1:100k / KDR Großblatt all
+    // publish a rectangle over northern Romania, but none of them carries a
+    // Romanian sheet — a bbox graze is not coverage.
+    ['mitteleuropaRow', 'chrzanowskiRow', 'reymannRow', 'kdr100kRow', 'kdrGbRow'].forEach(function (id) {
+        assert.equal(unavailable(document, id), true, id + ' hidden for Romania — its rectangle grazes the bbox but has no Romanian data');
+    });
+    // WIG 1:100k IS a Romanian sheet (far north only), so it keeps its
+    // attribution — the viewport gate, not the country filter, hides it.
+    assert.equal(unavailable(document, 'wig100kRow'), false, 'WIG 1:100k is attributed to Romania (far north)');
+    assert.equal(document.getElementById('wig100kRow').classList.contains(VIEWPORT_UNAVAILABLE), true,
+        'WIG 1:100k stays behind at the country fit — the far north does not fill the view');
+    // Valahia 1855-1859 is the southern half of the country: same contract.
+    assert.equal(unavailable(document, 'walachiaRow'), false, 'Valahia is attributed to Romania');
+    assert.equal(document.getElementById('walachiaRow').classList.contains(VIEWPORT_UNAVAILABLE), true,
+        'Valahia stays behind at the country fit — the southern half does not fill the view');
+
+    // Panning/zooming into Maramureș and northern Bucovina brings the WIG row
+    // back and keeps Valahia out (it is the opposite end of the country).
+    context.map.bounds = latLngBounds([[47.60, 23.00], [48.20, 26.20]]);
+    window.checkLayerVisibility();
+    assert.equal(document.getElementById('wig100kRow').classList.contains(VIEWPORT_UNAVAILABLE), false,
+        'WIG 1:100k appears once the far north of Romania fills the viewport');
+    assert.equal(document.getElementById('walachiaRow').classList.contains(VIEWPORT_UNAVAILABLE), true,
+        'Valahia stays hidden in a northern viewport');
+
+    // Moving down into Muntenia/Oltenia is the mirror image: Valahia appears,
+    // the WIG sheets disappear.
+    context.map.bounds = latLngBounds([[44.00, 24.00], [45.40, 26.60]]);
+    window.checkLayerVisibility();
+    assert.equal(document.getElementById('walachiaRow').classList.contains(VIEWPORT_UNAVAILABLE), false,
+        'Valahia appears once the view moves into the southern half of Romania');
+    assert.equal(document.getElementById('wig100kRow').classList.contains(VIEWPORT_UNAVAILABLE), true,
+        'WIG 1:100k disappears again when the view leaves the far north');
+
+    // A Bucharest-level viewport keeps it, a Transylvanian one does not.
+    context.map.bounds = latLngBounds([[44.30, 25.90], [44.60, 26.30]]);
+    window.checkLayerVisibility();
+    assert.equal(document.getElementById('walachiaRow').classList.contains(VIEWPORT_UNAVAILABLE), false,
+        'Valahia is listed over Bucharest');
+    context.map.bounds = latLngBounds([[46.60, 23.40], [46.90, 23.80]]);
+    window.checkLayerVisibility();
+    assert.equal(document.getElementById('walachiaRow').classList.contains(VIEWPORT_UNAVAILABLE), true,
+        'Valahia is not listed over Cluj / Transylvania');
+
+    // Exiting the locked view restores every row (state is never destroyed).
+    window.unfilterLayersForCountry();
+    ['mitteleuropaRow', 'chrzanowskiRow', 'reymannRow', 'kdr100kRow', 'kdrGbRow', 'wig100kRow', 'walachiaRow'].forEach(function (id) {
+        assert.equal(unavailable(document, id), false, id + ' restored on exit');
+    });
+    console.log('  ✓ Romania: Central-European sheets without Romanian data hidden; WIG 1:100k only over the far north; Valahia only over the southern half');
 }
 
 /* ══════════════════════════════════════════════════════════════

@@ -13185,6 +13185,22 @@
                     layerVar: '_banatMapLayer'
                 },
 
+                walachia: {
+                    // Valahia 1855-1859 — harta lui Szathmári Pap Mihály (foi XYZ
+                    // pe Supabase Storage). Acoperă Valahia istorică: Oltenia și
+                    // Muntenia, adică jumătatea de sud a României de azi (Dunăre →
+                    // Carpați), cu litoralul dunărean. Rândul din panou folosește
+                    // aceeași regiune (PREMIUM_VIEWPORT_REGIONS) și apare doar
+                    // cât timp view-ul arată sudul țării.
+                    // Tile-urile sunt XYZ pornind de la z0, deci nu există un
+                    // interval „fără tile-uri” care să justifice dreptunghiul
+                    // roșu de acoperire (noCoverageRect).
+                    bounds: [[43.50, 21.90], [45.65, 28.65]],
+                    label: 'Valahia 1855-1859',
+                    layerVar: '_walachiaMapLayer',
+                    noCoverageRect: true
+                },
+
                 transylvania1859: {
                     // Harta Transilvaniei 1859 (Tiled Map Service, ArcGIS Online —
                     // Siebenburgen_1859). fullExtent-ul serviciului convertit în WGS84.
@@ -13584,14 +13600,44 @@
                     premium_wig100k: 'wig100k',
                     premium_galicia1855: 'kummersberg'
                 };
+                // NOTE — Romania is deliberately absent from ukvme /
+                // chrzanowski / reymann / kdr / kdr_gb: those sheets publish a
+                // rectangle that spans northern Romania, but not one of them
+                // carries a Romanian sheet. The bbox graze is not coverage, so
+                // the Romanian view must not offer them. The single shared
+                // sheet with real (marginal) Romanian data — WIG 1:100k, far
+                // north only — keeps RO here and is narrowed by
+                // PREMIUM_VIEWPORT_REGIONS below.
                 var SHARED_PREMIUM_COUNTRIES = {
-                    ukvme: ['PL', 'DE', 'UA', 'BY', 'LT', 'LV', 'CZ', 'SK', 'AT', 'HU', 'RU', 'MD', 'RO', 'DK', 'EE'],
-                    chrzanowski: ['PL', 'DE', 'UA', 'BY', 'LT', 'LV', 'CZ', 'SK', 'AT', 'HU', 'RU', 'MD', 'RO', 'DK', 'EE'],
-                    reymann: ['PL', 'DE', 'UA', 'BY', 'LT', 'CZ', 'SK', 'AT', 'HU', 'RU', 'MD', 'RO', 'FR', 'BE', 'LU', 'NL', 'DK', 'CH'],
-                    kdr: ['PL', 'DE', 'UA', 'BY', 'LT', 'CZ', 'SK', 'AT', 'HU', 'RU', 'RO', 'FR', 'BE', 'LU', 'NL', 'DK', 'CH'],
-                    kdr_gb: ['PL', 'DE', 'UA', 'BY', 'LT', 'CZ', 'SK', 'AT', 'HU', 'RU', 'MD', 'RO'],
+                    ukvme: ['PL', 'DE', 'UA', 'BY', 'LT', 'LV', 'CZ', 'SK', 'AT', 'HU', 'RU', 'MD', 'DK', 'EE'],
+                    chrzanowski: ['PL', 'DE', 'UA', 'BY', 'LT', 'LV', 'CZ', 'SK', 'AT', 'HU', 'RU', 'MD', 'DK', 'EE'],
+                    reymann: ['PL', 'DE', 'UA', 'BY', 'LT', 'CZ', 'SK', 'AT', 'HU', 'RU', 'MD', 'FR', 'BE', 'LU', 'NL', 'DK', 'CH'],
+                    kdr: ['PL', 'DE', 'UA', 'BY', 'LT', 'CZ', 'SK', 'AT', 'HU', 'RU', 'FR', 'BE', 'LU', 'NL', 'DK', 'CH'],
+                    kdr_gb: ['PL', 'DE', 'UA', 'BY', 'LT', 'CZ', 'SK', 'AT', 'HU', 'RU', 'MD'],
                     wig100k: ['PL', 'DE', 'UA', 'BY', 'LT', 'LV', 'CZ', 'SK', 'HU', 'RU', 'MD', 'RO'],
                     kummersberg: ['PL', 'UA']
+                };
+                // Some sheets DO have data for a country, but only for a REGION
+                // of it, while their published rectangle spans the whole country
+                // bbox. Those rows keep their country attribution and are gated
+                // by the region the sheet really covers: the row is shown only
+                // while that region is the subject of the view (see
+                // viewportShowsRegion). Per-country region + share threshold; the
+                // catalog mirrors the marker as COUNTRIES_DATA `viewportRegion`.
+                var PREMIUM_VIEWPORT_REGIONS = {
+                    // WIG 1:100k — Harta tactică a Poloniei (1919–1939). Its only
+                    // Romanian data is a sliver in the far north (Maramureș and
+                    // northern Bucovina): the row appears for Romania only when
+                    // the view actually shows that strip, never at the country
+                    // fit (where the sheet box would otherwise pass the test).
+                    wig100k: { RO: { bounds: [[47.55, 22.25], [48.30, 27.25]], minShare: 0.30 } },
+                    // Valahia 1855-1859 — historical Wallachia, i.e. the bottom
+                    // half of today's Romania (Oltenia + Muntenia, Danube to the
+                    // Carpathians). At the locked country fit the south is ~44%
+                    // of the visible latitude span and the view centre sits over
+                    // Transylvania, so the row only appears once the view moves
+                    // down into the south.
+                    walachia: { RO: { bounds: [[43.50, 21.90], [45.65, 28.65]], minShare: 0.55 } }
                 };
                 // Countries covered by that curated analysis (COUNTRIES_DATA
                 // entries; BE-LU is listed as BE + LU). For any other country
@@ -13846,6 +13892,12 @@
                     layerDefs.push({
                         key: 'premium_' + item.key,
                         bounds: toBounds(b),
+                        // Rows whose published box overshoots their real data in
+                        // a country carry the region they actually cover there
+                        // (e.g. WIG 1:100k → far north of Romania). The
+                        // viewport pass then decides visibility from that
+                        // region instead of from `bounds`.
+                        viewportRegions: PREMIUM_VIEWPORT_REGIONS[item.key] || null,
                         getRow: (function(rowId) {
                             return function() { return document.getElementById(rowId); };
                         })(item.row),
@@ -14011,8 +14063,15 @@
                     // ask "is any child of this group row available?" without
                     // resolving the same rows a second time.
                     var markedRows = [];
+                    var regionIso = selectedCountryIso();
                     allDefs.forEach(function(def) {
                         var visible = def.viewportIndependent || isIntersecting(mapBounds, def.bounds);
+                        // A sheet whose published rectangle covers a country it
+                        // only marginally reaches (WIG 1:100k over Romania) is
+                        // decided by the region it really covers there, not by
+                        // that rectangle.
+                        var region = viewportRegionFor(def, regionIso);
+                        if (region) visible = viewportShowsRegion(mapBounds, region);
                         var rowEl = null;
                         try { rowEl = def.getRow(); } catch(e) { rowEl = null; }
                         if (rowEl) {
@@ -14179,6 +14238,57 @@
                     return catalogKey ? (SHARED_PREMIUM_COUNTRIES[catalogKey] || null) : null;
                 }
 
+                // ── Country regions inside a sheet ──
+                // A sheet can be aferentă țării and still show only a region of
+                // it: the Polish WIG 1:100k tactical series reaches just the far
+                // north of Romania (Maramureș and northern Bucovina), the
+                // Valahia 1855-1859 sheet just the south (Oltenia + Muntenia).
+                // For those rows the published rectangle is useless — the WIG
+                // box spans Central Europe and the Valahia row used to inherit
+                // the whole-country fallback — so the rectangle rule kept them
+                // in the panel even when the view sat at the opposite end of the
+                // country. Such rows declare the region they really cover
+                // (`viewportRegions`, from PREMIUM_VIEWPORT_REGIONS) and the
+                // viewport pass decides from that region instead of `bounds`.
+                function selectedCountryIso() {
+                    try { return String((window && window._detectlabSelectedCountry) || '').toUpperCase(); }
+                    catch (e) { return ''; }
+                }
+                function viewportRegionFor(def, iso) {
+                    if (!def || !def.viewportRegions || !iso) return null;
+                    return def.viewportRegions[iso] || null;
+                }
+                // The region must actually be the subject of the view: either it
+                // fills it (≥ `minShare` of the visible latitude span, 30 % by
+                // default) or the view is centred inside it. At the locked
+                // country fit the far-north strip is only ~15 % of the visible
+                // span and the centre sits over Transylvania, i.e. the user is
+                // looking at the whole country — the sheet, which has no data
+                // there, does not belong in the panel. The same test keeps the
+                // Valahia sheet out of the panel while the view stays north of
+                // the Carpathians. Zooming or panning into the region satisfies
+                // one of the two conditions and the row appears.
+                function viewportShowsRegion(mapBounds, regionBounds) {
+                    if (!viewportBoundsUsable(mapBounds)) return false;
+                    // A region is { bounds, minShare }; a bare box keeps the
+                    // default share threshold.
+                    var regionBox = (regionBounds && regionBounds.bounds) ? regionBounds.bounds : regionBounds;
+                    var minShare = (regionBounds && typeof regionBounds.minShare === 'number')
+                        ? regionBounds.minShare : 0.30;
+                    var region = toBounds(regionBox);
+                    if (!region || !isIntersecting(mapBounds, region)) return false;
+                    var regionSouth = boundsEdge(region, 'south');
+                    var regionNorth = boundsEdge(region, 'north');
+                    var viewSouth = boundsEdge(mapBounds, 'south');
+                    var viewNorth = boundsEdge(mapBounds, 'north');
+                    var viewSpan = viewNorth - viewSouth;
+                    if (!(viewSpan > 0)) return false;
+                    var center = (viewNorth + viewSouth) / 2;
+                    if (center >= regionSouth && center <= regionNorth) return true;
+                    var overlap = Math.min(viewNorth, regionNorth) - Math.max(viewSouth, regionSouth);
+                    return overlap > 0 && (overlap / viewSpan) >= minShare;
+                }
+
                 // After country selection the layer window offers ONLY the
                 // layers that are aferente the selected country: rows of
                 // neighbouring countries that merely graze the country's bbox
@@ -14314,6 +14424,15 @@
 
                     var panel = document.getElementById('transpPanel');
                     if (panel) panel.classList.add('country-filter-active');
+
+                    // Rows gated by a country region (WIG 1:100k → far north
+                    // of Romania) live in the viewport pass, so refresh it for
+                    // the new selection instead of waiting for the next
+                    // moveend: the panel must be right on the first frame the
+                    // country view opens.
+                    try {
+                        if (typeof window.checkLayerVisibility === 'function') window.checkLayerVisibility();
+                    } catch (e) {}
                 };
 
                 // Leaving a country-scoped view restores the full catalogue.

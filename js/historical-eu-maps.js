@@ -297,12 +297,18 @@
             flag: '🇷🇴',
             name: { ro: 'România', en: 'Romania', pl: 'Rumunia' },
             maps: [
-                { id: 'ukvme', pct: 26.4 },
-                { id: 'chrzanowski', pct: 24.7 },
-                { id: 'reymann', pct: 20.2 },
-                { id: 'kdr', pct: 1.6 },
-                { id: 'kdr_gb', pct: 1.4 },
-                { id: 'wig100k', pct: 1.2 }
+                // Hărțile Europei Centrale (Mitteleuropa, Chrzanowski, Reymann,
+                // KDR 1:100k, KDR Großblatt) publică un dreptunghi care acoperă
+                // nordul României, dar niciuna nu are foi românești: dreptunghiul
+                // lor nu este acoperire, deci nu mai sunt listate pentru RO.
+                //
+                // WIG 1:100k (harta tactică a Poloniei, 1919–1939) este singura
+                // foaie partajată cu date reale pe România — o fâșie în extremul
+                // nord (Maramureș și nordul Bucovinei). Rândul ei este gated de
+                // acea regiune în js/map-app.js
+                // (SHARED_PREMIUM_VIEWPORT_REGIONS): apare în panoul de straturi
+                // doar cât timp viewport-ul arată efectiv nordul îndepărtat.
+                { id: 'wig100k', pct: 1.2, viewportRegion: 'RO_FAR_NORTH' }
             ]
         },
         {
