@@ -32,9 +32,12 @@ console.log('Shared minimized-window drawer: multi-window, restore, removal and 
 // browser placement stays flush with the map; PWA also compensates map bleed.
 const css = fs.readFileSync('css/next-gen-apm.css', 'utf8');
 assert.match(css, /@media \(max-width: 768px\), \(pointer: coarse\)\s*\{\s*\.apm-dock\s*\{\s*bottom: calc\(16px \+ env\(safe-area-inset-bottom, 0px\)\);/);
-assert.match(css, /body\.is-pwa \.apm-dock\s*\{\s*bottom: calc\(16px \+ env\(safe-area-inset-bottom, 0px\) \+ var\(--pwa-bleed, 0px\)\);/);
+assert.match(css, /body\.is-pwa \.apm-dock\s*\{\s*bottom: calc\(4px \+ var\(--pwa-bleed, 0px\)\);/);
+// The PWA drawer sits on the same bottom line as the "© Leafleet" tag.
+const indexHtml = fs.readFileSync('index.html', 'utf8');
+assert.match(indexHtml, /body\.is-pwa \.leaflet-container::after\s*\{\s*bottom: calc\(4px \+ var\(--pwa-bleed, 0px\)\) !important;/);
 assert.match(css, /\.apm-dock\s*\{[^}]*bottom: 0;/);
-const cssUrl = 'css/next-gen-apm.css?v=20261031-dock-safe-area';
+const cssUrl = 'css/next-gen-apm.css?v=20261101-dock-leafleet-level';
 for (const file of ['index.html', 'sw.js']) {
     assert(fs.readFileSync(file, 'utf8').includes(cssUrl), `${file} uses the updated drawer stylesheet`);
 }
