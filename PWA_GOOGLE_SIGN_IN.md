@@ -21,6 +21,10 @@ callback returns the one-time authorization code on the first path available:
    per-attempt nonce. The app exchanges the code and installs the resulting
    session in the regular Supabase client, which persists it and emits the
    normal auth event.
+   The redirect URL is the plain, exact `https://<origin>/google-auth-callback.html`;
+   the nonce travels through same-origin storage
+   (`localStorage['detectlab-google-attempt']`), not through the query string, so a
+   redirect that Supabase normalises cannot drop the correlation either.
 2. A same-origin handoff record (`localStorage['detectlab-google-handoff']`,
    `{nonce, code|error, at}`) written by the callback window for the case where
    the OS isolated or severed the opener (iOS standalone, Android Custom Tab).
@@ -33,7 +37,10 @@ If neither path arrives before the 10-minute lifetime, the form says the
 sign-in did not finish and offers a retry — there is no "one-time sign-in code"
 field, no Complete button and no Cancel button in the login/register form, and
 the callback page shows no code either. Normal browser Google OAuth and
-email/password are unchanged.
+email/password are unchanged. Google sign-in is not offered on an origin that is
+not in `window.DetectLabOAuthOrigins` (default `detectlab.ro` and `detectlab.eu`):
+starting it there would be rewritten to the project Site URL and would hand the
+user to another domain instead of signing them in.
 
 The code is short-lived and PKCE-bound to that attempt; it is not a Google
 credential, but it is still sensitive and must not be shared or logged. The
@@ -67,23 +74,42 @@ force the OS to reopen an installed app with the same storage.
    client's **Authorized redirect URIs**. Use the actual project callback if
    deploying another Supabase project. The DetectLab callback below is a
    Supabase redirect URL, not the Google redirect URI.
-3. In Supabase Authentication → URL Configuration → Redirect URLs, add
-   `https://detectlab.ro/google-auth-callback.html**` and
-   `https://detectlab.eu/google-auth-callback.html**`. The wildcard is needed
-   for the unpredictable `?nonce=...` query. Retain existing site and browser
-   redirect entries. For preview/staging, explicitly allow that HTTPS origin's
-   callback too; do not allow arbitrary origins. Verify the deployed Supabase
-   wildcard rules against a real login; an unallowed redirect may fall back to
-   Site URL and the app cannot receive the code.
-4. Serve `google-auth-callback.html` at the same exact origin as the PWA,
+3. In Supabase Authentication → URL Configuration, the redirect allow-list is
+   what decides the domain a Google sign-in comes back to. **A `redirect_to`
+   that is not on that list is silently replaced with the project Site URL** —
+   which is `https://detectlab.ro`, so a login started on `detectlab.eu` (or on
+   a preview deploy) finished on the Romanian domain, in a browser window, and
+   could not be completed there. Add the plain callback path for every origin
+   that must work:
+
+   - `https://detectlab.ro/google-auth-callback.html`
+   - `https://detectlab.eu/google-auth-callback.html`
+
+   Exact entries are enough now: the redirect URL carries no `?nonce=…` any
+   more, so no wildcard is required. Add the exact
+   `https://<preview-host>/google-auth-callback.html` for any staging/preview
+   origin you test on (and set `window.DetectLabOAuthOrigins` to include it —
+   see below). Keep the existing site/browser redirect entries. Verify against a
+   real login: a missing entry shows up as the sign-in landing on the Site URL.
+4. Origins. The client refuses to start Google OAuth on an origin that is not
+   listed, because the fallback described above cannot be completed there.
+   The default list is `['https://detectlab.ro', 'https://detectlab.eu']`;
+   extend it before `js/auth.js` loads on another deployment:
+
+   ```html
+   <script>window.DetectLabOAuthOrigins = ['https://detectlab.ro', 'https://detectlab.eu', 'https://staging.example'];</script>
+   ```
+
+5. Serve `google-auth-callback.html` at the same exact origin as the PWA,
    without canonicalizing it to another host or redirecting to the app shell.
    On non-Netlify hosts also configure `Cache-Control: no-store` and
    `Referrer-Policy: no-referrer` for the callback. Do not set a
    Cross-Origin-Opener-Policy that breaks popups. Web Crypto and HTTPS (or
    localhost for development) are needed.
-5. `localStorage` must stay usable on both the app origin and the callback page
-   (the handoff record). A browser that blocks site storage for this origin
-   leaves only the `postMessage` path.
+6. `localStorage` must stay usable on both the app origin and the callback page
+   (the handoff record, and the attempt record that carries the nonce). A
+   browser that blocks site storage for this origin leaves only the
+   `postMessage` path, and the callback hands the code over without a nonce.
 
 ## Verification
 
@@ -99,6 +125,9 @@ both providers and deploying, verify on each production origin:
   authenticated map is in the *original* standalone app, not merely the browser
   callback. Close/reopen the app and confirm the session persists. Check both
   login and registration tabs and an existing account.
+- Start the sign-in on `detectlab.eu` and confirm the Google window returns to
+  `detectlab.eu` — the URL bar of the callback window must not show
+  `detectlab.ro`. Same for any preview origin that was explicitly allow-listed.
 - Confirm no code prompt appears anywhere: not in the login/register form and
   not on the callback page. If the popup does not reconnect, returning to the
   app must be enough (focus/visibility/storage path).

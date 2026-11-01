@@ -20,6 +20,14 @@
     var replaceAfter = 120 * 1000;
     // Must match HANDOFF_KEY in google-auth-callback.html.
     var HANDOFF_KEY = 'detectlab-google-handoff';
+    // The callback URL carries no query string on purpose: Supabase rewrites
+    // redirect_to to the project Site URL when the address is not in its
+    // allow-list, which is what used to throw a detectlab.eu sign-in onto
+    // detectlab.ro. An exact URL is the easiest one to allow, and the attempt
+    // nonce travels through same-origin storage instead of the query.
+    var CALLBACK_PATH = '/google-auth-callback.html';
+    var ATTEMPT_KEY = 'detectlab-google-attempt';
+    var DEFAULT_ORIGINS = ['https://detectlab.ro', 'https://detectlab.eu'];
 
     function isStandalone() {
         return window.navigator.standalone === true || !!(window.matchMedia &&
@@ -43,6 +51,30 @@
         try { window.localStorage.removeItem(HANDOFF_KEY); } catch (_) {}
     }
 
+    function recordAttempt(a) {
+        try {
+            window.localStorage.setItem(ATTEMPT_KEY, JSON.stringify({
+                nonce: a.nonce, origin: window.location.origin, at: a.started
+            }));
+        } catch (_) {}
+    }
+
+    function clearAttemptRecord() {
+        try { window.localStorage.removeItem(ATTEMPT_KEY); } catch (_) {}
+    }
+
+    // Supabase only honours redirect_to for an address it has been told about;
+    // anything else silently becomes the project Site URL (detectlab.ro), so a
+    // test or preview origin must not start the flow at all — it would send the
+    // user to another domain, in a browser window, with no way back.
+    function originAllowed() {
+        var list = window.DetectLabOAuthOrigins;
+        if (!list || typeof list.length !== 'number') list = DEFAULT_ORIGINS;
+        var origin = String(window.location.origin || '');
+        for (var i = 0; i < list.length; i++) if (list[i] === origin) return true;
+        return false;
+    }
+
     function stop(a, close) {
         if (attempt !== a) return;
         attempt = null;
@@ -53,6 +85,7 @@
         window.removeEventListener('focus', a.onWake);
         window.removeEventListener('pageshow', a.onWake);
         if (a.onVisibility) document.removeEventListener('visibilitychange', a.onVisibility);
+        clearAttemptRecord();
         // The temporary client must not keep its own copy of the session.
         try {
             a.client.auth._removeSession && a.client.auth._removeSession();
@@ -99,7 +132,12 @@
     async function adopt(a) {
         if (attempt !== a || a.busy) return false;
         var handoff = readHandoff();
-        if (!handoff || handoff.nonce !== a.nonce) return false;
+        if (!handoff) return false;
+        // The callback echoes the attempt nonce it read from the same-origin
+        // attempt record. When that record was not reachable it hands the code
+        // back with no nonce at all: a fresh record while exactly one attempt
+        // is open is still accepted.
+        if (handoff.nonce && handoff.nonce !== a.nonce) return false;
         clearHandoff();
         if (Date.now() - (Number(handoff.at) || 0) > lifetime) return false;
         if (handoff.error) {
@@ -128,6 +166,10 @@
             stop(attempt, true);
             clearHandoff();
         }
+        if (!originAllowed()) {
+            message('Google sign-in is not configured for this address. Open detectlab.ro or detectlab.eu, or use email and password.');
+            return;
+        }
         if (!window.crypto || !window.crypto.getRandomValues || !window.crypto.subtle ||
             !window.crypto.subtle.digest || !window.createGooglePopupClient) {
             message('Google sign-in is unavailable here. Please use email and password.');
@@ -150,10 +192,12 @@
         var a = { popup: popup, nonce: nonce, message: message, success: success,
             started: Date.now(), expires: Date.now() + lifetime, busy: false };
         attempt = a;
+        recordAttempt(a);
         a.listener = function (event) {
             var data = event.data;
             if (attempt !== a || event.origin !== window.location.origin || event.source !== popup ||
-                !data || data.type !== 'detectlab-google-callback' || data.nonce !== nonce) return;
+                !data || data.type !== 'detectlab-google-callback') return;
+            if (data.nonce && data.nonce !== nonce) return;
             try { popup.postMessage({ type: 'detectlab-google-ack', nonce: nonce }, window.location.origin); } catch (_) {}
             if (data.error) {
                 stop(a, true);
@@ -183,7 +227,7 @@
         message('Continue in the Google window, then return to the installed app.', 'success');
         try {
             a.client = window.createGooglePopupClient();
-            var callback = window.location.origin + '/google-auth-callback.html?nonce=' + nonce;
+            var callback = window.location.origin + CALLBACK_PATH;
             var result = await a.client.auth.signInWithOAuth({ provider: 'google', options: {
                 redirectTo: callback, skipBrowserRedirect: true,
                 queryParams: { access_type: 'offline', prompt: 'consent' }

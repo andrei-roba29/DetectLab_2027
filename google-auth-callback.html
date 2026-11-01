@@ -14,19 +14,29 @@
   <script>
     (function () {
       'use strict';
-      // Must match HANDOFF_KEY in js/pwa-google-auth.js. The installed app reads
+      // Must match the keys in js/pwa-google-auth.js. The installed app reads
       // this record as soon as it is back in front, so the user never copies a
       // code into the login form.
       var HANDOFF_KEY = 'detectlab-google-handoff';
+      var ATTEMPT_KEY = 'detectlab-google-attempt';
       var query = new URLSearchParams(location.search);
       var fragment = new URLSearchParams(location.hash.slice(1));
       var code = query.get('code');
-      var nonce = query.get('nonce');
       var error = query.get('error') || fragment.get('error');
+      // The attempt nonce lives in the app's own storage, not in the redirect
+      // URL: Supabase rewrites the address to the project Site URL when it is
+      // not allow-listed, so the callback URL stays a plain, exact path.
+      var nonce = query.get('nonce') || '';
+      if (!nonce) {
+        try {
+          var attempt = JSON.parse(localStorage.getItem(ATTEMPT_KEY) || 'null');
+          if (attempt && attempt.nonce) nonce = String(attempt.nonce);
+        } catch (_) {}
+      }
       // Strip the code and provider errors immediately, before any external request.
       history.replaceState(null, '', location.pathname);
       var status = document.getElementById('status');
-      if (!nonce || (!code && !error)) {
+      if (!code && !error) {
         status.textContent = 'No sign-in result was received. Return to DetectLab and try again.';
         return;
       }
@@ -34,18 +44,19 @@
       // opener: the app picks the record up when it comes back to the front.
       try {
         localStorage.setItem(HANDOFF_KEY, JSON.stringify({
-          nonce: nonce, code: code || null, error: !!error, at: Date.now()
+          nonce: nonce || null, code: code || null, error: !!error, at: Date.now()
         }));
       } catch (_) {}
       var acknowledged = false;
       window.addEventListener('message', function (event) {
         if (event.origin !== location.origin || event.source !== window.opener || !event.data ||
-            event.data.type !== 'detectlab-google-ack' || event.data.nonce !== nonce) return;
+            event.data.type !== 'detectlab-google-ack') return;
+        if (event.data.nonce && nonce && event.data.nonce !== nonce) return;
         acknowledged = true;
       });
       try {
-        if (window.opener) window.opener.postMessage({ type: 'detectlab-google-callback', nonce: nonce,
-          code: code, error: !!error }, location.origin);
+        if (window.opener) window.opener.postMessage({ type: 'detectlab-google-callback',
+          nonce: nonce || null, code: code, error: !!error }, location.origin);
       } catch (_) {}
       setTimeout(function () {
         if (error) {

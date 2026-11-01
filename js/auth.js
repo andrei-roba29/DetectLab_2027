@@ -771,6 +771,19 @@ window.doRegister = async function () {
 /* ══════════════════════════════════════════════
    OAUTH (Google / Apple) - WITH DUPLICATE HANDLING
 ══════════════════════════════════════════════ */
+// Supabase rewrites redirect_to to the project Site URL (detectlab.ro) when the
+// address is not in its redirect allow-list, so an origin that is not listed
+// must not start OAuth at all: it would hand the user to another domain, in a
+// browser window, with the sign-in impossible to finish. Extend the list with
+// window.DetectLabOAuthOrigins += before this script runs on another origin.
+window.detectLabOAuthOriginAllowed = function () {
+    var list = window.DetectLabOAuthOrigins;
+    if (!list || typeof list.length !== 'number') list = ['https://detectlab.ro', 'https://detectlab.eu'];
+    var origin = String(window.location.origin || '');
+    for (var i = 0; i < list.length; i++) if (list[i] === origin) return true;
+    return false;
+};
+
 window.authWithProvider = async function (provider) {
     try {
         if (!window.supabaseClient || !window.supabaseClient.auth) {
@@ -778,6 +791,10 @@ window.authWithProvider = async function (provider) {
             return;
         }
         _clearMsg();
+        if (!window.detectLabOAuthOriginAllowed()) {
+            _showMsg('Google sign-in is not configured for this address. Open detectlab.ro or detectlab.eu, or use email and password.');
+            return;
+        }
         if (provider === 'google' && window.DetectLabGooglePopup && window.DetectLabGooglePopup.isStandalone()) {
             window.DetectLabGooglePopup.start(_showMsg, function () {
                 _showMsg('Signed in successfully.', 'success');
