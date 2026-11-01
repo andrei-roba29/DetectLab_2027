@@ -152,6 +152,35 @@
         } catch (e) { return false; }
     }
 
+    var desktopHint = null;
+    var desktopHintTimer = null;
+
+    function hideDesktopHint() {
+        if (desktopHintTimer) root.clearTimeout(desktopHintTimer);
+        desktopHintTimer = null;
+        if (desktopHint) desktopHint.remove();
+        desktopHint = null;
+    }
+
+    function showDesktopHint() {
+        hideDesktopHint();
+        // Device detection, not viewport width: a narrow desktop window is
+        // still desktop, while iPadOS can advertise a desktop user agent.
+        var nav = root.navigator || {};
+        if ((nav.userAgentData && nav.userAgentData.mobile) ||
+            /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent || '') ||
+            (/Mac/i.test(nav.platform || '') && nav.maxTouchPoints > 1) ||
+            (root.matchMedia && root.matchMedia('(pointer: coarse)').matches)) return;
+        desktopHint = document.createElement('div');
+        desktopHint.id = 'm3d-desktop-hint';
+        desktopHint.setAttribute('role', 'status');
+        desktopHint.setAttribute('aria-live', 'polite');
+        desktopHint.style.cssText = 'position:fixed;left:50%;top:100px;transform:translateX(-50%);z-index:10000;padding:12px 20px;border-radius:12px;background:rgba(20,27,38,.94);color:#fff;font:600 15px/1.4 system-ui,sans-serif;box-shadow:0 4px 20px #0004;pointer-events:none;white-space:nowrap';
+        desktopHint.textContent = lang() === 'ro' ? 'Foloseste CTRL + Click' : 'Use CTRL +Click';
+        document.body.appendChild(desktopHint);
+        desktopHintTimer = root.setTimeout(hideDesktopHint, 6000);
+    }
+
     /* ═══════════════════════════════════════════════════════════════════════
      *  MOBILE / WEBGL CAPABILITY
      * -----------------------------------------------------------------------
@@ -4298,9 +4327,14 @@
              * so a slow/unreachable elevation model would hide every layer.
              * styledata fires as soon as the style is up, `loaded()` polling
              * covers the rest. */
+            var desktopHintShown = false;
             function firstSync() {
                 if (!state.open || generation !== openGeneration) return;
                 hideVeil();
+                if (!desktopHintShown) {
+                    desktopHintShown = true;
+                    showDesktopHint();
+                }
                 if (terrainSource().missingKey) {
                     console.warn('[Map3D] Terrain provider needs an API key — running without terrain.');
                 }
@@ -4349,6 +4383,7 @@
      * and one more tap retries; close() is what finally removes the class.
      */
     function fail3D(error) {
+        hideDesktopHint();
         var message = String((error && error.message) || error || 'unknown error');
         state.lastError = message;
         pushError(message);
@@ -4425,6 +4460,7 @@
     }
 
     function close() {
+        hideDesktopHint();
         ++openGeneration;
         if (!state.open && !map && !state.failed) return false;
         state.open = false;
