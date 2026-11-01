@@ -160,7 +160,13 @@ function tileCentre(tile) {
 const pyramids = historical.filter(def => def.kind === 'xyz' || def.kind === 'arcgis-image');
 let bounded = 0;
 pyramids.forEach(def => {
-    const parsed = readBack(def.url, api.urlFor(def.id));
+    const previewUrl = api.urlFor(def.id);
+    if (api.sheetPhotos && api.sheetPhotos[def.id]) {
+        assert.strictEqual(previewUrl, api.sheetPhotos[def.id],
+            def.id + ' previews its supplied sheet scan');
+        return;
+    }
+    const parsed = readBack(def.url, previewUrl);
     assert(parsed, 'the row photo is built from the layer tile template: ' + def.id);
     assert(parsed.z >= (def.minZoom || 0) && parsed.z <= (def.maxZoom || 22),
         'the preview zoom is inside the layer zoom window: ' + def.id);
@@ -179,8 +185,11 @@ assert(bounded >= 8, 'the bounded pyramids are checked against their own footpri
 console.log('  ✓ ' + pyramids.length + ' tile pyramids resolve to a tile inside their own coverage');
 
 /* Sparse sheets must try known or in-coverage tiles at several zooms. */
-assert(api.urlFor('premium.walachia-1855').endsWith('/charta/14/9209/5843.png'),
-    'Walachia uses the tile supplied for this sheet');
+assert.strictEqual(api.urlFor('premium.walachia-1855'),
+    'https://dacboefvooxgsngxkavx.supabase.co/storage/v1/object/public/Harti/szathm-ri-s-series-1-57-600-5-l.jpg',
+    'Walachia uses the Szathmári sheet as its layer-panel preview');
+assert.strictEqual(api.urlsFor('premium.walachia-1855').length, 1,
+    'Walachia does not fall back to an empty XYZ tile');
 const sparseBounds = {
     'premium.moldova-1868': [44.9959, 26.2354, 48.3124, 29.8389],
     'premium.polish-tactical-1933': [47.6950, 22.0166, 48.3124, 28.3887],
@@ -265,7 +274,7 @@ console.log('  ✓ previews load only for visible rows, once, and fail soft');
 }
 
 /* ── 6. Wiring: cache-busting, precache, shell version ─────────────────── */
-const TAG = '20261030-sparse-previews';
+const TAG = '20261101-walachia-sheet';
 const STYLES_TAG = '20261029-romania-5m';
 assert(html.includes('js/layer-panel-rows.js?v=' + TAG), 'index.html loads the row chrome, versioned');
 assert(sw.includes("'js/layer-panel-rows.js?v=" + TAG + "'"), 'sw.js precaches the row chrome');

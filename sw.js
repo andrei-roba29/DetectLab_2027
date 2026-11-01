@@ -892,7 +892,8 @@
 // ArcGIS MapServer publishes (js/lidar-photo-filter.js, js/map-app.js).
 // v347: CENAGIS historical sheets get a longer probe and a third try before
 // they are switched off (js/wms-health.js).
-const CACHE_NAME = 'detectlab-v353-apm-spatial-exclusions';
+// v354: Valahia layer-panel preview uses the Szathmári sheet scan.
+const CACHE_NAME = 'detectlab-v354-walachia-sheet';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1016,7 +1017,7 @@ const PRECACHE_URLS = [
   'js/map-rotate.js?v=20261026-touch-rotate-deadband',
   'js/tutorial.js?v=20261029-live-location-guide',
   'js/layer-panel-rows.js?v=20261025-layer-glass',
-  'js/layer-panel-rows.js?v=20261030-sparse-previews',
+  'js/layer-panel-rows.js?v=20261101-walachia-sheet',
   'css/styles.css?v=20261028-historical-tile-fallback',
   // v271: unified slim 3D-style pastel faded semitransparent orange sliders
   // and blurred button-box (--ctl-*) slider containers across desktop & PWA.
