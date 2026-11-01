@@ -10,9 +10,9 @@ const helper = fs.readFileSync('js/ios-input-focus.js', 'utf8');
 
 function setup(nav) {
     const body = {}, root = {}, trigger = {}, other = {};
-    const document = { body, documentElement: root, activeElement: trigger };
-    const window = { navigator: nav };
-    vm.runInNewContext(helper, { window, document });
+    const document = { body, documentElement: root, activeElement: trigger, addEventListener() {} };
+    const window = { navigator: nav, addEventListener() {}, innerHeight: 800 };
+    vm.runInNewContext(helper, { window, document, setTimeout() {} });
     let calls = 0;
     const input = { focus() { calls++; document.activeElement = input; } };
     return { window, document, trigger, other, input, calls: () => calls };
@@ -35,6 +35,51 @@ for (const nav of [
     t.document.activeElement = t.other;
     t.window.DetectLabInputFocus.autoFocus(t.input, t.trigger);
     assert.strictEqual(t.calls(), 1, 'late focus cannot steal another control');
+}
+
+// A focused field with only the iOS accessory toolbar needs a fresh focus
+// inside a REAL second tap. The first tap and a visible keyboard are left alone.
+{
+    const handlers = {}, viewportHandlers = {};
+    const input = {
+        nodeType: 1, tagName: 'INPUT', type: 'text',
+        blur() { counts.blur++; doc.activeElement = null; },
+        focus() { counts.focus++; doc.activeElement = input; }
+    };
+    const counts = { blur: 0, focus: 0 };
+    const viewport = { height: 800, addEventListener(type, cb) { viewportHandlers[type] = cb; } };
+    const doc = {
+        activeElement: null,
+        addEventListener(type, cb) { handlers[type] = cb; }
+    };
+    const win = {
+        navigator: { userAgent: 'iPhone' }, visualViewport: viewport,
+        addEventListener(type, cb) { handlers['window-' + type] = cb; }
+    };
+    vm.runInNewContext(helper, { window: win, document: doc, setTimeout() {} });
+    const tap = () => {
+        handlers.pointerdown({ target: input });
+        doc.activeElement = input; // native focus happens between pointerdown and click
+        handlers.click({ target: input });
+    };
+    tap();
+    assert.deepStrictEqual(counts, { blur: 0, focus: 0 }, 'first tap retains native focus');
+    tap();
+    assert.deepStrictEqual(counts, { blur: 1, focus: 1 }, 'second real tap re-arms a stranded input');
+    viewport.height = 480;
+    viewportHandlers.resize();
+    tap();
+    assert.deepStrictEqual(counts, { blur: 1, focus: 1 }, 'never disrupt an open keyboard');
+    viewport.height = 800;
+    doc.activeElement = null;
+    viewportHandlers.resize();
+    tap();
+    tap();
+    assert.deepStrictEqual(counts, { blur: 2, focus: 2 }, 'recovery works again after keyboard closes');
+    doc.activeElement = input;
+    handlers.pointerdown({ target: { nodeType: 1, tagName: 'BUTTON' } });
+    handlers.click({ target: input });
+    assert.deepStrictEqual(counts, { blur: 2, focus: 2 }, 'other controls cannot steal focus');
 }
 
 // Exercise the actual inline visual-viewport handler with keyboard resize,
@@ -70,10 +115,10 @@ assert(!editing);
 assert.deepStrictEqual(properties, {});
 
 for (const file of ['ios-input-focus', 'auth', 'friends', 'library-of-babel', 'subscriptions']) {
-    const url = `js/${file}.js?v=20261101-ios-keyboard`;
+    const url = `js/${file}.js?v=20261101-ios-keyboard-retry`;
     assert(html.includes(url) && sw.includes(url), `${url} must be loaded and precached`);
 }
 assert(html.indexOf('js/ios-input-focus.js?') < html.indexOf('js/friends.js?'));
 assert(html.includes('body.is-pwa #authModal .auth-box'));
-assert(sw.includes('detectlab-v369-ios-keyboard'));
+assert(sw.includes('detectlab-v370-ios-keyboard-retry'));
 console.log('iOS PWA input focus, viewport and offline shell checks passed');
