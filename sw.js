@@ -939,9 +939,9 @@
 //   focus: the keyboard's visualViewport resize used to rewrite the !important
 //   pixel heights under the finger, so the OS closed the keyboard again.
 //   Re-tags js/pwa-google-auth.js, js/auth.js, index.html and CACHE_NAME.
-// v372: restore native iOS text entry by unlocking the fullscreen map shell
-// during editing; remove the on-page keyboard and its transparent gap.
-const CACHE_NAME = 'detectlab-v372-ios-native-keyboard';
+// v373: keep the iOS standalone map in document flow, rather than moving
+// the fixed, physical-screen-sized shell during every keyboard gesture.
+const CACHE_NAME = 'detectlab-v373-ios-flow-keyboard';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1243,11 +1243,11 @@ const PRECACHE_URLS = [
   'js/translations.js?v=20260918-report-evidence',
   '.',
   'index.html',
-  'js/ios-input-focus.js?v=20261101-ios-native-keyboard',
-  'js/auth.js?v=20261101-ios-native-keyboard',
-  'js/friends.js?v=20261101-ios-native-keyboard',
-  'js/library-of-babel.js?v=20261101-ios-native-keyboard',
-  'js/subscriptions.js?v=20261101-ios-native-keyboard',
+  'js/ios-input-focus.js?v=20261101-ios-flow-keyboard',
+  'js/auth.js?v=20261101-ios-flow-keyboard',
+  'js/friends.js?v=20261101-ios-flow-keyboard',
+  'js/library-of-babel.js?v=20261101-ios-flow-keyboard',
+  'js/subscriptions.js?v=20261101-ios-flow-keyboard',
   // v183: the full-screen ArcGIS SceneView atlas (kept as an optional 3D
   // experience, opened in a new tab from the map header / top nav).
   'europe-roman-atlas.html?embed=1',
