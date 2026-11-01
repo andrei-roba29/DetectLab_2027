@@ -910,7 +910,12 @@
 // v361: leaving the 3D view resets the LiDAR Settings area — the photo effect,
 // its decoded tile cache and every adjustment go back to normal, because
 // carrying them across the 2D ⇄ 3D hand-off crashed the installed PWA.
-const CACHE_NAME = 'detectlab-v361-lidar-settings-reset';
+// v362: Valahia 1855-1859 asks only for tiles inside the Szathmári sheet,
+// retries a failed tile before it counts, so the "map cannot be loaded" notice
+// no longer appears at random on country views, and its red coverage rectangle
+// is the real sheet footprint (js/map-app.js). The notice names
+// the Supabase-hosted map data by its real scope, not as "Finnish" (js/wms-health.js).
+const CACHE_NAME = 'detectlab-v362-walachia-coverage';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1051,6 +1056,7 @@ const PRECACHE_URLS = [
   'js/wms-health.js?v=20261017-albania-asig',
   'js/wms-health.js?v=20261021-albania-country-group',
   'js/wms-health.js?v=20261101-cenagis-patience',
+  'js/wms-health.js?v=20261101-supabase-provider',
   'js/finland-tm35.js?v=20261019-finland-filter',
   'js/finland-layers.config.js?v=20261019-finland-filter',
   'js/finland-layers.js?v=20261019-finland-filter',
@@ -1903,6 +1909,8 @@ const PRECACHE_URLS = [
   'js/map-app.js?v=20261030-roman-layer-cleanup',
   'js/map-app.js?v=20261030-walachia',
   'js/map-app.js?v=20261101-ro-region-sheets',
+  'js/map-app.js?v=20261101-walachia-footprint',
+  'js/map-app.js?v=20261101-walachia-coverage',
   'js/lidar-photo-filter.js?v=20261101-lidar-service-levels',
   'js/lidar-photo-filter.js?v=20261101-lidar-geographic-mask',
   'js/lidar-photo-filter.js?v=20261101-lidar-deep-zoom',

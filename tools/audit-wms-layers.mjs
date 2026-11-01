@@ -742,7 +742,7 @@ const SIGNATURES = [
     owner: 'external (MML)', app: 'self-guarded Finland row reports tile failures'
   },
   {
-    host: 'dacboefvooxgsngxkavx.supabase.co', provider: 'DetectLab hosted Finnish layer data (Supabase)',
+    host: 'dacboefvooxgsngxkavx.supabase.co', provider: 'DetectLab hosted map data (Supabase)',
     request: 'Static GeoJSON object from the project storage bucket',
     what: 'HTTP 404/5xx or a JSON error body in place of the configured data object',
     owner: 'DetectLab deployment and storage configuration', app: 'self-guarded Finland data rows surface load errors'
