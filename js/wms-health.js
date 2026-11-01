@@ -30,7 +30,8 @@
      • a watched layer probes ONE GetMap URL before it is added — the exact
        URL Leaflet would request for the first visible tile;
      • a non-image answer (or a timeout) marks that layer down for a cooldown
-       (after one automatic retry on CENAGIS), so re-toggling it inside the
+       (after two automatic retries with a growing pause on CENAGIS, whose
+       GeoServer can take many seconds to decode an ECW mosaic), so re-toggling it inside the
        cooldown makes no request at all;
      • hosts configured as “watch” keep their probe-free behaviour: they are
        added, and only a run of failed tiles (a mid-session outage) trips them;
@@ -141,7 +142,15 @@
 
     var COOLDOWN_MS = 60000;        // a down verdict is trusted this long
     var PROBE_TIMEOUT_MS = 9000;    // no answer → treated as unavailable
-    var CENAGIS_RETRY_MS = 1500;   // one bounded second chance for intermittent WMS errors
+    /* CENAGIS (IH PAN) answers the Romanian and other historical sheets slowly
+       and intermittently: a GeoServer that is busy decoding an ECW mosaic may
+       need more than 9 s, or return an error for a few seconds and then serve
+       the same tile fine. A single 1.5 s second chance was too short, so one
+       slow or briefly failing answer switched the map off for a minute. The
+       CENAGIS probe therefore waits longer and gets two bounded retries with
+       a growing pause (about 5.5 s of patience after the first failure). */
+    var CENAGIS_PROBE_TIMEOUT_MS = 15000;
+    var CENAGIS_RETRY_DELAYS_MS = [1500, 4000];
     var HEALTHY_CHECK_MS = 10000;   // avoid repeatedly probing a healthy sheet's bad edge tiles
     var MIN_TILE_FAILURES = 3;      // tile failures that trip a healthy layer…
     var HARD_TILE_FAILURES = 8;     // …and the count that trips even with hits
@@ -444,12 +453,12 @@
         } catch (e) { return null; }
     }
 
-    function probe(url) {
+    function probe(url, timeoutMs) {
         return new Promise(function (resolve) {
             if (typeof window.Image !== 'function') { resolve(true); return; }   // fail open
             var img = new window.Image();
             var settled = false;
-            var timer = window.setTimeout(function () { finish(false); }, PROBE_TIMEOUT_MS);
+            var timer = window.setTimeout(function () { finish(false); }, timeoutMs || PROBE_TIMEOUT_MS);
             function finish(ok) {
                 if (settled) return;
                 settled = true;
@@ -469,21 +478,27 @@
     }
 
     /* CENAGIS occasionally returns a temporary error/timeout and then a valid
-       image seconds later. Don't switch the user's layer off on that first
-       failure. Only this host gets a second probe; the retry has a fresh URL
-       so a cached HTTP-200 error body cannot be mistaken for a second outage.
-       If the user turned the layer off meanwhile, do not send the retry. */
+       image seconds later. Don't switch the user's layer off on the first
+       failure. Only this host gets extra probes: up to CENAGIS_RETRY_DELAYS_MS
+       retries, each after its pause and with a fresh URL so a cached HTTP-200
+       error body cannot be mistaken for a later outage. If the user turned
+       the layer off meanwhile, or the browser went offline, no further request
+       is sent. */
     function probeWithRetry(url, layer, stillWanted) {
-        return probe(url).then(function (ok) {
-            if (ok || hostOf(layer._url) !== 'pastmaps.cenagis.edu.pl' || !stillWanted()
-                    || (navigator && navigator.onLine === false)) return ok;
-            return new Promise(function (resolve) {
-                window.setTimeout(resolve, CENAGIS_RETRY_MS);
-            }).then(function () {
-                if (!stillWanted()) return false;
-                return probe(url + (url.indexOf('?') === -1 ? '?' : '&') + '_dl_retry=' + Date.now());
+        var cenagis = hostOf(layer._url) === 'pastmaps.cenagis.edu.pl';
+        function attempt(target, n) {
+            return probe(target, cenagis ? CENAGIS_PROBE_TIMEOUT_MS : PROBE_TIMEOUT_MS).then(function (ok) {
+                if (ok || !cenagis || n >= CENAGIS_RETRY_DELAYS_MS.length || !stillWanted()
+                        || (navigator && navigator.onLine === false)) return ok;
+                return new Promise(function (resolve) {
+                    window.setTimeout(resolve, CENAGIS_RETRY_DELAYS_MS[n]);
+                }).then(function () {
+                    if (!stillWanted()) return false;
+                    return attempt(url + (url.indexOf('?') === -1 ? '?' : '&') + '_dl_retry=' + Date.now() + '-' + (n + 1), n + 1);
+                });
             });
-        });
+        }
+        return attempt(url, 0);
     }
 
     function setVerdict(key, state, reason) {

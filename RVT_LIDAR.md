@@ -77,3 +77,15 @@ source. Selection markers are UI and are not draped as a yellow fill.
 Run `node test-lidar-photo-3d.js` for the pixel, layer/area matching, and
 protocol precedence checks. `node test-lidar-area-first.js` covers area
 selection and cancellation.
+
+## Photo effects on LAKI III and Ro5m — service level windows
+
+The LiDAR photo effect (`js/lidar-photo-filter.js`) prefetches every zoom level from 0 up to the chosen zoom, and one missing tile voids the whole 1 km area. Some ArcGIS MapServer caches publish only a window of levels (`minLOD`/`maxLOD`):
+
+| Layer | Service `minLOD`–`maxLOD` | Before | Now |
+|---|---|---|---|
+| Ro2m, Ro1m | 0–16 | works | unchanged |
+| Ro5m | 7–15 | `maxNativeZoom: 16`; z0–6 requested | `minZoom: 7`, `maxNativeZoom: 15` |
+| CS / DJ / GJ / MH LAKI III | 9–17 | z0–8 requested, prepare failed | levels 9…zoom only |
+
+`zoomTiles()` now starts at the layer's `minzoom` and `chooseZoom()` clamps to `[minzoom, maxzoom]`. Checked by `node test-lidar-photo-filter.js`.
