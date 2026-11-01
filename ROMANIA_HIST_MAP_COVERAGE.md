@@ -144,3 +144,43 @@ pass** decides from their region:
    Valahia at any zoom.
 7. `node test-country-layer-filter.js`, `node test-historical-eu-maps.js`,
    `node test-layer-visibility.js`.
+
+## Valahia tile footprint — the random “Harta nu poate fi încărcată”
+
+**Symptom:** Valahia 1855-1859 switched on, sometimes drawn, sometimes replaced
+by the notice *“Serviciul de hărți (DetectLab hosted map data (Supabase)) nu a
+livrat o imagine validă…”*. The provider label now reads “map data” instead of
+“Finnish layer data”, which was misleading for a Romanian sheet.
+
+**Cause (checked against `storage.objects` in the `Harti` bucket):**
+
+- `Harti/charta/{z}/{x}/{y}.png` is a complete pyramid, z0–14, over **one**
+  rectangle: `43.405–45.844 N × 22.258–28.389 E`. Every z has a full rectangle of
+  tiles (z14: 279 × 156 = 43 524 files); nothing exists outside it.
+- The layer had no `bounds`, so Leaflet asked for every tile in the viewport.
+  At a country view most of those tiles lie off the sheet → **HTTP 404**.
+- The guard treats a failed tile as a failed service. The layer is watch-only
+  (no up-front probe), so it tripped after 3 failed tiles with no success yet.
+  Which tiles answered first decided the outcome: sometimes a sheet tile came
+  first (works), sometimes three empty tiles did (notice, 60 s cooldown).
+- Separately, one transient Supabase error on any tile counted the same way.
+
+**Fix (`js/map-app.js`, `index.html` and `sw.js` tags bumped to
+`20261101-walachia-footprint` / `detectlab-v362-walachia-footprint`):**
+
+- `L.tileLayer` gets `bounds: [[43.405048, 22.258301], [45.844107, 28.388671]]`
+  (the sheet edges, rounded inward to 1e-6). Leaflet's `_isValidTile` then never
+  requests an off-sheet tile, so an empty 404 cannot be read as an outage.
+- A failed tile is retried twice (700 ms, then 1.8 s) with a fresh `_dl_retry=`
+  URL before it reaches Leaflet's `tileerror`, so a transient blip does not trip
+  the guard. A tile that recovers is reported as loaded.
+
+**Coverage:** `test-walachia-footprint.js` checks the bounds against the storage
+index (every sheet tile overlaps, the ring just outside does not, at every zoom),
+the retry sequence, and the shipped tags. `test-country-layer-filter.js` and
+`test-roman-reference-layer.js` now pin the new `map-app.js` tag.
+
+**Manual QA:** turn Valahia on at the Romania country view, at zoom 7–9 over
+Cluj and at zoom 10+ over Bucharest, and zoom out and in repeatedly. It should
+never show the notice for a healthy service. Off-sheet areas show no sheet
+(expected) instead of a notice.

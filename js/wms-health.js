@@ -118,7 +118,7 @@
         'karttamoottori.maanmittauslaitos.fi': 'Maanmittauslaitos (karttamoottori)',
         'kartta.museoverkko.fi': 'Museovirasto (museoverkko)',
         'hkp.maanmittauslaitos.fi': 'Maanmittauslaitos (kiinteistötietojen karttapalvelu)',
-        'dacboefvooxgsngxkavx.supabase.co': 'DetectLab hosted Finnish layer data (Supabase)'
+        'dacboefvooxgsngxkavx.supabase.co': 'DetectLab hosted map data (Supabase)'
     };
 
     /* A re-pointed CENAGIS catalogue (window.DETECTLAB_CENAGIS_WMS, read by

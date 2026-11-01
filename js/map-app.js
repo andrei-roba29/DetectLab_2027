@@ -14843,12 +14843,45 @@
             })();
 
             // Valahia 1855-1859 — XYZ tiles from Supabase Storage.
+            // The bucket holds the Szathmári sheet as a complete pyramid (z0–14)
+            // over ONE rectangle, 43.405–45.844 N × 22.258–28.389 E (the z14 tile
+            // edges, checked against storage.objects). Every tile outside that
+            // rectangle is a 404, and the guard (js/wms-health.js) counts a failed
+            // tile as a failed service. So at a country view, where most tiles
+            // in the viewport lie off the sheet, whichever tile answers first
+            // decided whether the layer was switched off: "sometimes it works,
+            // sometimes it reports the map cannot be loaded". Two fixes:
+            //   • the layer only asks for tiles inside the sheet (`bounds`), so
+            //     an empty 404 can no longer be mistaken for an outage;
+            //   • a tile that fails is retried twice (700 ms, 1.8 s) before it
+            //     counts, so a transient Supabase blip does not switch it off.
             (function () {
+                // Rounded inward to the 6th decimal, so the tiles just outside the
+                // sheet (whose edges sit exactly on these lines) are never requested.
+                var WALACHIA_BOUNDS = L.latLngBounds([[43.405048, 22.258301], [45.844107, 28.388671]]);
+                var WALACHIA_RETRY_DELAYS_MS = [700, 1800];
+                function withTileRetry(layer, delaysMs) {
+                    var createTile = layer.createTile;
+                    layer.createTile = function (coords, done) {
+                        var self = this, attempt = 0, base = self.getTileUrl(coords);
+                        return createTile.call(self, coords, function (err, tile) {
+                            if (!err || attempt >= delaysMs.length || !self._map) return done(err, tile);
+                            var n = ++attempt;
+                            window.setTimeout(function () {
+                                if (!self._map) return done(err, tile);
+                                // A fresh URL so a cached error response cannot repeat.
+                                tile.src = base + (base.indexOf('?') === -1 ? '?' : '&') + '_dl_retry=' + n;
+                            }, delaysMs[n - 1]);
+                        });
+                    };
+                    return layer;
+                }
                 map.createPane('pane_walachia');
                 map.getPane('pane_walachia').style.zIndex = 650;
                 map.getPane('pane_walachia').style.pointerEvents = 'none';
-                window._walachiaMapLayer = L.tileLayer(DL.url2d('premium.walachia-1855'),
-                    DL.tile2dOptions('premium.walachia-1855', { pane: 'pane_walachia', minZoom: 0, maxZoom: 20 }));
+                window._walachiaMapLayer = withTileRetry(L.tileLayer(DL.url2d('premium.walachia-1855'),
+                    DL.tile2dOptions('premium.walachia-1855', { pane: 'pane_walachia', minZoom: 0, maxZoom: 20, bounds: WALACHIA_BOUNDS })),
+                    WALACHIA_RETRY_DELAYS_MS);
                 window.toggleWalachiaMap = function (on) {
                     if (on) {
                         var parent = document.getElementById('histPremiumToggle');
