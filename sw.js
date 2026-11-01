@@ -893,7 +893,11 @@
 // v347: CENAGIS historical sheets get a longer probe and a third try before
 // they are switched off (js/wms-health.js).
 // v354: Valahia layer-panel preview uses the Szathmári sheet scan.
-const CACHE_NAME = 'detectlab-v354-walachia-sheet';
+// v355: The Romanian country view no longer lists the Central-European
+// historical sheets that carry no Romanian data (Mitteleuropa, Chrzanowski,
+// Reymann, KDR 1:100k, KDR Großblatt); WIG 1:100k appears only over the far
+// north of Romania (ROMANIA_HIST_MAP_COVERAGE.md).
+const CACHE_NAME = 'detectlab-v355-ro-hist-sheets';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1174,7 +1178,7 @@ const PRECACHE_URLS = [
   // European Historical Maps (CENAGIS / IH PAN)
   'js/historical-eu-maps.js?v=20261008-country-overlap',
   'js/historical-eu-maps.js?v=20261013-flat-hist-maps',
-  'js/historical-eu-maps.js?v=20261031-cenagis-retry',
+  'js/historical-eu-maps.js?v=20261101-ro-hist-sheets',
   'js/historical-eu-maps.js?v=20261008-country-layers-strict',
   'js/historical-eu-maps.js',
   // Host-aware market defaults for detectlab.ro and detectlab.eu.
@@ -1880,7 +1884,7 @@ const PRECACHE_URLS = [
   'js/tile-perf.js?v=20261030-sat60-live-location',
   'js/map-app.js?v=20261030-roman-layer-cleanup',
   'js/map-app.js?v=20261030-walachia',
-  'js/map-app.js?v=20261101-lidar-service-levels',
+  'js/map-app.js?v=20261101-ro-hist-sheets',
   'js/lidar-photo-filter.js?v=20261101-lidar-service-levels',
   'js/lidar-photo-filter.js?v=20261101-lidar-geographic-mask'
 ];

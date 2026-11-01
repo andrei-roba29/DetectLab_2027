@@ -31,7 +31,7 @@ assert(!source.includes('cenagis-catalog-title'), 'the catalog renderer builds n
 ['histEuRow', 'histEuSubLayers', 'histEuToggle', 'histEuExpandBtn'].forEach(id => {
     assert(!indexHtml.includes('id="' + id + '"'), 'obsolete separate group #' + id + ' is removed');
 });
-assert(indexHtml.includes('js/historical-eu-maps.js?v=20261031-cenagis-retry'), 'versioned catalog is loaded');
+assert(indexHtml.includes('js/historical-eu-maps.js?v=20261101-ro-hist-sheets'), 'versioned catalog is loaded');
 const mapAppTag = (indexHtml.match(/js\/map-app\.js\?v=[^"']+/) || [])[0];
 assert(mapAppTag && swJs.includes("'" + mapAppTag + "'"), 'versioned fallback map app is precached');
 assert(indexHtml.includes('js/subscriptions.js?v=20261024-uk-historical-maps'), 'premium guard is versioned');
@@ -40,7 +40,7 @@ assert(subscriptions.includes("'toggleRomanDareCategories'"), 'DARE All/None is 
 assert(subscriptions.includes("'toggleRomanSub'"), 'Roman sublayers are Premium-guarded');
 console.log('  ✓ one premium parent group, versioned scripts and entitlement guards verified');
 
-assert(swJs.includes('js/historical-eu-maps.js?v=20261031-cenagis-retry'), 'service worker precaches the versioned catalog');
+assert(swJs.includes('js/historical-eu-maps.js?v=20261101-ro-hist-sheets'), 'service worker precaches the versioned catalog');
 assert(swJs.includes('js/subscriptions.js?v=20261024-uk-historical-maps'), 'service worker precaches the versioned subscription guard');
 const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
 assert(shellVersion >= 171, 'service-worker cache bumped for the merged catalog (got v' + shellVersion + ')');
@@ -221,7 +221,22 @@ assert.strictEqual(noMaps.style.display, 'block', 'empty catalog message appears
 ['PL', 'DE', 'UA', 'BY', 'LT', 'LV', 'CZ', 'SK', 'AT', 'HU', 'RU', 'MD', 'RO', 'FR', 'BE-LU', 'NL', 'DK', 'EE', 'CH'].forEach(code => {
     assert(api.countries.some(country => country.code === code), 'fallback coverage includes ' + code);
 });
-console.log('  ✓ country-ISO fallback catalog retained');
+
+// Romania: the Central-European series publish a rectangle over the north of
+// the country but carry no Romanian sheet, so they are NOT curated coverage
+// any more. WIG 1:100k is the one shared sheet with real (far-north) Romanian
+// data, and it carries the region marker js/map-app.js gates the row with.
+const romania = api.countries.find(country => country.code === 'RO');
+assert(romania, 'Romania stays in the curated analysis');
+assert.strictEqual(romania.maps.map(entry => entry.id).join(','), 'wig100k',
+    'Romania is curated to WIG 1:100k only — Mitteleuropa/Chrzanowski/Reymann/KDR carry no Romanian data');
+assert.strictEqual(romania.maps[0].viewportRegion, 'RO_FAR_NORTH',
+    'the WIG 1:100k Romanian entry declares its far-north region');
+['ukvme', 'chrzanowski', 'reymann', 'kdr', 'kdr_gb'].forEach(id => {
+    assert(!api.countries.some(country => country.code === 'RO' && country.maps.some(map => map.id === id)),
+        id + ' dropped from the Romanian list');
+});
+console.log('  ✓ Romania curated to the far-north WIG 1:100k sheet only');
 
 // ── Drift guard: js/map-app.js keeps a static mirror of the curated coverage
 // for the premium rows that host the shared sheets (it runs before / without
