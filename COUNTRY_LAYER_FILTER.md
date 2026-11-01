@@ -65,11 +65,12 @@ layers** and keeps the selection visible on the map:
     graze the Danish bbox). Romania keeps **none** of the Central-European
     series (Mitteleuropa, Chrzanowski, Reymann, KDR 1:100k, KDR Großblatt):
     their rectangles span northern Romania but not one of them carries a
-    Romanian sheet. The Polish WIG 1:100k tactical series is the exception —
-    it has real data in the far north of Romania, so the row stays attributed
-    to `RO` and is instead **viewport-gated** by that far-north strip
-    (`SHARED_PREMIUM_VIEWPORT_REGIONS` → `viewportShowsRegion()`), i.e. it is
-    listed only while the region fills the view. See
+    Romanian sheet. Two sheets really do reach the country, but only a region
+    of it, so they stay attributed to `RO` and are instead **viewport-gated**
+    by that region (`PREMIUM_VIEWPORT_REGIONS` → `viewportShowsRegion()`),
+    i.e. they are listed only while the region is the subject of the view:
+    WIG 1:100k → the far north (Maramureș / northern Bucovina), Valahia
+    1855-1859 → the bottom half of the country (Oltenia + Muntenia). See
     `ROMANIA_HIST_MAP_COVERAGE.md`.
   - **Pan-European catalogues** (CORONA "Satellite imagery 60's", the Roman
     Empire group) carry no country list and keep the coverage rule — they are
@@ -117,17 +118,18 @@ layers** and keeps the selection visible on the map:
   county LiDAR keys added programmatically), `SHARED_PREMIUM_CATALOG_KEYS` /
   `SHARED_PREMIUM_COUNTRIES` (static mirror of the catalog's curated coverage
   for the premium rows that host the shared sheets — the filter runs before /
-  without `historical-eu-maps.js`), `SHARED_PREMIUM_VIEWPORT_REGIONS` (the
-  country region a shared sheet really covers where its box overshoots — WIG
-  1:100k over the far north of Romania) and `CURATED_COVERAGE_COUNTRIES` (the
-  analyzed ISO set). `filterLayersForCountry(iso)` matches attributed rows
-  strictly by ISO (BE-LU ↔ BE/LU and GB ↔ UK aliases), falls back to
-  substantial coverage for shared sheets when the country is outside the
-  analysis, and keeps the coverage rule for unattributed pan-European rows.
-  Region-gated rows are decided by `viewportShowsRegion()` inside
-  `checkLayerVisibility()` (refreshed at the end of `filterLayersForCountry`),
-  so they stay attributed to the country but only list while that region fills
-  the view. Group rows still hide when no sublayer survives.
+  without `historical-eu-maps.js`), `PREMIUM_VIEWPORT_REGIONS` (the country
+  region a sheet really covers where its box overshoots — WIG 1:100k over the
+  far north of Romania, Valahia 1855-1859 over the bottom half) and
+  `CURATED_COVERAGE_COUNTRIES` (the analyzed ISO set).
+  `filterLayersForCountry(iso)` matches attributed rows strictly by ISO
+  (BE-LU ↔ BE/LU and GB ↔ UK aliases), falls back to substantial coverage for
+  shared sheets when the country is outside the analysis, and keeps the
+  coverage rule for unattributed pan-European rows. Region-gated rows are
+  decided by `viewportShowsRegion()` inside `checkLayerVisibility()` (refreshed
+  at the end of `filterLayersForCountry`), so they stay attributed to the
+  country but only list while that region is the subject of the view. Group
+  rows still hide when no sublayer survives.
 - `js/historical-eu-maps.js` — `filterForCountry` is curated-first
   (`COUNTRIES_DATA`), with the substantial-extent fallback for unanalyzed
   countries and `[]` for an unknown ISO without geometry. The empty-state text
@@ -145,14 +147,14 @@ layers** and keeps the selection visible on the map:
 - `test-country-layer-filter.js` — regression suite: Italy must not see
   France/Switzerland rows, Denmark must not see Sweden/Poland rows or the
   Polish WIG sheets; curated premium sheets stay for their countries; Romania
-  keeps no Central-European sheet and offers WIG 1:100k only over its far
-  north (`ROMANIA_HIST_MAP_COVERAGE.md`).
+  keeps no Central-European sheet, offers WIG 1:100k only over its far north
+  and Valahia only over its southern half (`ROMANIA_HIST_MAP_COVERAGE.md`).
 - `test-historical-eu-maps.js` — curated-first catalog + a drift guard that
   asserts `SHARED_PREMIUM_COUNTRIES` mirrors `COUNTRIES_DATA` exactly.
 - `index.html` / `sw.js` — version bumps
-  (`js/map-app.js?v=20261101-ro-hist-sheets`,
+  (`js/map-app.js?v=20261101-ro-region-sheets`,
   `js/historical-eu-maps.js?v=20261101-ro-hist-sheets`,
-  `js/globe-country-picker.js?v=20261017-outline-zoom-settle`), shell `v355`.
+  `js/globe-country-picker.js?v=20261017-outline-zoom-settle`), shell `v356`.
   The CENAGIS sheets are listed **flat** in the single “Hărți istorice /
   Historical Maps” group: there is no “European maps · CENAGIS / IH PAN”
   subcategory heading (nor any replacement one) above them.
@@ -167,12 +169,14 @@ layers** and keeps the selection visible on the map:
 - Substantial coverage fallback (unanalyzed countries only): the rectangles
   must intersect and the overlap must be ≥ 5% of the country's bbox area OR
   ≥ 5% of the sheet's bbox area.
-- Region gate (`viewportRegions`, WIG 1:100k over `RO`): a sheet that is
-  aferentă but only reaches a corner of the country is listed only while that
-  corner is the subject of the view — at least 30 % of the visible latitude
-  span inside the declared region, or the view centre inside it. The country
-  fit (whole Romania) keeps the row hidden; the far north shows it. Layer state
-  is untouched, and the row returns as soon as the view moves back north.
+- Region gate (`viewportRegions`): a sheet that is aferentă but only reaches a
+  region of the country is listed only while that region is the subject of the
+  view — at least `minShare` of the visible latitude span inside the declared
+  region (30 % by default, 55 % for the southern half), or the view centre
+  inside it. WIG 1:100k over `RO` → far north; Valahia 1855-1859 over `RO` →
+  the bottom half of the country (Oltenia + Muntenia). The country fit keeps
+  both rows hidden; moving into the matching region shows them. Layer state is
+  untouched, and the rows return as soon as the view moves back.
 - Layer on/off state is not changed by the filter — the map is locked to the
   country anyway, and switching back restores rows with their previous state.
 - The filter belongs to the locked view: it applies on every selection

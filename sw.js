@@ -897,7 +897,9 @@
 // historical sheets that carry no Romanian data (Mitteleuropa, Chrzanowski,
 // Reymann, KDR 1:100k, KDR Großblatt); WIG 1:100k appears only over the far
 // north of Romania (ROMANIA_HIST_MAP_COVERAGE.md).
-const CACHE_NAME = 'detectlab-v355-ro-hist-sheets';
+// v356: Valahia 1855-1859 gets its real Wallachia footprint: the layer-panel
+// row is listed only while the view shows the southern half of Romania.
+const CACHE_NAME = 'detectlab-v356-ro-region-sheets';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1884,7 +1886,7 @@ const PRECACHE_URLS = [
   'js/tile-perf.js?v=20261030-sat60-live-location',
   'js/map-app.js?v=20261030-roman-layer-cleanup',
   'js/map-app.js?v=20261030-walachia',
-  'js/map-app.js?v=20261101-ro-hist-sheets',
+  'js/map-app.js?v=20261101-ro-region-sheets',
   'js/lidar-photo-filter.js?v=20261101-lidar-service-levels',
   'js/lidar-photo-filter.js?v=20261101-lidar-geographic-mask'
 ];
