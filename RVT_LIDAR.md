@@ -4,7 +4,7 @@
 
 Every LiDAR sublayer has a Settings button. The panel defaults to **17 explicitly labelled photographic simulations** (even where a DTM has separately been registered), not RVT algorithms or measurements: directional lighting, image gradients, local contrast, and pseudo-colour channel mixes applied to the fetched WMS/WMTS/XYZ imagery. They are *not* suitable for deriving terrain heights or archaeological evidence. The six image sliders are exposure, highlights, shadows, contrast, brightness, and sharpness, plus opacity. Original imagery outside the selected **1 km radius** remains visible and unchanged. The six Looking for chips intentionally do not pretend to have scientifically verified ratings. A true ground profile and metre-based RVT measure/stretch controls stay unavailable on imagery-only layers. A registered numeric DTM adds an optional “Use numeric DTM instead” switch for the supported true-RVT methods.
 
-The user must switch on the sublayer, press **Choose and prefetch a 1 km area**, and click its centre on the map. `js/lidar-photo-filter.js` fetches at most 96 image tiles on desktop or 48 on narrow screens at two zoom levels (falling back to a coarser level if needed), through the same map3d mirror tile URL builder/CORS-aware proxy fetch path used by 3D, or its canvas-tile renderer. It rejects incomplete tile sets instead of silently showing partial results. It retains original decoded RGBA pixels in memory: switching among the 17 photo looks and dragging image sliders re-renders cached pixels, without WMS requests. A masked photo overlay replaces original layer pixels only inside the circle; clearing the effect restores the original tiles. On entering 3D, the existing 3D entry gate asks whether to seed its normal LiDAR disc dialog with this area or choose another. **3D fetches its own terrain/tiles; the 2D image-effect cache is not reused as 3D terrain.** On a static deployment, the 3D tile proxy must be available for CORS-restricted WMS hosts; inaccessible tiles produce an error and the effect is not applied.
+The user must switch on the sublayer, press **Choose and prefetch a 1 km area**, and click its centre on the map. `js/lidar-photo-filter.js` fetches at most 96 image tiles on desktop or 48 on narrow screens, planning the deepest level the provider publishes first and stepping down only as far as that budget requires (so the disc is prepared at the layer's real detail, not at the zoom the pick was made from), through the same map3d mirror tile URL builder/CORS-aware proxy fetch path used by 3D, or its canvas-tile renderer. It rejects incomplete tile sets instead of silently showing partial results. It retains original decoded RGBA pixels in memory: switching among the 17 photo looks and dragging image sliders re-renders cached pixels, without WMS requests. A masked photo overlay replaces original layer pixels only inside the circle; clearing the effect restores the original tiles. On entering 3D, the existing 3D entry gate asks whether to seed its normal LiDAR disc dialog with this area or choose another. **3D fetches its own terrain/tiles; the 2D image-effect cache is not reused as 3D terrain.** On a static deployment, the 3D tile proxy must be available for CORS-restricted WMS hosts; inaccessible tiles produce an error and the effect is not applied.
 
 
 
@@ -89,3 +89,73 @@ The LiDAR photo effect (`js/lidar-photo-filter.js`) prefetches every zoom level 
 | CS / DJ / GJ / MH LAKI III | 9–17 | z0–8 requested, prepare failed | levels 9…zoom only |
 
 `zoomTiles()` now starts at the layer's `minzoom` and `chooseZoom()` clamps to `[minzoom, maxzoom]`. Checked by `node test-lidar-photo-filter.js`.
+
+## The area's depth belongs to the layer, not to the view it was picked from
+
+**Report (2026-11-01):** *"when choosing a LiDAR area for LiDAR settings from a
+great distance, for example zoom 10, when zooming in, that area is really
+blurred — like the tiles used for applying the setting are for the same zoom
+level that the map had when the area was chosen."*
+
+Exactly that. `chooseZoom()` seeded its plan with `Math.floor(map.getZoom())`:
+
+```js
+/* before */
+let z = Math.max(lo, Math.min(hi, Math.floor(map.getZoom())));   // ← the view
+while (z > lo && zoomTiles(center, z, lo).length > MAX_TILES) z--;
+```
+
+At z10 the 1 km disc is **19 px wide** (106 m per pixel at 46° N), so the whole
+area was one tile — and `PhotoLayer` was created with
+`maxNativeZoom: session.zoom`. Every step closer upscaled that single 100 m/px
+tile: already soft at z12, unusable at z16. Picking the same spot from z17 gave
+a 1.7 m/px disc, which is why the bug looked like "it depends where I was
+standing when I tapped".
+
+### 1. The plan starts at the provider's ceiling
+
+`nativeCeiling()` reads `maxNativeZoom` (the pyramid) before `maxZoom` (only the
+display ceiling, above which Leaflet upscales anyway) and `chooseZoom()` walks
+**down** from there until the whole disc fits the budget:
+
+| Layer | published levels | native | disc tiles at native | prepared (96 / 48 budget) |
+|---|---|---|---|---|
+| Ro1m / Ro2m | 0–16 | 16 | 73 | **z16** / z15 |
+| Ro5m | 7–15 | 15 | 30 | **z15** / z15 |
+| CS / DJ / GJ / MH LAKI III | 9–17 | 17 | 180 | **z16** / z15 |
+
+(Counts at 46.8° N, where a 1 km disc covers 36 tiles at z16 and 110 at z17.)
+
+The tap zoom is no longer an input: the same centre always plans the same disc.
+The prepared levels are still every level from the layer's `minzoom` up to that
+depth (the lower ones are single tiles), so the effect is visible — and masked
+correctly — from the provider's minimum upwards; `settleMasks()` now hides the
+overlay only below `session.minzoom`, not below `session.zoom`.
+
+### 2. Above the prepared depth, the exact level is fetched
+
+Preparing to `maxNativeZoom` would blow both the tile budget and the memory
+(one decoded 256×256 RGBA tile is 262 KB): 180 tiles at LAKI III's native z17
+is 47 MB. So the overlay is created with `maxNativeZoom: nativeCeiling(entry)`
+and `PhotoLayer.createTile` has a second path: for `coords.z > session.zoom` it
+
+1. paints the deepest cached parent scaled into the tile as a stand-in, so the
+   circle is never a transparent hole over the masked original LiDAR;
+2. fetches **that** level through the same `fetchPixels()` transport (the
+   provider usually answers from the HTTP cache, because the live LiDAR layer
+   underneath is drawing the same URLs);
+3. repaints the tile with the real pixels when they arrive, and drops them
+   again on `tileunload`.
+
+A tile that cannot touch the disc (the grid is bigger than 1 km) requests
+nothing at all. `tile3d()` gained the matching exact-hit branch, so a 3D
+round-trip after a close-in 2D view reuses those deep pixels instead of
+overzooming the prepared ones.
+
+Net effect: the disc is sharp at every zoom the provider actually serves — the
+prepared levels instantly, anything deeper as it is looked at.
+
+Checked by `node test-lidar-photo-filter.js` (the plan ignores `map.getZoom()`
+and stays inside the budget) and the new `node test-lidar-photo-deep-zoom.js`
+(real prepare at z10 → depth 16, deeper tile requested by its own level, tiles
+outside the disc never requested, prepared levels drawn from memory).

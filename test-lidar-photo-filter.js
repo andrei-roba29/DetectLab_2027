@@ -13,7 +13,7 @@ const doc = {body:{appendChild(){}},createElement(){return {hidden:true,setAttri
 vm.runInNewContext(fs.readFileSync('js/lidar-photo-filter.js','utf8'),{
   window:win,document:doc,console,CustomEvent:class{}
 });
-const {effect,tileCoordinates,chooseZoom,zoomTiles} = win.DLPhotoFilter._test;
+const {effect,tileCoordinates,chooseZoom,zoomTiles,nativeCeiling} = win.DLPhotoFilter._test;
 const ids=['hillshade','multi-hillshade','slope','slrm','msrm','mstp','svf','asvf',
   'openness','local-dominance','sky-illumination','vat','combined-vat',
   'prismatic-openness','crim','e2mstp','e3mstp'];
@@ -31,8 +31,22 @@ const laki = {minzoom:9, maxzoom:17};
 const lakiZ = chooseZoom(center, laki);
 assert.ok(lakiZ >= 9 && lakiZ <= 17, 'LAKI III stays inside its published window z9–z17');
 assert.ok(zoomTiles(center, 17, 9).every(t => t.z >= 9), 'no LAKI III tile below z9');
-const lowMap = map.getZoom; map.getZoom = () => 4;
-assert.equal(chooseZoom(center, laki), 9, 'a far-out view still picks the lowest published level');
+// Reported 2026-11-01: an area picked from z10 produced z10 tiles, so flying
+// in blew a 100 m/px tile up into a blur. The prepared depth must belong to
+// the layer, never to the view the centre was picked from.
+const lowMap = map.getZoom;
+const pickedClose = chooseZoom(center, laki);
+for (const from of [4, 8, 10, 13, 17]) {
+    map.getZoom = () => from;
+    assert.equal(chooseZoom(center, laki), pickedClose, `a z${from} pick prepares the same disc`);
+}
+map.getZoom = () => 10;
+const pickedFar = chooseZoom(center, laki);
+assert.ok(pickedFar >= 15, 'a far-out pick is still prepared at real detail (got z' + pickedFar + ')');
+assert.ok(pickedFar > 10, 'the pick zoom is not the prepared depth');
+assert.ok(zoomTiles(center, pickedFar, 9).length <= 96, 'the deep plan still fits the tile budget');
+assert.equal(nativeCeiling({maxzoom:17,layer:{options:{maxNativeZoom:17,maxZoom:20}}}), 17,
+    'the display ceiling is not mistaken for native detail');
 map.getZoom = lowMap;
 const ro5m = {minzoom:7, maxzoom:15};
 assert.equal(chooseZoom(center, ro5m), 15, 'Ro5m never asks for z16');

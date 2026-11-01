@@ -903,7 +903,11 @@
 // v358: shared touch, mouse and keyboard resizing for application windows.
 // v359: the layers window (#transpPanel) carries no resize grip any more — it
 // stays anchored top→bottom of the map frame and only the dialogs resize.
-const CACHE_NAME = 'detectlab-v359-layer-no-grip';
+// v360: the LiDAR Settings 1 km area is prepared at the layer's own native
+// depth instead of the zoom the centre was picked from, and levels above it
+// are fetched on demand, so picking the area from a country view no longer
+// leaves a blurred disc when the user flies in.
+const CACHE_NAME = 'detectlab-v360-lidar-deep-zoom';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1895,7 +1899,8 @@ const PRECACHE_URLS = [
   'js/map-app.js?v=20261030-walachia',
   'js/map-app.js?v=20261101-ro-region-sheets',
   'js/lidar-photo-filter.js?v=20261101-lidar-service-levels',
-  'js/lidar-photo-filter.js?v=20261101-lidar-geographic-mask'
+  'js/lidar-photo-filter.js?v=20261101-lidar-geographic-mask',
+  'js/lidar-photo-filter.js?v=20261101-lidar-deep-zoom'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

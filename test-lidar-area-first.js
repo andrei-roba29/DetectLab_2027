@@ -80,6 +80,6 @@ const text=n=>n.textContent+' '+n.children.map(text).join(' ');
         assert.equal(opacityEvents.length, before + 1, id + ' notifies its opacity handler');
     }
     const html=fs.readFileSync('index.html','utf8'), sw=fs.readFileSync('sw.js','utf8');
-    for(const tag of ['js/rvt-panel.js?v=20261101-settings-opacity','js/lidar-photo-filter.js?v=20261101-lidar-geographic-mask']) assert(html.includes(tag)&&sw.includes(tag));
+    for(const tag of ['js/rvt-panel.js?v=20261101-settings-opacity','js/lidar-photo-filter.js?v=20261101-lidar-deep-zoom']) assert(html.includes(tag)&&sw.includes(tag));
     console.log('OK — LiDAR settings require a successfully prepared area; failure, retry and cancellation work.');
 })().catch(err=>{console.error(err);process.exitCode=1;});
