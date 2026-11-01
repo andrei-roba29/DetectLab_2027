@@ -6931,7 +6931,10 @@
                     opacity: 0,
                     type: 'xyz',
                     url: 'https://tiles.arcgis.com/tiles/wCvLzGFkz06gCfBg/arcgis/rest/services/Ro5m/MapServer/tile/{z}/{y}/{x}',
-                    maxNativeZoom: 16,
+                    // The service publishes levels 7–15 only (minLOD/maxLOD of
+                    // the MapServer). Asking for 16 returned no tile.
+                    minZoom: 7,
+                    maxNativeZoom: 15,
                     className: 'lidar-ro5m-tiles',
                     leafletLayer: null
                 },

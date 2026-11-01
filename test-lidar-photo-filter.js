@@ -13,7 +13,7 @@ const doc = {body:{appendChild(){}},createElement(){return {hidden:true,setAttri
 vm.runInNewContext(fs.readFileSync('js/lidar-photo-filter.js','utf8'),{
   window:win,document:doc,console,CustomEvent:class{}
 });
-const {effect,tileCoordinates,chooseZoom} = win.DLPhotoFilter._test;
+const {effect,tileCoordinates,chooseZoom,zoomTiles} = win.DLPhotoFilter._test;
 const ids=['hillshade','multi-hillshade','slope','slrm','msrm','mstp','svf','asvf',
   'openness','local-dominance','sky-illumination','vat','combined-vat',
   'prismatic-openness','crim','e2mstp','e3mstp'];
@@ -24,6 +24,20 @@ const center={lat:52,lng:5};
 const z=chooseZoom(center,{maxzoom:18});
 assert.ok(z<=17 && tileCoordinates(center,z).length+tileCoordinates(center,z-1).length<=96);
 console.log('Photo effects: 17 distinct styles; <=96 prefetched tiles.');
+
+// Service windows (MapServer minLOD/maxLOD): LAKI III 9–17, Ro5m 7–15.
+// The photo filter must never request a level the provider does not publish.
+const laki = {minzoom:9, maxzoom:17};
+const lakiZ = chooseZoom(center, laki);
+assert.ok(lakiZ >= 9 && lakiZ <= 17, 'LAKI III stays inside its published window z9–z17');
+assert.ok(zoomTiles(center, 17, 9).every(t => t.z >= 9), 'no LAKI III tile below z9');
+const lowMap = map.getZoom; map.getZoom = () => 4;
+assert.equal(chooseZoom(center, laki), 9, 'a far-out view still picks the lowest published level');
+map.getZoom = lowMap;
+const ro5m = {minzoom:7, maxzoom:15};
+assert.equal(chooseZoom(center, ro5m), 15, 'Ro5m never asks for z16');
+assert.ok(zoomTiles(center, 15, 7).every(t => t.z >= 7 && t.z <= 15), 'Ro5m tiles stay within z7–z15');
+console.log('Photo filter: requested levels stay inside each provider window.');
 
 const source = fs.readFileSync('js/lidar-photo-filter.js', 'utf8');
 assert(!source.includes('rvt-photo-status'), 'no separate photo-effect status window');

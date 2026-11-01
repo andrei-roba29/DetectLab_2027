@@ -888,9 +888,11 @@
 //   css/map3d-terrain.css.
 // v343: lift the minimized-window drawer above mobile system bars and PWA bleed.
 // v344: allow historical-map alignment up to 3 km instead of 300 m.
+// v348: LAKI III and Ro5m photo-effect tiles only request the levels their
+// ArcGIS MapServer publishes (js/lidar-photo-filter.js, js/map-app.js).
 // v347: CENAGIS historical sheets get a longer probe and a third try before
 // they are switched off (js/wms-health.js).
-const CACHE_NAME = 'detectlab-v347-cenagis-patience';
+const CACHE_NAME = 'detectlab-v348-lidar-service-levels';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1875,7 +1877,9 @@ const PRECACHE_URLS = [
   'js/corona-wms-layer.js?v=20261030-sat60-live-location',
   'js/tile-perf.js?v=20261030-sat60-live-location',
   'js/map-app.js?v=20261030-roman-layer-cleanup',
-  'js/map-app.js?v=20261030-walachia'
+  'js/map-app.js?v=20261030-walachia',
+  'js/map-app.js?v=20261101-lidar-service-levels',
+  'js/lidar-photo-filter.js?v=20261101-lidar-service-levels'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

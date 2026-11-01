@@ -38,14 +38,20 @@
         }
         return tiles;
     }
-    function zoomTiles(center, maxZoom) {
+    /* Only the levels the provider really serves are requested. A LAKI III or
+       Ro5m MapServer publishes a window of levels (CS/DJ/GJ/MH: 9–17, Ro5m:
+       7–15); asking for z0…minLOD-1 or above maxLOD returns no tile, and one
+       missing tile voids the whole prepared area. */
+    function zoomTiles(center, maxZoom, minZoom=0) {
         const tiles=[];
-        for (let z=0; z<=maxZoom; z++) tiles.push(...tileCoordinates(center,z));
+        for (let z=minZoom; z<=maxZoom; z++) tiles.push(...tileCoordinates(center,z));
         return tiles;
     }
     function chooseZoom(center, layer) {
-        let z = Math.min(18, Math.floor(map.getZoom()), layer.maxzoom || 18);
-        while (z > 0 && zoomTiles(center,z).length > MAX_TILES) z--;
+        const lo = Math.max(0, layer.minzoom || 0);
+        const hi = Math.min(18, layer.maxzoom || 18);
+        let z = Math.max(lo, Math.min(hi, Math.floor(map.getZoom())));
+        while (z > lo && zoomTiles(center,z,lo).length > MAX_TILES) z--;
         return z;
     }
     const keyOf = t => [t.z,t.x,t.y].join('/');
@@ -274,7 +280,7 @@
         if (!entry) throw Error('Switch on this LiDAR sublayer before preparing its image area');
         if (!root.DetectLabMirror || !root.DetectLabMap3D) throw Error('3D image tile transport is not ready');
         const zoom=chooseZoom(center,entry);
-        const tiles=zoomTiles(center,zoom);
+        const tiles=zoomTiles(center,zoom,Math.max(0,entry.minzoom||0));
         const serial=++generation, controller=new AbortController();
         session={key,entry,center,zoom,method,controller}; Object.assign(controls,values||{});
         marker=L.circle(center,{radius:1000,color:'#efbb75',weight:2,fill:false,interactive:false,pane:'rvt-photo-pane'}).addTo(map);
@@ -367,5 +373,5 @@
     map.on('zoomend moveend resize', settleMasks);
     root.DLPhotoFilter={active,choose,prepare,update,stop,get:snapshot,preview,info3d,tile3d,
         source3d: () => session && session.ready ? session.entry.layer : null,
-        _test:{effect,tileCoordinates,chooseZoom}};
+        _test:{effect,tileCoordinates,chooseZoom,zoomTiles}};
 })(window);
