@@ -475,6 +475,11 @@ window.openAuth = function (tab) {
     switchAuthTab(tab || 'login');
     var modal = document.getElementById('authModal');
     if (modal) modal.classList.add('show');
+    // iOS standalone needs the PKCE URL before the actual Google tap; only a
+    // direct external navigation can escape the in-app popup keyboard issue.
+    if (window.DetectLabGooglePopup && window.DetectLabGooglePopup.prepare) {
+        window.DetectLabGooglePopup.prepare();
+    }
     var previousActive = document.activeElement;
     setTimeout(function () {
         if (!modal || !modal.classList.contains('show')) return;

@@ -37,7 +37,7 @@ function harness(opts = {}) {
   const window = { navigator: { standalone: !!opts.ios },
     matchMedia: q => ({matches: !!opts.android && q.includes('standalone')}),
     location: {origin: opts.origin || 'https://detectlab.ro'}, crypto: {subtle:{digest(){}}, getRandomValues(bytes) {bytes.fill(4);}},
-    open() { opened++; return opts.blocked ? null : popup; },
+    open(url) { opened++; popup.openedWith = url; if (url !== 'about:blank') popup.location.url = url; return opts.blocked ? null : popup; },
     createGooglePopupClient() {return client;},
     localStorage: storage,
     supabaseClient: {auth: { async setSession(tokens) { installed = tokens; return opts.sessionError ? {error: {}} : {data: {session: tokens}}; }}},
@@ -60,6 +60,11 @@ function harness(opts = {}) {
     visible() {document.hidden = false; if (docListeners.visibilitychange) docListeners.visibilitychange();},
     tickWatcher() {if (watcher) watcher();},
     expire() {if (timer) timer();} };
+}
+async function readyHarness(opts) {
+  const h = harness(opts);
+  await h.window.DetectLabGooglePopup.prepare();
+  return h;
 }
 function callbackHarness(url, withOpener, seed) {
   const elements = {status:{textContent:''}};
@@ -86,7 +91,7 @@ async function run() {
   assert.doesNotMatch(html, /googlePopupHelp|googlePopupCode|finishGooglePopupCode|One-time sign-in code/);
   assert.doesNotMatch(callback, /One-time sign-in code|id="code"|value = code|<textarea/);
 
-  let h = harness({ios:true});
+  let h = await readyHarness({ios:true});
   assert.equal(h.window.DetectLabGooglePopup.isStandalone(), true);
   const start = h.start();
   assert.equal(h.opened, 1, 'popup opened before first await');
@@ -95,6 +100,8 @@ async function run() {
   assert.equal(h.oauth.options.redirectTo, callbackUrl,
     'the callback URL must be an exact path, with no query for Supabase to match');
   assert.equal(h.popup.location.url, 'https://supabase.example/authorize?code_challenge_method=s256&code_challenge=challenge');
+  assert.equal(h.popup.openedWith, h.popup.location.url,
+    'iOS opens the real OAuth URL inside the tap, not an about:blank PWA popup');
   const nonce = attemptNonce(h.storage);
   assert.match(nonce, /^[0-9a-f]{32}$/, 'the attempt nonce lives in same-origin storage');
   const data = {type:'detectlab-google-callback', nonce, code:'one-time-code'};
@@ -108,6 +115,15 @@ async function run() {
   assert.equal(h.installed.refresh_token, 'r');
   assert.equal(h.successes, 1);
   assert.equal(h.popup.closed, true);
+
+  // Slow PKCE preparation must never open a blank in-app iOS popup.
+  h = harness({ios:true});
+  await h.start();
+  assert.equal(h.opened, 0, 'no about:blank popup while direct URL is preparing');
+  assert.match(h.messages.at(-1).msg, /tap Continue with Google again/);
+  await h.window.DetectLabGooglePopup.prepare();
+  await h.start();
+  assert.equal(h.popup.openedWith, h.popup.location.url);
 
   // ── Handoff record left by the callback window (opener severed) ──
   h = harness({android:true});
@@ -125,58 +141,58 @@ async function run() {
   assert.equal(h.storage.getItem(ATTEMPT_KEY), null, 'attempt record cleared');
 
   // Picked up when the installed app comes back to the front.
-  h = harness({ios:true}); await h.start();
+  h = await readyHarness({ios:true}); await h.start();
   hNonce = attemptNonce(h.storage);
   h.storage.setItem(HANDOFF_KEY, JSON.stringify({nonce:hNonce, code:'focus-code', at:Date.now()}));
   h.visible(); await tick(); await tick();
   assert.equal(h.exchanged, 'focus-code'); assert.equal(h.successes, 1);
-  h = harness({ios:true}); await h.start();
+  h = await readyHarness({ios:true}); await h.start();
   hNonce = attemptNonce(h.storage);
   h.storage.setItem(HANDOFF_KEY, JSON.stringify({nonce:hNonce, code:'poll-code', at:Date.now()}));
   h.tickWatcher(); await tick(); await tick();
   assert.equal(h.exchanged, 'poll-code');
 
   // Expired handoff record is not used.
-  h = harness({ios:true}); await h.start();
+  h = await readyHarness({ios:true}); await h.start();
   hNonce = attemptNonce(h.storage);
   h.storage.setItem(HANDOFF_KEY, JSON.stringify({nonce:hNonce, code:'old-code', at:Date.now() - 11 * 60 * 1000}));
   h.wake(); await tick();
   assert.equal(h.exchanged, undefined);
 
   // A cancelled/failed consent ends the attempt without a code.
-  h = harness({ios:true}); await h.start();
+  h = await readyHarness({ios:true}); await h.start();
   hNonce = attemptNonce(h.storage);
   h.storage.setItem(HANDOFF_KEY, JSON.stringify({nonce:hNonce, error:true, at:Date.now()}));
   h.wake(); await tick();
   assert.equal(h.exchanged, undefined); assert.match(h.messages.at(-1).msg, /cancelled or failed/);
-  h = harness({ios:true}); await h.start();
+  h = await readyHarness({ios:true}); await h.start();
   hNonce = attemptNonce(h.storage);
   h.deliver({origin:'https://detectlab.ro', source:h.popup, data:{type:'detectlab-google-callback', nonce:hNonce, error:true}});
   assert.equal(h.exchanged, undefined); assert.match(h.messages.at(-1).msg, /cancelled or failed/);
 
   // ── Failures stay in the form, with nothing to paste ──
-  h = harness({blocked:true, ios:true}); await h.start();
+  h = await readyHarness({blocked:true, ios:true}); await h.start();
   assert.match(h.messages.at(-1).msg, /blocked/);
-  h = harness({ios:true, startError:true}); await h.start();
+  h = harness({android:true, startError:true}); await h.start();
   assert.equal(h.popup.closed, true); assert.match(h.messages.at(-1).msg, /Could not open/);
-  h = harness({ios:true, exchangeError:true}); await h.start();
+  h = await readyHarness({ios:true, exchangeError:true}); await h.start();
   hNonce = attemptNonce(h.storage);
   h.deliver({origin:'https://detectlab.ro', source:h.popup, data:{type:'detectlab-google-callback', nonce:hNonce, code:'bad'}});
   await tick();
   assert.equal(h.successes, 0); assert.equal(h.installed, undefined); assert.match(h.messages.at(-1).msg, /could not be completed/);
-  h = harness({ios:true, sessionError:true}); await h.start();
+  h = await readyHarness({ios:true, sessionError:true}); await h.start();
   hNonce = attemptNonce(h.storage);
   h.deliver({origin:'https://detectlab.ro', source:h.popup, data:{type:'detectlab-google-callback', nonce:hNonce, code:'bad'}});
   await tick();
   assert.equal(h.successes, 0); assert.match(h.messages.at(-1).msg, /could not be completed/);
 
   // One attempt at a time; an abandoned one is replaced after the grace period.
-  h = harness({ios:true}); await h.start(); await h.start();
+  h = await readyHarness({ios:true}); await h.start(); await h.start();
   assert.equal(h.opened, 1); assert.match(h.messages.at(-1).msg, /already in progress/);
-  h = harness({ios:true}); await h.start();
+  h = await readyHarness({ios:true}); await h.start();
   h.window.DetectLabGooglePopup.cancel();
   assert.equal(h.popup.closed, true);
-  h = harness({ios:true}); await h.start(); h.expire();
+  h = await readyHarness({ios:true}); await h.start(); h.expire();
   assert.match(h.messages.at(-1).msg, /expired/);
 
   // ── Callback window ──
@@ -216,7 +232,7 @@ async function run() {
   // Supabase sends an unknown redirect_to to the project Site URL
   // (detectlab.ro), which is what moved a detectlab.eu sign-in to the other
   // domain, inside a browser window.
-  h = harness({ios:true, origin: 'https://deploy-preview-12--detectlab.netlify.app'});
+  h = await readyHarness({ios:true, origin: 'https://deploy-preview-12--detectlab.netlify.app'});
   await h.start();
   assert.equal(h.opened, 0, 'no popup on an unlisted origin');
   assert.equal(h.oauth, undefined, 'the OAuth request must not be started');
@@ -226,14 +242,14 @@ async function run() {
   await h.start();
   assert.equal(h.oauth.options.redirectTo, 'https://deploy-preview-12--detectlab.netlify.app/google-auth-callback.html',
     'an explicitly listed origin keeps its own callback');
-  h = harness({ios:true, origin: 'https://detectlab.eu'});
+  h = await readyHarness({ios:true, origin: 'https://detectlab.eu'});
   await h.start();
   assert.equal(h.oauth.options.redirectTo, 'https://detectlab.eu/google-auth-callback.html',
     'the .eu market stays on .eu');
 
   // A callback that could not read the attempt record hands the code over
   // without a nonce; with exactly one attempt open that is still the answer.
-  h = harness({ios:true}); await h.start();
+  h = await readyHarness({ios:true}); await h.start();
   h.storage.setItem(HANDOFF_KEY, JSON.stringify({nonce:null, code:'anonymous-code', at:Date.now()}));
   h.wake(); await tick(); await tick();
   assert.equal(h.exchanged, 'anonymous-code');
@@ -244,7 +260,10 @@ async function run() {
   assert.match(auth, /signInWithPassword\(/);
   assert.match(auth, /detectLabOAuthOriginAllowed/, 'the browser path checks the origin list too');
   assert.match(auth, /DetectLabOAuthOrigins/, 'the allow-list can be extended per deployment');
-  assert.match(html, /js\/pwa-google-auth\.js\?v=/);
+  assert.match(html, /js\/pwa-google-auth\.js\?v=20261101-safari-direct-oauth/);
+  assert.match(sw, /js\/pwa-google-auth\.js\?v=20261101-safari-direct-oauth/);
+  assert.match(html, /js\/auth\.js\?v=20261101-safari-direct-oauth/);
+  assert.match(sw, /js\/auth\.js\?v=20261101-safari-direct-oauth/);
   assert.match(sw, /pathname === '\/google-auth-callback\.html'\) return/);
   assert.match(callback, /history\.replaceState\(null, '', location\.pathname\)/);
   assert.match(callback, /event\.origin !== location\.origin/);
