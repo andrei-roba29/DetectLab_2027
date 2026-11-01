@@ -820,7 +820,7 @@
             tileSize: 256, minZoom: 0, maxZoom: 20, maxNativeZoom: 14, opacity: 0.80,
             attribution: 'Valahia 1855-1859', cors: 'yes', proxy: 'auto',
             ui: { toggle: 'walachiaMapToggle', slider: 'walachiaMapOpacitySlider', pct: 'walachiaMapPct', fn: 'toggleWalachiaMap', var2d: '_walachiaMapLayer', parent: 'histPremiumToggle' },
-            notes: 'Supabase Storage public bucket; zoom 14 is the only level indicated by the supplied tile URL.'
+            notes: 'Supabase Storage public bucket; zoom 14 is the only level indicated by the supplied tile URL. The layer-panel preview is the Szathmári sheet scan, not an XYZ tile.'
         },
         {
             id: 'premium.transylvania-1859', group: 'hist-premium', z: 652, kind: 'arcgis-image',

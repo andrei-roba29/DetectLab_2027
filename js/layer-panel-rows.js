@@ -19,9 +19,11 @@
  *      readable on top of it. The URL comes from the layer's own definition
  *      in js/layer-registry.js — its tile template for XYZ / ArcGIS
  *      pyramids, a GetMap window for WMS mosaics — never from a second copy
- *      of the endpoints. The row is only given the photo once the image has
- *      actually loaded, so a service that is down leaves a plain glass row
- *      instead of an empty frame (and never retries on every sweep).
+ *      of the endpoints. A sheet whose pyramid has no reliable preview tile
+ *      (Valahia) uses the supplied scan in SHEET_PHOTOS instead. The row is
+ *      only given the photo once the image has actually loaded, so a service
+ *      that is down leaves a plain glass row instead of an empty frame (and
+ *      never retries on every sweep).
  *
  *  Rows opt in with `data-preview-layer="<registry id>"`; the CENAGIS
  *  catalogue rows carry `data-map-id="<catalogue key>"` instead, and are
@@ -62,12 +64,17 @@
         'premium.wig-100k':            { lat: 52.232, lng: 21.006 }    /* Warsaw */
     };
 
+    /* A full sheet scan used as the row photo when the XYZ pyramid has no
+     * reliable preview tile. The map itself still uses the layer template. */
+    var SHEET_PHOTOS = {
+        'premium.walachia-1855': 'https://dacboefvooxgsngxkavx.supabase.co/storage/v1/object/public/Harti/szathm-ri-s-series-1-57-600-5-l.jpg'
+    };
+
     /* Preview-only candidates for sheets with sparse or uncertain pyramids.
      * Coordinates for the four R2 sheets are inside their coverage rectangles
      * in map-app.js. Try different locations and native zooms before nearby
      * tiles; do not infer the availability of a whole pyramid from one tile. */
     var SPARSE_PREVIEWS = {
-        'premium.walachia-1855': { tiles: [[14, 9209, 5843]] },
         'premium.moldova-1868': { points: [[47.158, 27.601], [46.57, 27.91], [45.44, 28.05]], zooms: [12, 11, 10, 13, 9, 8] },
         'premium.polish-tactical-1933': { points: [[48.10, 25.90], [48.10, 24.00], [47.95, 27.00]], zooms: [12, 11, 10, 13, 9, 8] },
         'premium.ww1': { points: [[45.44, 28.05], [44.4268, 26.1025], [47.158, 27.601]], zooms: [10, 9, 11, 8] },
@@ -134,6 +141,9 @@
         if (!reg) return [];
         var def = reg.get(id);
         if (!def || !HISTORICAL_GROUPS[def.group]) return [];
+        /* An explicit sheet scan is the preview. Do not fall through to an
+           XYZ tile that may 404 or come back transparent. */
+        if (SHEET_PHOTOS[id]) return [SHEET_PHOTOS[id]];
         var centre = centreOf(def);
         if (!centre || !def.url) return [];
 
@@ -411,6 +421,7 @@
 
     root.DetectLabPanelRows = {
         anchors: ANCHORS,
+        sheetPhotos: SHEET_PHOTOS,
         urlFor: urlFor,
         urlsFor: urlsFor,
         markGlass: markGlass,
