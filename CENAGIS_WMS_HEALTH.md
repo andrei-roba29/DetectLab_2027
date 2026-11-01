@@ -268,3 +268,22 @@ guarded (58 probed, 11 watched), 3 same-origin/runtime**.
 `js/dataforsyningen-dhm-layer.js?v=20261014-dk-token-message`, matching the
 `?v=` pins in `index.html`. Old tags stay in the list (the established pattern)
 so a client that still has the previous shell cached can resolve them.
+
+## Slow or briefly failing sheets — the 2026-11-01 patience fix
+
+Romanian and other historical sheets (`ukvme`, `chrzanowski`, `reymann`, `kdr`,
+`wig100k`, …) were reported as *“Harta nu poate fi încărcată”* even though a
+retry a few seconds later worked. The guard gave a CENAGIS probe a 9 s timeout
+and a single 1.5 s second chance, so one slow ECW decode or a short gateway
+error switched the sheet off for the 60 s cooldown.
+
+For `pastmaps.cenagis.edu.pl` only, `js/wms-health.js` now uses:
+
+* `CENAGIS_PROBE_TIMEOUT_MS = 15000` per attempt (other hosts keep 9 s);
+* `CENAGIS_RETRY_DELAYS_MS = [1500, 4000]`: the first probe plus two retries,
+  each with a fresh `_dl_retry=` URL. The sheet is tripped only after all three fail.
+
+The same probing path confirms tile-error trips, so mid-session blips get the
+same patience. Cache version: `sw.js` `detectlab-v347-cenagis-patience`, and
+`js/wms-health.js?v=20261101-cenagis-patience` in `index.html` and the precache list.
+Coverage: `test-wms-health.js` (“CENAGIS gets a third probe…”).

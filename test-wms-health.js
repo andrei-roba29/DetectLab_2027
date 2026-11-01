@@ -258,12 +258,15 @@ function answerImage(img, ok, size) {
     else if (!ok && img.onerror) img.onerror();
 }
 function flush() { return new Promise((r) => setImmediate(r)); }
+// CENAGIS gets the first probe plus two bounded retries; all three must fail
+// before the layer is tripped. The harness backoff is immediate.
 async function failCenagisProbe(sandbox) {
-    answerImage(sandbox.__images[sandbox.__images.length - 1], false);
-    await new Promise((r) => setTimeout(r, 5)); // bounded backoff in the harness is immediate
-    const retry = sandbox.__images[sandbox.__images.length - 1];
-    assert(retry._src.includes('_dl_retry='), 'second chance bypasses a cached error response');
-    answerImage(retry, false);
+    for (let i = 0; i < 3; i++) {
+        const probeImg = sandbox.__images[sandbox.__images.length - 1];
+        if (i > 0) assert(probeImg._src.includes('_dl_retry='), 'retries bypass a cached error response');
+        answerImage(probeImg, false);
+        await new Promise((r) => setTimeout(r, 5));
+    }
     await flush();
 }
 
@@ -368,7 +371,7 @@ function loadGuard(extra) {
     });
     if (extra && extra.registry) doc.registry = extra.registry;
     const sandbox = {
-        console, setTimeout: (fn, ms) => setTimeout(fn, ms === 1500 ? 0 : ms),
+        console, setTimeout: (fn, ms) => setTimeout(fn, (ms === 1500 || ms === 4000) ? 0 : ms),
         clearTimeout, setInterval, clearInterval,
         Promise, Date, Math, JSON, encodeURIComponent, parseFloat, String, Object, Array,
         navigator: { onLine: true },
@@ -599,6 +602,23 @@ async function providerTests() {
         'the layer loads on the automatic second chance');
     assert(!G.noticeShown(), 'no alarming notice for a recovered request');
     console.log('  ✓ transient CENAGIS probe errors recover without user interaction');
+
+    // ── 3c-2. Two failed CENAGIS probes still get a third chance ──
+    const late = sandbox.L.tileLayer.wms(CENAGIS, { layers: 'ihpan:chrzanowski_3857' });
+    late._detectlabUiKeys = ['chrzanowski'];
+    late._detectlabUiTitle = 'Chrzanowski';
+    late.onAdd(map);
+    await flush();
+    answerImage(sandbox.__images[sandbox.__images.length - 1], false);
+    await new Promise((r) => setTimeout(r, 5));
+    answerImage(sandbox.__images[sandbox.__images.length - 1], false);
+    await new Promise((r) => setTimeout(r, 5));
+    assert(late.addCalls === 0 && !G.isDownFor(late), 'two failed probes do not yet disable the layer');
+    answerImage(sandbox.__images[sandbox.__images.length - 1], true);
+    await flush();
+    assert(late.addCalls === 1 && !G.isDownFor(late), 'the third probe lets a slow CENAGIS sheet load');
+    assert(!G.noticeShown(), 'no notice for a sheet that recovered on the third probe');
+    console.log('  ✓ CENAGIS gets a third probe before a sheet is switched off');
 
     // ── 3d. A persistent non-image response blocks the add ──
     sandbox.L.tileLayer.wms(CENAGIS, { layers: 'ihpan:ukvme_3857' });

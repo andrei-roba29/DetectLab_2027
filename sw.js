@@ -888,8 +888,10 @@
 //   css/map3d-terrain.css.
 // v343: lift the minimized-window drawer above mobile system bars and PWA bleed.
 // v344: allow historical-map alignment up to 3 km instead of 300 m.
+// v347: CENAGIS historical sheets get a longer probe and a third try before
+// they are switched off (js/wms-health.js).
+const CACHE_NAME = 'detectlab-v347-cenagis-patience';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
-const CACHE_NAME = 'detectlab-v346-pwa-dock-leafleet';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1024,7 +1026,7 @@ const PRECACHE_URLS = [
   'js/translations.js?v=20261017-albania-asig',
   'js/wms-health.js?v=20261017-albania-asig',
   'js/wms-health.js?v=20261021-albania-country-group',
-  'js/wms-health.js?v=20261031-cenagis-retry',
+  'js/wms-health.js?v=20261101-cenagis-patience',
   'js/finland-tm35.js?v=20261019-finland-filter',
   'js/finland-layers.config.js?v=20261019-finland-filter',
   'js/finland-layers.js?v=20261019-finland-filter',
