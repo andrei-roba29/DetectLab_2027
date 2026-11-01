@@ -90,12 +90,12 @@ assert(/else\s*\{\s*var zoomCtrl = document\.querySelector\('#detectlab-map \.le
     'website still inserts 🎯 below zoom in left stack');
 ok('🎯 mounted into #pwa-br-stack first, account below; website keeps left column');
 
-/* ── 5. Panel open hides both controls ───────────────────────────────── */
-const hiddenRule = cssOnly.includes('transp-panel-open #pwa-br-stack') || cssOnly.includes('transp-panel-open .pwa-live-location-control');
-assert(hiddenRule, 'transp-panel-open must hide #pwa-br-stack / .pwa-live-location-control');
-assert(/transp-panel-open #pwa-br-stack/.test(cssOnly) && /visibility:\s*hidden/.test(cssOnly),
-    'hidden rule must set visibility:hidden');
-ok('transp-panel-open hides the stack (both buttons)');
+/* ── 5. Windows cover the stack without moving or hiding it ─────────── */
+const windowCss = read('css/map-window-layers.css');
+assert(!cssOnly.includes('transp-panel-open #pwa-br-stack'), 'the stack remains available where not covered');
+assert(/body\.is-pwa \.map-frame \.transp-panel[\s\S]*?z-index:\s*10300\s*!important/.test(windowCss),
+    'the layer window paints above the floating stack');
+ok('the layers window covers the stack where they overlap');
 
 /* ── 6. Account dropdown still functional ─────────────────────────────── */
 assert(/pwaUserDropdown/.test(html) && /togglePwaUserDropdown/.test(html),
@@ -117,4 +117,4 @@ assert(mapTag && sw.includes("'" + mapTag + "'"), 'map-app.js version must be pr
 ok('service worker cache-busts and pre-caches restored stack assets');
 
 console.log('\n' + passed + ' groups passed.');
-console.log('OK — PWA bottom-right stack restored: 🎯 on top, account below, safe-area respected, hidden on panel open.');
+console.log('OK — PWA bottom-right stack restored: 🎯 on top, account below, safe-area respected, covered when a panel overlaps.');

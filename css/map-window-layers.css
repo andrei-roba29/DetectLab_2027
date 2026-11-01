@@ -1,0 +1,39 @@
+/* Map stacking order: controls < windows < the country-selection gate.
+   The PWA account/location stack lives in the map frame too, so it shares
+   this ordering instead of sitting above the entire map as a body sibling. */
+.map-frame .transp-panel,
+body.is-pwa .map-frame .transp-panel,
+.map-frame.is-fullscreen .transp-panel {
+    z-index: 10300 !important;
+}
+.map-frame .transp-arrow-tab,
+body.is-pwa .map-frame .transp-arrow-tab,
+.map-frame.is-fullscreen .transp-arrow-tab {
+    z-index: 10301 !important;
+}
+
+/* These windows may overlap the map controls, fullscreen close button, or
+   the PWA account stack. Only their actual cards intercept input; transparent
+   modal containers retain their existing pointer-events behaviour. */
+.map-frame #iosBldSettingsPanel,
+.map-frame #iosfreeModal,
+.map-frame .hist-shift-panel,
+.map-frame .om-panel,
+.map-frame .offline-map-panel,
+.map-frame .offline-library,
+.map-frame .apm-panel,
+.map-frame #rvt-panel,
+.map-frame #map3d-focus,
+.map-frame.is-fullscreen .apm-panel,
+.map-frame.is-fullscreen #rvt-panel {
+    z-index: 10400;
+}
+
+/* The globe gate deliberately keeps its fullscreen exit reachable. In the
+   normal map view, that same button belongs below open windows instead. */
+.map-frame.is-fullscreen .btn-close-fullscreen {
+    z-index: 10200 !important;
+}
+html.globe-gate-open .map-frame.is-fullscreen .btn-close-fullscreen {
+    z-index: 10700 !important;
+}

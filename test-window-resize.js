@@ -1,0 +1,78 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+let JSDOM;
+try { ({ JSDOM } = require('jsdom')); }
+catch (_) { console.log('SKIP — install jsdom to test interactive window resizing.'); process.exit(0); }
+
+const script = fs.readFileSync('js/window-resize.js', 'utf8');
+const css = fs.readFileSync('css/window-resize.css', 'utf8');
+const html = fs.readFileSync('index.html', 'utf8');
+const sw = fs.readFileSync('sw.js', 'utf8');
+for (const asset of ['css/window-resize.css?v=20261101-window-resize', 'js/window-resize.js?v=20261101-window-resize']) {
+    assert(html.includes(asset) && sw.includes(asset), 'new asset is loaded and precached');
+}
+assert(/sel === '\.transp-panel' && el\.classList\.contains\('dl-window-resized'\)/.test(html), 'PWA fitting preserves the chosen height');
+assert(/touch-action:\s*none\s*!important/.test(css), 'touch drag is not taken over by scrolling');
+assert(/overflow-y:\s*auto\s*!important/.test(css), 'content remains scrollable');
+
+(async () => {
+    const dom = new JSDOM(`<!doctype html><html lang="en"><body>
+        <div class="map-frame"><div class="transp-panel"><button>Layer control</button></div>
+        <div id="rvt-body"><button>Settings</button></div></div>
+        <div id="authModal" style="display:flex;align-items:center;flex-direction:row"><div class="auth-box"><input id="email"></div></div>
+        <div class="pwa-account-wrapper"><div id="accountPanel"><button>Account</button></div></div>
+        </body></html>`, { runScripts: 'outside-only', pretendToBeVisual: true });
+    const { window } = dom;
+    Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true });
+    const frame = window.document.querySelector('.map-frame');
+    frame.getBoundingClientRect = () => ({ height: 560 });
+    const mockHeight = el => {
+        el.getBoundingClientRect = () => ({ height: parseFloat(el.style.height) || 340 });
+    };
+    const layer = window.document.querySelector('.transp-panel');
+    const rvt = window.document.querySelector('#rvt-body');
+    const auth = window.document.querySelector('.auth-box');
+    [layer, rvt, auth].forEach(mockHeight);
+    window.eval(script);
+    window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
+    const handle = layer.querySelector('.dl-window-resize-handle');
+    assert(handle && rvt.querySelector('.dl-window-resize-handle') && auth.querySelector('.dl-window-resize-handle'));
+    assert.equal(handle.getAttribute('role'), 'separator');
+    assert.equal(handle.getAttribute('aria-orientation'), 'horizontal');
+    assert(!window.document.querySelector('#accountPanel > .dl-window-resize-handle'), 'PWA account window has no nested handle');
+    const authHandle = auth.querySelector('.dl-window-resize-handle');
+    authHandle.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    assert.equal(auth.style.getPropertyValue('--dl-resize-shift'), '8px', 'centred dialog keeps its bottom edge when shrinking');
+    function pointer(target, type, y, id = 4) {
+        const event = new window.MouseEvent(type, { bubbles: true, cancelable: true, clientY: y, button: 0 });
+        Object.defineProperty(event, 'pointerId', { value: id });
+        target.dispatchEvent(event);
+    }
+    pointer(handle, 'pointerdown', 100);
+    pointer(window, 'pointermove', 200);
+    assert.equal(layer.style.height, '240px', 'dragging down shrinks the window');
+    assert(layer.classList.contains('dl-window-compact'), 'small windows get the compact content layout');
+    assert.equal(layer.style.getPropertyPriority('height'), 'important', 'PWA heights are overridden');
+    assert.equal(handle.getAttribute('aria-valuenow'), '240');
+    pointer(window, 'pointerup', 200);
+    pointer(window, 'pointermove', 250);
+    assert.equal(layer.style.height, '240px', 'releasing the drag stops resizing');
+    handle.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
+    assert.equal(layer.style.height, '256px', 'keyboard increases height');
+    handle.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
+    assert.equal(layer.style.height, '96px', 'minimum preserves a usable scrollable window');
+    handle.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+    assert.equal(layer.style.height, '544px', 'height is bounded by the map frame');
+    assert(!layer.classList.contains('dl-window-compact'), 'expanding restores the normal layout');
+    assert(layer.querySelector('button'), 'existing controls survive resizing');
+    rvt.innerHTML = '<button>Re-rendered settings</button>';
+    const created = window.document.createElement('div');
+    created.className = 'offline-library';
+    frame.appendChild(created);
+    await new Promise(resolve => window.setTimeout(resolve, 0));
+    assert.equal(rvt.querySelectorAll('.dl-window-resize-handle').length, 1, 'grip returns after rerender');
+    assert.equal(created.querySelectorAll('.dl-window-resize-handle').length, 1, 'dynamically added windows get a grip');
+    dom.window.close();
+    console.log('Window resize: mouse/touch pointer, keyboard, limits, dynamic windows and PWA wiring OK.');
+})().catch(err => { console.error(err); process.exitCode = 1; });

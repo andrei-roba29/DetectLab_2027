@@ -11,13 +11,12 @@
 //   native PWA safe-area bar. A later gradient fix faded the panel into the
 //   map near the bottom, making its tint and opacity uneven.
 // · Stretching the panel to the bottom can put floating controls over the last
-//   rows. Keep the live-location button at its bottom-right anchor, but hide it
-//   in place while the layers window is open; never teleport it over compass /
-//   Detect / nearby.
+//   rows. Keep the live-location button at its bottom-right anchor, underneath
+//   the window instead of teleporting it over compass / Detect / nearby.
 //
 // The fix pins the panel with position:fixed to the true viewport edges, restores
 // a 44px-or-device-safe-area padding at the bottom, and paints a single tint
-// over the entire panel. Floating controls are hidden while it is open.
+// over the entire panel. Floating controls are covered where they overlap.
 //
 // Run: node test-pwa-layer-panel.js
 
@@ -81,22 +80,18 @@ assert(!/100% - var\(--pwa-bottom-controls-clearance/.test(pwa),
 const full = ruleOf(css, '.map-frame.is-fullscreen .transp-panel');
 assert(/bottom:\s*0/.test(full), 'browser fullscreen still pins the window to the bottom');
 
-/* 4. The floating PWA stack stays put (hidden in place) while the window is open. */
+/* 4. The floating PWA stack stays put underneath the window. */
 assert(/function markTranspPanelOpen\(on\)/.test(mapApp),
     'one helper owns the open state so every path stays in sync');
 assert(/classList\.toggle\('transp-panel-open', transpPanelOpen\)/.test(mapApp),
     'the open state is published on <body>');
 const openClose = /if \(!panel\.contains\(e\.target\) && !tab\.contains\(e\.target\)\)\s*\{\s*markTranspPanelOpen\(false\);/.test(mapApp);
 assert(openClose, 'the click-outside close must go through the same helper');
-const hideRule = (flatHtml.match(/body\.is-pwa\.transp-panel-open #pwa-br-stack,[^{]*\{([^}]*)\}/) || [])[1] || '';
-assert(/body\.is-pwa\.transp-panel-open #pwa-br-stack,\s*body\.is-pwa\.transp-panel-open \.pwa-live-location-control\s*\{/.test(flatHtml),
-    'the separate live-location button must be included in the in-place hide rule');
-assert(/visibility:\s*hidden/.test(hideRule),
-    'with the panel open the account stack and location button are hidden, not moved');
-assert(/pointer-events:\s*none/.test(hideRule),
-    'hidden controls must not intercept taps on the open layer panel');
-assert(!/left:\s*max\(10px/.test(hideRule) && !/right:\s*auto/.test(hideRule),
-    'no right-side control may teleport left over compass / Detect / nearby');
+const layersCss = read('css/map-window-layers.css');
+assert(/\.map-frame \.transp-panel[\s\S]*?z-index:\s*10300\s*!important/.test(layersCss),
+    'the layers window is stacked above the floating controls');
+assert(!/body\.is-pwa\.transp-panel-open #pwa-br-stack/.test(flatHtml),
+    'controls stay in place and are covered only where the panel overlaps them');
 
 /* 5. Installed PWAs must actually receive it. */
 const sw = read('sw.js');
@@ -113,5 +108,5 @@ assert(/['\"]index\.html['\"]/.test(sw), 'the current shell must remain in the s
 
 console.log('✓ the layers window is anchored top→bottom (no 560px cap)');
 console.log('✓ the PWA panel is uniformly tinted through its safe-area clearance');
-console.log('✓ the panel hides floating controls in place and the updated shell is pre-cached');
+console.log('✓ the panel covers floating controls and the updated shell is pre-cached');
 console.log('OK — the PWA layers panel reaches the screen edge without fading.');

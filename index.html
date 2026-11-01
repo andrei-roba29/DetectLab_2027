@@ -234,15 +234,6 @@
             z-index: 2100 !important;
         }
 
-        /* Keep the live-location button under the full-screen layers window
-           while it is open; it stays anchored in the same bottom-right place. */
-        body.is-pwa.transp-panel-open #pwa-br-stack,
-        body.is-pwa.transp-panel-open .pwa-live-location-control {
-            visibility: hidden;
-            pointer-events: none;
-            opacity: 0;
-        }
-
         /* ── Transparency arrow tab: vertically centred, pinned to the
            viewport so it travels with the fixed panel. */
         body.is-pwa .transp-arrow-tab {
@@ -1050,6 +1041,70 @@
         </div>
     </nav>
 
+    <!-- PWA ACCOUNT OVERLAY -->
+    <div class="pwa-account-overlay" id="pwaAccountOverlay">
+        <div class="pwa-account-wrapper">
+            <button class="pwa-account-back" onclick="pwaCloseAccount()">
+                <span class="t" data-key="back_to_map">← Back to map</span>
+            </button>
+            <div id="pwaAccountContent">
+                <!-- Account card will be cloned/moved here by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- HERO -->
+    <section id="hero">
+        <div class="hero-bg"></div>
+        <div class="topo-lines">
+            <svg viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice">
+                <ellipse cx="600" cy="350" rx="520" ry="280" fill="none" stroke="#B8D8F0" stroke-width="0.6" />
+                <ellipse cx="600" cy="350" rx="420" ry="220" fill="none" stroke="#B8D8F0" stroke-width="0.5" />
+                <ellipse cx="600" cy="350" rx="320" ry="160" fill="none" stroke="#6B3FA0" stroke-width="0.6" />
+                <ellipse cx="600" cy="350" rx="220" ry="100" fill="none" stroke="#6B3FA0" stroke-width="0.5" />
+                <ellipse cx="600" cy="350" rx="120" ry="50" fill="none" stroke="#E8772A" stroke-width="0.7" />
+                <ellipse cx="600" cy="350" rx="50" ry="22" fill="none" stroke="#C42B2B" stroke-width="0.8" />
+                <line x1="80" y1="350" x2="1120" y2="350" stroke="#B8D8F0" stroke-width="0.4" opacity="0.5" />
+                <line x1="600" y1="20" x2="600" y2="680" stroke="#B8D8F0" stroke-width="0.4" opacity="0.5" />
+            </svg>
+        </div>
+        <div class="hero-badge t" data-key="hero_badge">Archaeology × Artificial Intelligence</div>
+        <h1 class="hero-title"><span class="a1">Detect</span><span class="a2">Lab</span></h1>
+        <p class="hero-tagline t" data-key="hero_tagline">Saving History Together</p>
+        <div class="hero-tech">
+            <a href="tehnologie.html" class="btn-secondary t" data-key="nav_tech" data-doc-link="technology">Tehnologie</a>
+        </div>
+        <div class="hero-ctas">
+            <a href="#map-section" class="btn-primary t" data-key="hero_btn1">🗺 Explore the Map</a>
+            <a href="#pricing" class="btn-secondary t" data-key="hero_btn2">View Membership Plans</a>
+        </div>
+        <div class="hero-scroll">
+            <span class="t" data-key="scroll">Scroll to discover</span>
+            <svg width="16" height="24" viewBox="0 0 16 24" fill="none">
+                <rect x="1" y="1" width="14" height="22" rx="7" stroke="#B8D8F0" stroke-width="1.2" opacity="0.4" />
+                <circle cx="8" cy="8" r="2.5" fill="#B8D8F0" opacity="0.6">
+                    <animate attributeName="cy" values="8;15;8" dur="2s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="0.6;0.1;0.6" dur="2s" repeatCount="indefinite" />
+                </circle>
+            </svg>
+        </div>
+    </section>
+
+    <!-- MAP -->
+    <section id="map-section">
+        <div class="container">
+            <div class="map-header">
+                <div>
+                    <p class="section-label t" data-key="map_label">Live Map</p>
+                    <h2 class="section-title t" style="margin-bottom:0" data-key="map_title">Explore the <span class="hl">APM Layer</span></h2>
+                </div>
+                <div class="map-tabs" aria-label="Map view">
+                    <button class="map-tab active t" data-key="tab_free" onclick="switchTab(this,'free')">🔓 Free Preview</button>
+                    <button class="map-tab" id="tabWeather" onclick="switchTab(this,'weather')">🌤 Vreme</button>
+                    <a class="map-tab roman-atlas-link" href="europe-roman-atlas.html" target="_blank" rel="noopener" title="Open the ArcGIS SceneView atlas in a new tab" style="display:inline-flex;align-items:center;text-decoration:none;white-space:nowrap">↗ 3D ArcGIS atlas</a>
+                </div>
+            </div>
+            <div class="map-frame">
     <!-- PWA ACCOUNT STACK — bottom-right: 🎯 live-location on top,
          account trigger (initials / Log In) + dropdown below. On the
          website this container is display:none — the top nav holds the
@@ -1129,70 +1184,6 @@
         </div>
     </div>
 
-    <!-- PWA ACCOUNT OVERLAY -->
-    <div class="pwa-account-overlay" id="pwaAccountOverlay">
-        <div class="pwa-account-wrapper">
-            <button class="pwa-account-back" onclick="pwaCloseAccount()">
-                <span class="t" data-key="back_to_map">← Back to map</span>
-            </button>
-            <div id="pwaAccountContent">
-                <!-- Account card will be cloned/moved here by JS -->
-            </div>
-        </div>
-    </div>
-
-    <!-- HERO -->
-    <section id="hero">
-        <div class="hero-bg"></div>
-        <div class="topo-lines">
-            <svg viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice">
-                <ellipse cx="600" cy="350" rx="520" ry="280" fill="none" stroke="#B8D8F0" stroke-width="0.6" />
-                <ellipse cx="600" cy="350" rx="420" ry="220" fill="none" stroke="#B8D8F0" stroke-width="0.5" />
-                <ellipse cx="600" cy="350" rx="320" ry="160" fill="none" stroke="#6B3FA0" stroke-width="0.6" />
-                <ellipse cx="600" cy="350" rx="220" ry="100" fill="none" stroke="#6B3FA0" stroke-width="0.5" />
-                <ellipse cx="600" cy="350" rx="120" ry="50" fill="none" stroke="#E8772A" stroke-width="0.7" />
-                <ellipse cx="600" cy="350" rx="50" ry="22" fill="none" stroke="#C42B2B" stroke-width="0.8" />
-                <line x1="80" y1="350" x2="1120" y2="350" stroke="#B8D8F0" stroke-width="0.4" opacity="0.5" />
-                <line x1="600" y1="20" x2="600" y2="680" stroke="#B8D8F0" stroke-width="0.4" opacity="0.5" />
-            </svg>
-        </div>
-        <div class="hero-badge t" data-key="hero_badge">Archaeology × Artificial Intelligence</div>
-        <h1 class="hero-title"><span class="a1">Detect</span><span class="a2">Lab</span></h1>
-        <p class="hero-tagline t" data-key="hero_tagline">Saving History Together</p>
-        <div class="hero-tech">
-            <a href="tehnologie.html" class="btn-secondary t" data-key="nav_tech" data-doc-link="technology">Tehnologie</a>
-        </div>
-        <div class="hero-ctas">
-            <a href="#map-section" class="btn-primary t" data-key="hero_btn1">🗺 Explore the Map</a>
-            <a href="#pricing" class="btn-secondary t" data-key="hero_btn2">View Membership Plans</a>
-        </div>
-        <div class="hero-scroll">
-            <span class="t" data-key="scroll">Scroll to discover</span>
-            <svg width="16" height="24" viewBox="0 0 16 24" fill="none">
-                <rect x="1" y="1" width="14" height="22" rx="7" stroke="#B8D8F0" stroke-width="1.2" opacity="0.4" />
-                <circle cx="8" cy="8" r="2.5" fill="#B8D8F0" opacity="0.6">
-                    <animate attributeName="cy" values="8;15;8" dur="2s" repeatCount="indefinite" />
-                    <animate attributeName="opacity" values="0.6;0.1;0.6" dur="2s" repeatCount="indefinite" />
-                </circle>
-            </svg>
-        </div>
-    </section>
-
-    <!-- MAP -->
-    <section id="map-section">
-        <div class="container">
-            <div class="map-header">
-                <div>
-                    <p class="section-label t" data-key="map_label">Live Map</p>
-                    <h2 class="section-title t" style="margin-bottom:0" data-key="map_title">Explore the <span class="hl">APM Layer</span></h2>
-                </div>
-                <div class="map-tabs" aria-label="Map view">
-                    <button class="map-tab active t" data-key="tab_free" onclick="switchTab(this,'free')">🔓 Free Preview</button>
-                    <button class="map-tab" id="tabWeather" onclick="switchTab(this,'weather')">🌤 Vreme</button>
-                    <a class="map-tab roman-atlas-link" href="europe-roman-atlas.html" target="_blank" rel="noopener" title="Open the ArcGIS SceneView atlas in a new tab" style="display:inline-flex;align-items:center;text-decoration:none;white-space:nowrap">↗ 3D ArcGIS atlas</a>
-                </div>
-            </div>
-            <div class="map-frame">
                 <div class="map-wrapper">
                     <div id="detectlab-map" style="width:100%;height:100%;"></div>
                     <div id="lidarScannerLoading" class="lidar-scanner-loading" aria-live="polite"><span class="lidar-scanner-ring" aria-hidden="true"></span></div>
@@ -5263,6 +5254,8 @@
     <script src="js/roman-roads.js?v=20261015-roman-roads"></script>
     <script src="js/map-app.js?v=20261101-ro-region-sheets"></script>
     <link rel="stylesheet" href="css/rvt-panel.css?v=20261101-robust-train">
+    <link rel="stylesheet" href="css/map-window-layers.css?v=20261101-window-stacking">
+    <link rel="stylesheet" href="css/window-resize.css?v=20261101-window-resize">
     <script src="js/lidar-photo-filter.js?v=20261101-lidar-geographic-mask" defer></script>
     <script src="js/map-window-dock.js?v=20261101-robust-train"></script>
     <script src="js/rvt-panel.js?v=20261101-settings-opacity" defer></script>
@@ -6097,6 +6090,8 @@
                     PWA_FIT_SELECTORS.forEach(function (sel) {
                         var el = document.querySelector(sel);
                         if (!el) return;
+                        // Keep the user's layer-window height during viewport updates.
+                        if (sel === '.transp-panel' && el.classList.contains('dl-window-resized')) return;
                         el.style.setProperty('height', h, 'important');
                         el.style.setProperty('min-height', '0', 'important');
                         el.style.setProperty('max-height', 'none', 'important');
@@ -6591,5 +6586,6 @@
     }
 </script>
 <script src="js/hybrid-tile-switch.js"></script>
+<script src="js/window-resize.js?v=20261101-window-resize" defer></script>
 </body>
 </html>

@@ -1,0 +1,63 @@
+/* The grip stays at the top while the window's contents scroll beneath it. */
+.dl-window-resize-handle {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    flex: 0 0 28px;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 28px;
+    min-height: 28px;
+    margin: calc(2px - var(--dl-window-top-inset, 0px)) auto 4px;
+    border: 1px solid rgba(184, 216, 240, .35);
+    border-radius: 8px;
+    color: #d6e8f6;
+    background: rgba(20, 24, 40, .94);
+    box-sizing: border-box;
+    cursor: ns-resize;
+    touch-action: none !important;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+.dl-window-resize-handle:focus-visible { outline: 2px solid #ffc674; outline-offset: 2px; }
+.dl-window-resize-centered { translate: 0 var(--dl-resize-shift, 0px); }
+.dl-window-resized {
+    box-sizing: border-box !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+/* Top-attached, full-height panels now resize upward from the bottom edge.
+   Only the resized panel changes geometry; the map and backdrops stay put. */
+.map-frame .transp-panel.dl-window-resized,
+body.is-pwa .map-frame .transp-panel.dl-window-resized,
+.map-frame.is-fullscreen .transp-panel.dl-window-resized,
+#friendsManagerPanel.dl-window-resized,
+.fr-chat-panel.dl-window-resized,
+#eventsManagerPanel.dl-window-resize-centered { translate: 0 var(--dl-resize-shift, 0px); }
+.dl-window-resized {
+    top: auto !important;
+    bottom: 0 !important;
+}
+/* Flex-based dialogs keep their internal lists scrollable at small heights. */
+.dl-window-resized .dl-tut-card-body,
+.dl-window-resized .babel-body,
+.dl-window-resized .om-modal-list,
+.dl-window-resized .fr-chat-messages,
+.dl-window-resized #chatMessagesList {
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* Give compact windows a more flexible content layout; nothing is removed. */
+.dl-window-compact :is(.apm-actions, .m3d-focus-actions, .offline-panel-actions, .nearby-actions, .ios-modal-body) {
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.dl-window-compact :is(.babel-dialog-title, .apm-group, .rvt-group) {
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
