@@ -8,7 +8,7 @@
     // Login/register, account management, Friends and Events also stay grip-free.
     var selector = [
         '#iosBldSettingsPanel', '#iosfreeModalInner',
-        '.country-dock-panel', '.hist-shift-panel', '.om-panel',
+        '.hist-shift-panel', '.om-panel',
         '.offline-map-panel', '.offline-library', '.apm-panel', '#rvt-body',
         '#map3d-focus .m3d-focus-card', '.om-modal-card', '.layer-info-box',
         '.ios-modal-card', '.babel-dialog', '.premium-box',

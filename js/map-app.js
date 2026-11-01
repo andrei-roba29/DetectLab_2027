@@ -1580,14 +1580,12 @@
             ];
 
             // Initialise Leaflet map inside DetectLab's existing container.
-            // APM_BOUNDS defines only the initial Romanian view and the APM
-            // raster coverage; it must not constrain navigation. The .eu site
-            // can therefore pan freely as European regions are added.
+            // APM_BOUNDS defines the initial Romanian view and the APM raster
+            // coverage; js/romania-lock.js additionally locks navigation to
+            // Romania (maxBounds + zoom floor), so the view can never leave
+            // the country.
             var map = L.map('detectlab-map', {
                 zoomControl: false,
-                // The first screen is a geographic selector, not a Romania-only view.
-                // Once a country is chosen the picker fits the map back to the
-                // normal working scale.
                 minZoom: 2,
                 maxZoom: 20,
                 worldCopyJump: false,
@@ -1605,26 +1603,15 @@
                 markerZoomAnimation: true,
                 fadeAnimation: true,
                 zoomAnimationThreshold: 10
-            }).setView([51, 12], 3);
+            }).setView([46.0, 25.0], 6);
 
-            // Country selection happens in the globe gate (js/globe-country-picker.js,
-            // lazy ArcGIS SceneView renderer + canvas fallback), shown the first
-            // time an authenticated visitor reaches the map. attach() restores a
-            // previously chosen country instantly (no gate flash) or opens the gate
-            // once the user is confirmed logged in. Once a country is picked the
-            // gate hands this Leaflet instance a locked maxBounds/minZoom and
-            // calls filterLayersForCountry().
-            if (window.DetectLabGlobeGate) {
-                window.DetectLabGlobeGate.attach(map);
-            }
-
-            // Country dock (js/country-dock.js): the slide-down country
-            // switcher + World-hillshade checkbox glued under the search bar
-            // and the bottom-centre “Exit view” button of the locked country
-            // view. It reads the country list / lock state from the gate, so
-            // it must be attached after it.
-            if (window.DetectLabCountryDock) {
-                window.DetectLabCountryDock.attach(map);
+            // Romania-only lock (js/romania-lock.js): no globe gate and no
+            // country dock any more — the map is fitted to Romania and the
+            // view is constrained to Romania only (maxBounds viscosity 1 +
+            // zoom floor). attach() also publishes the fixed RO selection
+            // globals and calls filterLayersForCountry('RO').
+            if (window.DetectLabRomaniaLock) {
+                window.DetectLabRomaniaLock.attach(map);
             }
 
             // ── GLOBAL TILE GOVERNOR ──
@@ -3408,8 +3395,8 @@
                 if (hsText) hsText.textContent = ARCGIS_BASEMAP_LABELS.hillshade[useRo ? 'ro' : 'en'];
                 ctrl.setAttribute('aria-label', useRo ? 'Hartă de bază ArcGIS' : 'ArcGIS basemap');
                 var hsBox = document.getElementById('arcgisBasemapHillshade');
-                if (hsBox && window.DetectLabCountryDock) {
-                    try { hsBox.checked = !!window.DetectLabCountryDock.isHillshadeOn(); } catch (e) {}
+                if (hsBox && window.DetectLabRomaniaLock) {
+                    try { hsBox.checked = !!window.DetectLabRomaniaLock.isHillshadeOn(); } catch (e) {}
                 }
             }
 
@@ -3459,9 +3446,9 @@
             // (and on a phone) instead of a permanent block of buttons.
             // Picking a base map folds the list again; so does a click
             // elsewhere on the page or the Escape key.
-            // The World Hillshade checkbox drives the same overlay the country
-            // dock owns (window.toggleWorldHillshade) and stays in sync with
-            // the dock's checkbox. The control sits bottom-left, clear of the
+            // The World Hillshade checkbox drives the overlay owned by
+            // js/romania-lock.js (window.toggleWorldHillshade). The control
+            // sits bottom-left, clear of the
             // search bar (top-centre), the layer panel (right) and the PWA
             // action dock (bottom-right), so it never covers the interface.
             (function addArcgisBasemapControl() {
@@ -3522,13 +3509,8 @@
                         try { window.toggleWorldHillshade(!!hsBox.checked); } catch (e) {}
                     }
                 });
-                // Keep the dock's hillshade checkbox and this one in sync.
-                var dockHs = document.getElementById('countryDockHillshade');
-                if (dockHs) dockHs.addEventListener('change', function () {
-                    if (window.DetectLabCountryDock) {
-                        try { hsBox.checked = !!window.DetectLabCountryDock.isHillshadeOn(); } catch (e) {}
-                    }
-                });
+                // The hillshade overlay itself lives in js/romania-lock.js
+                // (window.toggleWorldHillshade); this checkbox is the only UI.
 
                 /* ── folding / unfolding ─────────────────────────────────── */
                 function setListOpen(open) {
