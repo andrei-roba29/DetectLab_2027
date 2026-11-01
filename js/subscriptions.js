@@ -512,6 +512,7 @@
         if (btn) btn.disabled = true;
         input.disabled = true;
 
+        var previousActive = document.activeElement;
         var result = await window.redeemPromoCode(code);
 
         if (btn) btn.disabled = false;
@@ -519,8 +520,8 @@
 
         if (!result.ok) {
             setPromoMessage('', result.message);
-            input.focus();
-            input.select();
+            if (window.DetectLabInputFocus) window.DetectLabInputFocus.autoFocus(input, previousActive);
+            if (document.activeElement === input) input.select();
             return;
         }
 

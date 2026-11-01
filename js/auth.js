@@ -475,9 +475,12 @@ window.openAuth = function (tab) {
     switchAuthTab(tab || 'login');
     var modal = document.getElementById('authModal');
     if (modal) modal.classList.add('show');
+    var previousActive = document.activeElement;
     setTimeout(function () {
-        var f = document.querySelector('#authModal .auth-input');
-        if (f) f.focus();
+        if (!modal || !modal.classList.contains('show')) return;
+        var form = document.getElementById(tab === 'register' ? 'registerForm' : 'loginForm');
+        var f = form && form.style.display !== 'none' && form.querySelector('.auth-input');
+        if (window.DetectLabInputFocus) window.DetectLabInputFocus.autoFocus(f, previousActive);
     }, 100);
 };
 

@@ -2420,6 +2420,7 @@
             renderChatMessages();
         });
 
+        var previousActive = document.activeElement;
         await Promise.all([loadConversationMessages(convId), loadConversationMembers(convId)]);
         state.chatLoading = false;
         renderChatMessages();
@@ -2427,7 +2428,7 @@
         renderChatActions();
         await markConversationRead(convId);
         startChatLiveUpdates(convId);
-        input.focus();
+        if (panel.isConnected && window.DetectLabInputFocus) window.DetectLabInputFocus.autoFocus(input, previousActive);
     }
 
     function closeChatView() {

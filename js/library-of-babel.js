@@ -1099,7 +1099,7 @@
         var f = document.getElementById('babelForm');
         f.onsubmit = function (e) { e.preventDefault(); run(document.getElementById('babelQuery').value); };
         var qi = document.getElementById('babelQuery');
-        if (qi && typeof qi.focus === 'function') qi.focus();
+        if (window.DetectLabInputFocus) window.DetectLabInputFocus.autoFocus(qi, document.activeElement);
         var saveBtn = document.getElementById('babelKeySave');
         saveBtn.onclick = function () {
             saveEuropeanaKey(document.getElementById('babelKey').value);
