@@ -21,6 +21,7 @@
     var BUFFER_M = 3000;          // context beyond the search circle (water decay band, Horn edges)
     var TRAIN_AREA_KM = 50;
     var BG_EXCLUDE_M = 500;       // no background point within 500 m of a site
+    var TRAIN_ROBUST_CONFIG = core.robustTrainConfig;
     var CANCELLED = 'cancelled';
 
     function cancelledError() { var e = new Error('Cancelled'); e.code = CANCELLED; return e; }
@@ -305,7 +306,7 @@
 
     /* ── TRAIN: background sampling and sample-set assembly (pure) ────────── */
     /** Uniform random points in a disc (metres), excluding a buffer around the given sites. */
-    function sampleBackground(centre, radiusM, count, siteList, excludeM, rnd) {
+    function sampleBackground(centre, radiusM, count, siteList, excludeM, rnd, allowed) {
         rnd = rnd || Math.random;
         var out = [], tries = 0, mpd = core.metresPerDegree(centre.lat);
         var maxTries = count * 20;
@@ -314,13 +315,60 @@
             var r = radiusM * Math.sqrt(rnd()), th = rnd() * 2 * Math.PI;
             var x = r * Math.cos(th), y = r * Math.sin(th);
             var lat = centre.lat + y / mpd.lat, lon = centre.lon + x / mpd.lon;
-            var ok = true;
-            for (var s = 0; s < siteList.length; s++) {
+            var ok = !allowed || allowed(lat, lon);
+            for (var s = 0; ok && s < siteList.length; s++) {
                 if (core.haversineM(lat, lon, siteList[s].lat, siteList[s].lon) < excludeM) { ok = false; break; }
             }
             if (ok) out.push({ lat: lat, lon: lon, x: x, y: y });
         }
         return out;
+    }
+
+    function pointInRing(lon, lat, ring) {
+        var inside = false;
+        for (var i=0,j=ring.length-1;i<ring.length;j=i++) {
+            var a=ring[i],b=ring[j];
+            if (((a[1]>lat)!==(b[1]>lat)) && lon < (b[0]-a[0])*(lat-a[1])/(b[1]-a[1])+a[0]) inside=!inside;
+        }
+        return inside;
+    }
+    function polygonAreaM2(rings, atLat) {
+        if (!rings || !rings.length || !rings[0].length) return 0;
+        var sx=111320*Math.cos((atLat||0)*Math.PI/180), sy=110574, ring=rings[0],sum=0;
+        for(var i=0;i<ring.length;i++){var a=ring[i],b=ring[(i+1)%ring.length];sum+=(a[0]*sx)*(b[1]*sy)-(b[0]*sx)*(a[1]*sy);}
+        return Math.abs(sum/2);
+    }
+    function waterReason(lon,lat,water,cfg) {
+        for(var i=0;i<(water.polygons||[]).length;i++){
+            var p=water.polygons[i],rings=p.rings||[],label=String(p.name||'')+' '+String(p.type||'')+' '+String(p.water||'');
+            var explicitlyWater=/water|lake|sea|ocean/i.test(label);
+            if(!explicitlyWater&&polygonAreaM2(rings,lat)<cfg.waterPolygonMinAreaM2)continue;
+            if(!rings.length||!pointInRing(lon,lat,rings[0]))continue;
+            var inHole=false;for(var h=1;h<rings.length;h++)if(pointInRing(lon,lat,rings[h])){inHole=true;break;}
+            if(inHole)continue;
+            var marine=/sea|ocean|marine/i.test(String(p.name||p.type||p.water||''));
+            return marine?'sea':'large-water-polygon';
+        }
+        return null;
+    }
+    function filterTrainingSites(pts, water, grid, cfg) {
+        cfg=Object.assign({},TRAIN_ROBUST_CONFIG,cfg||{});
+        var seen=Object.create(null),kept=[],excluded={sea:0,largeWaterPolygon:0,outsideDem:0,noData:0,duplicate:0},details=[];
+        (pts||[]).forEach(function(p){
+            if(!p.isSite){kept.push(p);return;}
+            var reason=null,cell=raster.cellOf(grid,p.lon,p.lat);
+            if(cell<0)reason='outside-dem';
+            else {
+                var wr=waterReason(p.lon,p.lat,water||{},cfg);
+                if(wr)reason=wr;
+                else if(!p.valid)reason='no-data';
+                else {var key=Number(p.lat).toFixed(8)+','+Number(p.lon).toFixed(8);if(seen[key])reason='duplicate';else seen[key]=true;}
+            }
+            if(!reason){kept.push(p);return;}
+            var k=reason==='outside-dem'?'outsideDem':reason==='no-data'?'noData':reason==='large-water-polygon'?'largeWaterPolygon':reason;
+            excluded[k]++;details.push({id:p.id||null,lat:p.lat,lon:p.lon,reason:reason});
+        });
+        return {points:kept,excluded:excluded,details:details,total:Object.keys(excluded).reduce(function(a,k){return a+excluded[k];},0)};
     }
 
     /**
@@ -356,7 +404,7 @@
         }
         var sitesN = 0;
         for (i = 0; i < n; i++) if (S.y[i]) sitesN++;
-        return { S: S, altRef: altRef, soilRef: soilRef, waterClasses: waterClasses.slice(), counts: { sites: sitesN, background: n - sitesN } };
+        return { S: S, samples: keep, altRef: altRef, soilRef: soilRef, waterClasses: waterClasses.slice(), counts: { sites: sitesN, background: n - sitesN } };
     }
 
     /* ── TRAIN ─────────────────────────────────────────────────────────────── */
@@ -390,9 +438,11 @@
         var warnings = [];
         var progress = params.onProgress || function () {};
         var centre = params.centre;
+        var siteMeta = params.records && params.records._meta;
+        if (siteMeta && siteMeta.areaCrossesBorder) warnings.push(M('warn.romaniaBorder', {}, 'The 50 km training area crosses Romania’s border; background samples are restricted to Romania and sites outside the dataset are unavailable.'));
         var radiusM = params.radiusKm * 1000;
         var areaM = TRAIN_AREA_KM * 1000;
-        var sel = sites.filterSites(params.records, { center: centre, radiusKm: TRAIN_AREA_KM, period: params.period });
+        var sel = sites.filterSites(params.records, { center: centre, radiusKm: TRAIN_AREA_KM, period: params.period, dedupeM: -1 });
         var nSites = sel.sites.length;
         var minSites = params.minSites || 10, warnSites = params.warnSites || 30;
         if (trainSiteStatus(nSites, minSites, warnSites).status === 'block') {
@@ -405,10 +455,10 @@
         if (unknownAccuracy) warnings.push(M('warn.ariadneAccuracy', { n: unknownAccuracy }, 'ARIADNE points have unverified position accuracy.'));
         if (nSites < warnSites) warnings.push(M('warn.fewSites', { n: nSites, rec: warnSites }, 'Only ' + nSites + ' sites.'));
 
-        var bg = sampleBackground(centre, areaM, params.bgCount || 5000, sel.sites, BG_EXCLUDE_M, params.rnd);
+        var bg = sampleBackground(centre, areaM, params.bgCount || 5000, sel.sites, BG_EXCLUDE_M, params.rnd, params.backgroundAllowed);
         var pts = sel.sites.map(function (s) {
             var mpd = core.metresPerDegree(centre.lat);
-            return { lat: s.lat, lon: s.lon, x: (s.lon - centre.lon) * mpd.lon, y: (s.lat - centre.lat) * mpd.lat, isSite: true };
+            return { id: s.id, lat: s.lat, lon: s.lon, x: (s.lon - centre.lon) * mpd.lon, y: (s.lat - centre.lat) * mpd.lat, isSite: true };
         }).concat(bg.map(function (b) { return { lat: b.lat, lon: b.lon, x: b.x, y: b.y, isSite: false }; }));
 
         var bbox = core.circleBBox(centre.lat, centre.lon, areaM + 1000);
@@ -449,13 +499,14 @@
                     var parts = key.split(',').map(Number);
                     var j0 = parts[0] * tilePx, i0 = parts[1] * tilePx;
                     var cw = Math.min(grid.w - i0, tilePx), ch = Math.min(grid.h - j0, tilePx);
-                    var hg = prov.subGrid(grid, i0 - 1, j0 - 1, cw + 2, ch + 2);
+                    var spacing = raster.gridSpacingM(grid), pad = Math.max(1, Math.ceil(TRAIN_ROBUST_CONFIG.positionRadiusM / Math.min(spacing.dx, spacing.dy)));
+                    var hg = prov.subGrid(grid, i0 - pad, j0 - pad, cw + 2 * pad, ch + 2 * pad);
                     return dem.fetchBlock(hg).then(function (elev) {
                         var idxs = tileOf.get(key);
-                        var flat = new Float64Array(idxs.length * 2);
-                        idxs.forEach(function (pi, k) { flat[2 * k] = pts[pi].lon; flat[2 * k + 1] = pts[pi].lat; });
+                        var flat = new Float64Array(idxs.length * 2), siteMask = new Uint8Array(idxs.length);
+                        idxs.forEach(function (pi, k) { flat[2 * k] = pts[pi].lon; flat[2 * k + 1] = pts[pi].lat; siteMask[k] = pts[pi].isSite ? 1 : 0; });
                         return session.worker.call('sampleTile', {
-                            elev: elev, w: hg.w, h: hg.h, dxM: raster.gridSpacingM(grid).dx, dyM: raster.gridSpacingM(grid).dy,
+                            elev: elev, w: hg.w, h: hg.h, dxM: spacing.dx, dyM: spacing.dy, positionRadiusM: TRAIN_ROBUST_CONFIG.positionRadiusM, siteMask: siteMask,
                             tile: { west: hg.west, north: hg.north, dLon: hg.dLon, dLat: hg.dLat },
                             smooth: !!params.smoothDem, nodata: undefined, points: flat
                         }).then(function (r) {
@@ -478,7 +529,8 @@
                     var r = results[i] || { valid: false };
                     return Object.assign({}, p, r);
                 });
-                var built = buildSampleSet(merged, {
+                var hard = filterTrainingSites(merged, water.water, grid, TRAIN_ROBUST_CONFIG);
+                var built = buildSampleSet(hard.points, {
                     minSlopeDeg: params.minSlopeDeg, radiusM: areaM, folds: 5, waterClasses: params.waterClasses.filter(function (c) { return classes.indexOf(c) >= 0; })
                 });
                 if (built.counts.sites < minSites) {
@@ -491,13 +543,14 @@
                 progress('prog.train', 65);
                 return session.worker.call('train', {
                     S: built.S, waterClasses: built.waterClasses,
-                    minSlopeDeg: params.minSlopeDeg, folds: 5
+                    minSlopeDeg: params.minSlopeDeg, folds: 5, robustConfig: TRAIN_ROBUST_CONFIG
                 }).then(function (tr) {
-                    return { train: tr.result, built: built, warnings: warnings };
+                    return { train: tr.result, built: built, hardExcluded: hard, warnings: warnings };
                 });
             });
         }).then(function (t) {
             checkToken(params.token);
+            session.trainCache = { S:t.built.S, waterClasses:t.built.waterClasses, minSlopeDeg:params.minSlopeDeg, robustConfig:TRAIN_ROBUST_CONFIG, minAreaM2:params.minAreaM2, built:t.built, hardExcluded:t.hardExcluded, siteCount:sel.sites.length, unknownAccuracy:unknownAccuracy, dropped:sel.dropped, warnings:t.warnings.concat(warnings), restoredIndices:[] };
             // Prediction window (search circle + buffer) with the same DEM provider.
             progress('prog.window', 80);
             var wb = core.circleBBox(centre.lat, centre.lon, radiusM + BUFFER_M);
@@ -521,15 +574,19 @@
         }).then(function (t) {
             checkToken(params.token);
             progress('prog.scoring', 90);
-            var tr = t.train;
-            var thr = tr.thresholds;
+                var tr = t.train;
+                var thr = tr.thresholds;
+                if(tr.robust.skipped)warnings.push(M('warn.robustSkipped',{n:tr.robust.siteCount,min:TRAIN_ROBUST_CONFIG.minSites},'Robust fitting was skipped: too few sites.'));
+                if(tr.robust.possibleSecondPattern.length)warnings.push(M('warn.secondPattern',{n:tr.robust.possibleSecondPattern.length},'A coherent alternate site pattern was preserved, not down-weighted.'));
+                if(tr.robust.weightChange>=TRAIN_ROBUST_CONFIG.weightChangeWarning)warnings.push(M('warn.weightShift',{v:(100*tr.robust.weightChange).toFixed(0)},'Robust fitting materially changed the learned variable weights.'));
+                var robustSites=tr.robust.flagged.map(function(x){var p=t.built.samples[x.index]||{};return {id:p.id||null,sampleIndex:x.index,lat:p.lat,lon:p.lon,weight:x.weight,reason:x.reason};});
             return session.worker.call('score', {
                 mode: 'train', model: tr.model, waterClasses: t.built.waterClasses,
                 thresholds: thr, minAreaM2: params.minAreaM2, smoothIters: 1
             }).then(function (res) {
                 progress('prog.done', 100);
                 var periodCount = sel.sites.length;
-                return {
+                var output = {
                     mode: 'train',
                     geojson: res.geojson,
                     heatmap: res.heatmap,
@@ -539,14 +596,26 @@
                     provenance: session.provenance,
                     warnings: t.warnings.concat(warnings),
                     diagnostics: {
-                        sitesUsed: periodCount,
+                        sitesUsed: t.built.counts.sites,
+                        sitesInAreaBeforeExclusions: periodCount,
                         sitesWithUnknownAccuracy: unknownAccuracy,
+                        hardExcluded: t.hardExcluded.excluded,
+                        hardExcludedTotal: t.hardExcluded.total,
+                        positionMedianRadiusM: TRAIN_ROBUST_CONFIG.positionRadiusM,
+                        hardExcludedDetails: t.hardExcluded.details,
+                        downweightedSites: robustSites,
+                        robustSkipped: tr.robust.skipped,
+                        possibleSecondPattern: tr.robust.possibleSecondPattern.map(function(i){var p=t.built.samples[i]||{};return {id:p.id||null,lat:p.lat,lon:p.lon};}),
+                        robustIterations: tr.robust.iterations,
+                        weightChange: tr.robust.weightChange,
                         sitesInSample: t.built.counts.sites,
                         backgroundUsed: t.built.counts.background,
                         dropped: sel.dropped,
                         weights: tr.model.weights,
                         curves: tr.model.curves,
                         cv: tr.cv,
+                        cvRobust: tr.cv,
+                        cvPlain: tr.cvPlain,
                         soilSlopeR: tr.soilSlopeR,
                         excluded: tr.excluded,
                         variables: tr.variables,
@@ -555,6 +624,27 @@
                         noSignal: tr.model.noSignal
                     }
                 };
+                if(session.trainCache)session.trainCache.output=output;
+                return output;
+            });
+        });
+    }
+
+    function rerunTrain(session, restoredIndices) {
+        var cache=session&&session.trainCache;if(!cache||!cache.output||!session.worker) return Promise.reject(new Error('TRAIN cached samples are unavailable; run TRAIN again first.'));
+        cache.restoredIndices=Array.from(new Set((restoredIndices||[]).map(Number)));
+        var config=Object.assign({},cache.robustConfig,{restoredIndices:cache.restoredIndices});
+        return session.worker.call('train',{S:cache.S,waterClasses:cache.waterClasses,minSlopeDeg:cache.minSlopeDeg,folds:5,robustConfig:config}).then(function(reply){
+            var tr=reply.result;
+            return session.worker.call('score',{mode:'train',model:tr.model,waterClasses:cache.waterClasses,thresholds:tr.thresholds,minAreaM2:cache.minAreaM2,smoothIters:1}).then(function(scored){
+                var out=Object.assign({},cache.output),d=Object.assign({},out.diagnostics),robustSites=tr.robust.flagged.map(function(x){var p=cache.built.samples[x.index]||{};return {id:p.id||null,sampleIndex:x.index,lat:p.lat,lon:p.lon,weight:x.weight,reason:x.reason};});
+                d.weights=tr.model.weights;d.curves=tr.model.curves;d.cv=tr.cv;d.cvRobust=tr.cv;d.cvPlain=tr.cvPlain;d.downweightedSites=robustSites;d.robustSkipped=tr.robust.skipped;d.possibleSecondPattern=tr.robust.possibleSecondPattern.map(function(i){var p=cache.built.samples[i]||{};return {id:p.id||null,sampleIndex:i,lat:p.lat,lon:p.lon};});d.robustIterations=tr.robust.iterations;d.weightChange=tr.robust.weightChange;d.thresholds=tr.thresholds;d.confidence=tr.confidence;
+                out.geojson=scored.geojson;out.heatmap=scored.heatmap;out.thresholds=scored.thresholds;out.areaKm2=scored.areaKm2;out.scoreStats=scored.scoreStats;out.diagnostics=d;
+                out.warnings=(out.warnings||[]).filter(function(w){return !w||!['warn.robustSkipped','warn.secondPattern','warn.weightShift'].includes(w.key);});
+                if(tr.robust.skipped)out.warnings.push(core.msg('warn.robustSkipped',{n:tr.robust.siteCount,min:TRAIN_ROBUST_CONFIG.minSites},'Robust outlier handling was skipped.'));
+                if(tr.robust.possibleSecondPattern.length)out.warnings.push(core.msg('warn.secondPattern',{n:tr.robust.possibleSecondPattern.length},'A possible second pattern was preserved.'));
+                if(tr.robust.weightChange>=TRAIN_ROBUST_CONFIG.weightChangeWarning)out.warnings.push(core.msg('warn.weightShift',{v:(100*tr.robust.weightChange).toFixed(0)},'Robust fitting materially changed weights.'));
+                cache.output=out;return out;
             });
         });
     }
@@ -568,6 +658,8 @@
         rasteriseWater: rasteriseWater,
         waterSegments: waterSegments,
         sampleBackground: sampleBackground,
+        filterTrainingSites: filterTrainingSites,
+        trainRobustConfig: TRAIN_ROBUST_CONFIG,
         buildSampleSet: buildSampleSet,
         sitePool: sitePool,
         trainSiteStatus: trainSiteStatus,

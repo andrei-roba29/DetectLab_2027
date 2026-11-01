@@ -8,7 +8,7 @@ Premium-only, behind an on/off switch. Cache: `detectlab-v321-apm-pick-hidden`.
 Scores the area around a point you choose on the map.
 
 - **MANUAL**: search radius **1–10 km** (default 5 km). Relief (slope, aspect, altitude percentile), water distance and an optional soil proxy, combined with weights and fixed, editable curves. Thresholded into three classes. Default weights: relief 0.6, water 0.4, **soil proxy 0**.
-- **TRAIN**: fixed 50 km area. Classified settlement points load automatically from the ARIADNE portal using subject-scoped searches, not an all-monuments search. The user is prompted to choose one of the local occupation periods (or explicitly All periods) before training. Actual point coordinates are filtered by radius, de-duplicated (50 m), and filtered by period. ARIADNE does not supply position accuracy; these positions remain unknown and are included with an explicit uncertainty warning, not labelled as accurate to 100 m. A logistic model is fitted with 5-fold cross-validation and applied over the same area. Variables redundant with slope (|r| > 0.8) are excluded and reported.
+- **TRAIN**: fixed 50 km area. Romanian sites load from the premium-gated Supabase RPC over `archaeological_sites_a`. Only `COORD=DA` exact-position rows are included; the browser does not query the table directly. Default choice is All periods. Editable name-keyword period inference and settlement-type exclusions are approximate and require archaeological review. A logistic model is fitted with 5-fold cross-validation and applied over the same area. Variables redundant with slope (|r| > 0.8) are excluded and reported.
 
 ## Hybrid result: heatmap + highest-potential polygons
 
@@ -205,6 +205,20 @@ Wiring: `index.html` loads the stylesheet and eight scripts (versioned `?v=20261
 ## Phone layout (legend)
 
 On screens up to 600 px wide the map legend (bottom-right) is hidden while the APM panel is open, because the panel (bottom-left, 340 px) would cover it. The panel repeats the heat gradient, very-high outline legend, score cutoff and class areas, so nothing is lost. The legend returns when the panel closes. Desktop widths are unchanged (checked at 1280 px).
+
+## TRAIN robust site handling
+
+After terrain/environment sampling, TRAIN hard-excludes sites on sea/water polygons, outside the DEM, on no-data cells, and exact duplicate coordinates, recording each reason. Site altitude, slope, aspect and terrain-texture samples use a circular median neighbourhood with configurable `positionRadiusM=60 m`, never smaller than a DEM cell; water distance remains at the exact point. The motivation is to reduce small geocoding/DEM cell-position errors without blurring the water-distance signal.
+
+Robust fitting uses a plain initial fit, then robust median/MAD standardized feature distances across site samples, Tukey-style soft site weights, and a refit. It skips below 20 valid sites; weights stay positive; no more than 20% are down-weighted. A compact flagged cluster of at least 8 sites and more than 15% of the set is preserved/reported as a possible second pattern. Spatial block CV repeats that robust process inside each training fold and scores every held-out site; panel diagnostics show robust and plain AUC/Kvamme. Grey map markers have reason tooltips and individual/restore-all actions; refits use cached samples and do not reload data.
+
+Synthetic fixture performance: for 45 rule-following sites plus 5 uniformly random injected sites, this implementation down-weighted **5/5 injected**, **0/45 genuine**, and reduced L1 error from **0.314 (plain) to 0.275 (robust)** against the known illustrative weights. A 30% coherent second rule was preserved as a possible second pattern. **Real data will do worse**: this clean synthetic result is not an estimate of field-data detection accuracy.
+
+The defaults are in one object, `DetectLabApmCore.robustTrainConfig` (`js/apm-next/apm-core.js`): position radius 60 m (at least one DEM cell), minimum 20 sites, maximum 20% down-weighted, Tukey weight floor 0.08, outlier distance 3.25 MAD-scaled units, and alternate-pattern cluster minimum 8 / >15% with radius 1 standardized unit. CV optimizer tolerance is relaxed to 1e-4 to meet the browser budget; the full-data optimizer uses the same tolerance. These are configurable starting points, not calibrated archaeological thresholds. A local synthetic benchmark with 1,000 sites plus 3,000 backgrounds completed the fit/CV path in about 1.8 s; actual browser hardware and bigger site pools may differ.
+
+## Romania TRAIN source status (2026-11)
+
+TRAIN now uses the premium-gated Supabase RPC for the Romanian national archaeological repertory (`archaeological_sites_a`), not Ariadne. Exact positions are filtered server-side (`COORD='DA'`); empty/NU are excluded. The editable approximate name-inference rules, source citations, excluded-name patterns, rough Natural Earth Romania outline, attribution/OPEN QUESTION licence note, and deployment caveats are documented in [ROMANIA_APM_TRAIN_IMPLEMENTATION.md](ROMANIA_APM_TRAIN_IMPLEMENTATION.md). Live schema, index and RLS metadata were inspected; the database migration was applied on 2026-11-01. The requested 100-row attachment was not available in the checkout. A single Cluj 50 km SQL plan used the new GiST index (about 145 ms execution); this is not a broad performance benchmark. Authenticated premium/free-user RPC behavior has not been exercised. The old Ariadne implementation notes below are historical and do not describe the current provider.
 
 ## Known limitations
 

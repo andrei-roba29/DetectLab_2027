@@ -479,6 +479,7 @@
         });
         // De-duplicate: keep the first of any pair closer than dedupeM.
         var result = [];
+        if (dedupeM < 0) return { sites: kept, dropped: drop, total: records.length };
         kept.forEach(function (r) {
             for (var i = 0; i < result.length; i++) {
                 if (core.haversineM(r.lat, r.lon, result[i].lat, result[i].lon) < dedupeM) {

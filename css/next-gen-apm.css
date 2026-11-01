@@ -33,7 +33,10 @@
     box-sizing: border-box;
     width: min(400px, calc(100% - 16px));
     max-height: min(76vh, 620px);
+    overflow-x: hidden;
     overflow-y: auto;
+    overscroll-behavior-x: none;
+    touch-action: pan-y;
     /* Match the LiDAR in 3D configuration card. */
     padding: 11px 13px 13px;
     border: 1px solid rgba(200, 169, 110, 0.42);

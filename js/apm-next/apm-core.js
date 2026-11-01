@@ -221,8 +221,8 @@
             }
             return lo;
         }
-        for (i = 0; i < values.length; i++) if (isFinite(values[i])) ns[binOf(values[i])]++;
-        for (i = 0; i < bgValues.length; i++) if (isFinite(bgValues[i])) nb[binOf(bgValues[i])]++;
+        for (i = 0; i < values.length; i++) if (isFinite(values[i])) ns[binOf(values[i])] += opts.siteWeights ? opts.siteWeights[i] : 1;
+        for (i = 0; i < bgValues.length; i++) if (isFinite(bgValues[i])) nb[binOf(bgValues[i])] += opts.bgWeights ? opts.bgWeights[i] : 1;
         var Ns = 0, Nb = 0;
         for (b = 0; b < B; b++) { Ns += ns[b]; Nb += nb[b]; }
         if (Ns === 0 || Nb === 0) {
@@ -296,9 +296,15 @@
         var nPos = 0, nNeg = 0, i, j;
         for (i = 0; i < n; i++) { if (y[i]) nPos++; else nNeg++; }
         if (!nPos || !nNeg) throw new Error('Logistic fit needs both site and background samples.');
-        // Class-balanced sample weights (each class sums to 0.5).
-        var sw = new Float64Array(n);
-        for (i = 0; i < n; i++) sw[i] = y[i] ? 0.5 / nPos : 0.5 / nNeg;
+        // Class-balanced sample weights (each class sums to 0.5), with optional robust site weights.
+        var sw = new Float64Array(n), posWeight = 0, negWeight = 0;
+        for (i = 0; i < n; i++) {
+            var rw = opts.sampleWeights ? Math.max(0, Number(opts.sampleWeights[i]) || 0) : 1;
+            if (y[i]) posWeight += rw; else negWeight += rw;
+            sw[i] = rw;
+        }
+        if (posWeight <= 0 || negWeight <= 0) throw new Error('Logistic fit needs positive effective weight in both classes.');
+        for (i = 0; i < n; i++) sw[i] *= y[i] ? 0.5 / posWeight : 0.5 / negWeight;
 
         var w = new Float64Array(p).fill(0.1), b = 0;
         var gw = new Float64Array(p), it, converged = false;
@@ -323,7 +329,7 @@
             var nb2 = b - lr * gb;
             maxStep = Math.max(maxStep, Math.abs(nb2 - b));
             b = nb2;
-            if (maxStep < 1e-7) { converged = true; break; }
+            if (maxStep < (opts.tolerance || 1e-7)) { converged = true; break; }
         }
         return { weights: w, intercept: b, iterations: it + 1, converged: converged };
     }
@@ -356,12 +362,12 @@
         for (i = 0; i < idx.length; i++) (S.y[idx[i]] ? siteIdx : bgIdx).push(idx[i]);
         keys.forEach(function (k) {
             var src = S.vals[k];
-            var sv = new Float64Array(siteIdx.length), bv = new Float64Array(bgIdx.length);
-            for (i = 0; i < siteIdx.length; i++) sv[i] = src[siteIdx[i]];
+            var sv = new Float64Array(siteIdx.length), bv = new Float64Array(bgIdx.length), sw = new Float64Array(siteIdx.length);
+            for (i = 0; i < siteIdx.length; i++) { sv[i] = src[siteIdx[i]]; sw[i] = opts.siteWeights ? opts.siteWeights[siteIdx[i]] : 1; }
             for (i = 0; i < bgIdx.length; i++) bv[i] = src[bgIdx[i]];
             var base = k.indexOf('water_') === 0 ? 'water' : k;
             var edges = TRAIN_BINS[base]();
-            curves[k] = buildCurve(sv, bv, edges, { circular: k === 'aspect', period: 360 });
+            curves[k] = buildCurve(sv, bv, edges, { circular: k === 'aspect', period: 360, siteWeights: sw });
         });
         return curves;
     }
@@ -422,13 +428,15 @@
             return c;
         });
         for (var i = 0; i < idx.length; i++) y[i] = S.y[idx[i]];
-        var fit = fitNonNegLogistic(colArr, y, opts);
+        var fitOpts = Object.assign({}, opts);
+        if (opts.siteWeights) fitOpts.sampleWeights = Float64Array.from(idx, function (ix) { return S.y[ix] ? opts.siteWeights[ix] : 1; });
+        var fit = fitNonNegLogistic(colArr, y, fitOpts);
         var raw = {}, total = 0, weights = {};
         ['water', 'altitude', 'slope', 'aspect', 'soil'].forEach(function (v) { weights[v] = 0; raw[v] = 0; });
         varNames.forEach(function (v, j) { raw[v] = fit.weights[j]; total += fit.weights[j]; });
         var noSignal = total <= 1e-9;
         varNames.forEach(function (v) { weights[v] = noSignal ? 0 : raw[v] / total; });
-        return { curves: curves, weights: weights, raw: raw, noSignal: noSignal, intercept: fit.intercept, converged: fit.converged };
+        return { curves: curves, weights: weights, raw: raw, noSignal: noSignal, intercept: fit.intercept, converged: fit.converged, iterations: fit.iterations };
     }
 
     /** Composite score for samples with a fitted model. Uses model.weights (zero weights skipped). */
@@ -473,6 +481,38 @@
         return (bx + 2 * by) % k;
     }
 
+    var ROBUST_TRAIN_CONFIG = { positionRadiusM: 60, minimumPositionRadiusCells: 1, waterPolygonMinAreaM2: 100000, minSites: 20, maxDownweightFraction: 0.20, maxIterations: 4, outlierZ: 3.25, minWeight: 0.08, clusterMinCount: 8, clusterMinFraction: 0.15, clusterRadius: 1.0, weightChangeWarning: 0.20 };
+
+    function medianNumber(a) { var x = Array.from(a).filter(isFinite).sort(function(m,n){return m-n;}); if(!x.length)return NaN; var h=x.length>>1;return x.length%2?x[h]:(x[h-1]+x[h])/2; }
+    function robustDistanceWeights(S, idx, opts) {
+        opts=opts||{};var cfg=Object.assign({},ROBUST_TRAIN_CONFIG,opts.robustConfig||{}), si=idx.filter(function(i){return !!S.y[i];}), result={weights:new Float64Array(S.n).fill(1),flagged:[],possibleSecondPattern:[],skipped:si.length<cfg.minSites,siteCount:si.length};
+        if(result.skipped)return result;
+        var keys=Object.keys(S.vals), cols=[];
+        keys.forEach(function(k){var vals=si.map(function(i){return S.vals[k][i];}).filter(isFinite);var med;if(k==='aspect'){var sx=0,sy=0;vals.forEach(function(v){sx+=Math.cos(v*Math.PI/180);sy+=Math.sin(v*Math.PI/180);});med=(Math.atan2(sy,sx)*180/Math.PI+360)%360;}else med=medianNumber(vals);var dev=vals.map(function(v){var d=Math.abs(v-med);return k==='aspect'?Math.min(d,360-d):d;});var mad=medianNumber(dev),scale=mad*1.4826;if(!isFinite(scale)||scale<1e-8)scale=0;cols.push({key:k,median:med,scale:scale});});
+        var vectors={},distances=[];
+        si.forEach(function(i){var z=[];cols.forEach(function(c){var v=S.vals[c.key][i],d=v-c.median;if(c.key==='aspect')d=((d+540)%360)-180;z.push(!isFinite(v)||!c.scale?0:Math.max(-8,Math.min(8,d/c.scale)));});var sum=0,num=0;z.forEach(function(v){sum+=v*v;num++;});var d=num?Math.sqrt(sum/num):0;vectors[i]=z;distances.push({i:i,d:d});});
+        var candidates=distances.filter(function(x){return x.d>cfg.outlierZ;}).sort(function(a,b){return b.d-a.d;});
+        // Candidate-space connected components detect coherent alternate patterns (not random strays).
+        var parent={};candidates.forEach(function(x){parent[x.i]=x.i;});function find(x){while(parent[x]!==x){parent[x]=parent[parent[x]];x=parent[x];}return x;}function union(a,b){a=find(a);b=find(b);if(a!==b)parent[b]=a;}
+        var dense={};for(var a=0;a<candidates.length;a++){var near=[candidates[a].i],va=vectors[candidates[a].i];for(var b=0;b<candidates.length;b++){if(a===b)continue;var vb=vectors[candidates[b].i],ss=0,nn=0;for(var z=0;z<va.length;z++){var dz=va[z]-vb[z];ss+=dz*dz;nn++;}if(nn&&Math.sqrt(ss/nn)<=cfg.clusterRadius)near.push(candidates[b].i);}if(near.length>=cfg.clusterMinCount)near.forEach(function(id){dense[id]=true;});}
+        var denseIds=Object.keys(dense).map(Number);for(var a=0;a<denseIds.length;a++)for(var b=a+1;b<denseIds.length;b++){var va=vectors[denseIds[a]],vb=vectors[denseIds[b]],ss=0,nn=0;for(var z=0;z<va.length;z++){var dz=va[z]-vb[z];ss+=dz*dz;nn++;}if(nn&&Math.sqrt(ss/nn)<=cfg.clusterRadius)union(denseIds[a],denseIds[b]);}
+        var groups={};denseIds.forEach(function(id){var r=find(id);(groups[r]||(groups[r]=[])).push(id);});
+        var protectedSites={};Object.keys(groups).forEach(function(k){var g=groups[k];if(g.length>=cfg.clusterMinCount&&g.length/si.length>cfg.clusterMinFraction)g.forEach(function(i){protectedSites[i]=true;});});
+        result.possibleSecondPattern=Object.keys(protectedSites).map(Number);
+        var restored={};(cfg.restoredIndices||[]).forEach(function(i){restored[Number(i)]=true;});
+        result.restoredIndices=Object.keys(restored).map(Number);
+        var eligible=candidates.filter(function(x){return !protectedSites[x.i]&&!restored[x.i];}),cap=Math.floor(si.length*cfg.maxDownweightFraction);eligible=eligible.slice(0,cap);
+        eligible.forEach(function(x){var u=Math.max(0,Math.min(1,(x.d-cfg.outlierZ)/Math.max(1,x.d)));var tukey=Math.pow(1-u*u,2);var w=Math.max(cfg.minWeight,tukey);result.weights[x.i]=w;result.flagged.push({index:x.i,distance:x.d,weight:w,reason:cols.filter(function(c){var v=S.vals[c.key][x.i];return isFinite(v)&&c.scale&&Math.abs((v-c.median)/c.scale)>cfg.outlierZ/Math.sqrt(Math.max(1,cols.length));}).map(function(c){return c.key;})});});
+        return result;
+    }
+
+    function robustFitModel(S, idx, opts) {
+        opts=opts||{};var cfg=Object.assign({},ROBUST_TRAIN_CONFIG,opts.robustConfig||{}),initial=fitModel(S,idx,opts),state=robustDistanceWeights(S,idx,opts),model=initial,iterations=0,prev='';
+        if(state.skipped)return {model:initial,state:state,iterations:0};
+        for(iterations=0;iterations<cfg.maxIterations;iterations++){var key=Array.from(state.weights).join(',');if(key===prev)break;prev=key;model=fitModel(S,idx,Object.assign({},opts,{siteWeights:state.weights}));}
+        return {model:model,state:state,iterations:Math.max(1,Math.min(iterations+1,cfg.maxIterations))};
+    }
+
     /**
      * Spatial block cross-validation. Curves AND weights are re-fitted on each
      * training fold; only held-out samples are scored.
@@ -493,7 +533,7 @@
             var nTrS = 0, nTrB = 0;
             for (i = 0; i < trainIdx.length; i++) { if (S.y[trainIdx[i]]) nTrS++; else nTrB++; }
             if (!testS.length || !testB.length || nTrS < 3 || nTrB < 10) continue;
-            var model = fitModel(S, trainIdx, opts);
+            var model = opts.robust === true ? robustFitModel(S, trainIdx, opts).model : fitModel(S, trainIdx, opts);
             var ss = scoreSamples(model, S, testS);
             var bs = scoreSamples(model, S, testB);
             perFold.push({ fold: f, auc: auc(ss, bs), nSites: testS.length });
@@ -534,7 +574,7 @@
             variables = variables.filter(function (v) { return v !== 'soil'; });
             excluded.push({ variable: 'soil', reason: 'redundant', detail: 'Soil proxy correlates with slope (|r| = ' + soilSlope.toFixed(2) + ' > 0.8).' });
         }
-        var cvOpts = { folds: opts.folds || 5, waterClasses: waterClasses, minSlopeDeg: opts.minSlopeDeg };
+        var cvOpts = { folds: opts.folds || 5, waterClasses: waterClasses, minSlopeDeg: opts.minSlopeDeg, maxIter: opts.cvMaxIter || 1000, tolerance: opts.cvTolerance || 1e-4 };
         var cv = spatialBlockCV(S, Object.assign({ variables: variables }, cvOpts));
         if (!redundant && variables.indexOf('soil') >= 0) {
             var noSoil = variables.filter(function (v) { return v !== 'soil'; });
@@ -547,20 +587,29 @@
         }
         var all = [];
         for (i = 0; i < S.n; i++) all.push(i);
-        var model = fitModel(S, all, Object.assign({ variables: variables, waterClasses: waterClasses }, cvOpts));
+        var fitOpts = { variables: variables, waterClasses: waterClasses, minSlopeDeg: opts.minSlopeDeg, robustConfig: opts.robustConfig, maxIter: opts.maxIter, tolerance: opts.finalTolerance || 1e-4 };
+        var plainModel = fitModel(S, all, fitOpts);
+        var robustResult = robustFitModel(S, all, fitOpts);
+        var model = robustResult.model;
+        var cvPlain = cv;
+        var cvRobust = spatialBlockCV(S, Object.assign({}, fitOpts, { robust: true }));
         model.minSlopeDeg = opts.minSlopeDeg || 0.5;
         var siteIdx = [];
         for (i = 0; i < S.n; i++) if (S.y[i]) siteIdx.push(i);
         var siteScores = scoreSamples(model, S, siteIdx);
+        var weightChange = ['water','altitude','slope','aspect','soil'].reduce(function(sum,k){return sum+Math.abs((model.weights[k]||0)-(plainModel.weights[k]||0));},0);
         return {
             model: model,
-            cv: { auc: cv.auc, kvamme75: cv.kvamme75, nFolds: cv.nFolds, perFold: cv.perFold },
+            plainModel: plainModel,
+            cv: { auc: cvRobust.auc, kvamme75: cvRobust.kvamme75, nFolds: cvRobust.nFolds, perFold: cvRobust.perFold },
+            cvPlain: { auc: cvPlain.auc, kvamme75: cvPlain.kvamme75, nFolds: cvPlain.nFolds, perFold: cvPlain.perFold },
+            robust: { skipped: robustResult.state.skipped, siteCount: robustResult.state.siteCount, iterations: robustResult.iterations, flagged: robustResult.state.flagged, possibleSecondPattern: robustResult.state.possibleSecondPattern, weightChange: weightChange },
             soilSlopeR: soilSlope,
             excluded: excluded,
             variables: variables,
             siteScores: Array.prototype.slice.call(siteScores),
             thresholds: trainThresholds(siteScores),
-            confidence: confidenceBadge(siteIdx.length, cv.auc, cv.kvamme75)
+            confidence: confidenceBadge(siteIdx.length, cvRobust.auc, cvRobust.kvamme75)
         };
     }
 
@@ -792,6 +841,9 @@
         spatialFold: spatialFold,
         spatialBlockCV: spatialBlockCV,
         trainModelFromSamples: trainModelFromSamples,
+        robustTrainConfig: ROBUST_TRAIN_CONFIG,
+        robustDistanceWeights: robustDistanceWeights,
+        robustFitModel: robustFitModel,
         confidenceBadge: confidenceBadge,
         trainThresholds: trainThresholds,
         validateManualThresholds: validateManualThresholds,
