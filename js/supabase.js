@@ -11,3 +11,19 @@ const supabaseClient = window.supabase.createClient(
 window.supabaseClient = supabaseClient;
 
 console.log("✅ Supabase connected");
+
+// A short-lived PKCE client keeps its verifier in the installed app's memory.
+// It never refreshes or persists its temporary session alongside the main client.
+window.createGooglePopupClient = function () {
+    var values = Object.create(null);
+    var storage = {
+        getItem: function (key) { return values[key] || null; },
+        setItem: function (key, value) { values[key] = value; },
+        removeItem: function (key) { delete values[key]; }
+    };
+    return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { flowType: 'pkce', detectSessionInUrl: false,
+            autoRefreshToken: false, persistSession: true, storage: storage,
+            storageKey: 'detectlab-google-popup' }
+    });
+};

@@ -285,6 +285,13 @@ try {
         window.supabaseClient.auth.getSession().then(async function (result) {
             var session = result && result.data ? result.data.session : null;
             if (!session || !session.user) {
+                // A sign-in can complete while this startup snapshot is in flight.
+                // Do not clear the user installed by the newer auth event.
+                if (_startupEventReceived) {
+                    _startupComplete = true;
+                    if (_authReadyResolve) _authReadyResolve(_user);
+                    return;
+                }
                 _clear();
                 _updateNav();
                 _updateMapGate();
@@ -771,6 +778,20 @@ window.authWithProvider = async function (provider) {
             return;
         }
         _clearMsg();
+        if (provider === 'google' && window.DetectLabGooglePopup && window.DetectLabGooglePopup.isStandalone()) {
+            window.DetectLabGooglePopup.start(_showMsg, function () {
+                _showMsg('Signed in successfully.', 'success');
+                setTimeout(closeAuth, 1200);
+            });
+            return;
+        }
+        if (provider === 'google' && (window.navigator.standalone === true ||
+            (window.matchMedia && (window.matchMedia('(display-mode: standalone)').matches ||
+                window.matchMedia('(display-mode: fullscreen)').matches ||
+                window.matchMedia('(display-mode: minimal-ui)').matches)))) {
+            _showMsg('Google sign-in is unavailable in the installed app. Please retry or use email and password.');
+            return;
+        }
         _showMsg('Redirecting to ' + provider + '...', 'success');
         const { error } = await window.supabaseClient.auth.signInWithOAuth({
             provider: provider,

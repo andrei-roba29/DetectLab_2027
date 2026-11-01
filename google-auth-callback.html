@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Return to DetectLab</title>
+</head>
+<body>
+  <main>
+    <h1>Return to DetectLab</h1>
+    <p id="status">Returning the sign-in result to the app…</p>
+    <div id="manual" hidden>
+      <p>Automatic return was unavailable. Copy this one-time code, return to the original installed DetectLab app, and paste it in the Google sign-in form. Do not share it. It only works for the sign-in you just started.</p>
+      <textarea id="code" readonly aria-label="One-time sign-in code" rows="4" style="width:100%;max-width:35em"></textarea>
+    </div>
+  </main>
+  <script>
+    (function () {
+      'use strict';
+      var query = new URLSearchParams(location.search);
+      var fragment = new URLSearchParams(location.hash.slice(1));
+      var code = query.get('code');
+      var nonce = query.get('nonce');
+      var error = query.get('error') || fragment.get('error');
+      // Strip the code and provider errors immediately, before any external request.
+      history.replaceState(null, '', location.pathname);
+      var status = document.getElementById('status');
+      var acknowledged = false;
+      if (!nonce || (!code && !error)) {
+        status.textContent = 'No sign-in result was received. Return to the installed app and try again.';
+        return;
+      }
+      window.addEventListener('message', function (event) {
+        if (event.origin !== location.origin || event.source !== window.opener || !event.data ||
+            event.data.type !== 'detectlab-google-ack' || event.data.nonce !== nonce) return;
+        acknowledged = true;
+        status.textContent = 'Result sent. Return to the original DetectLab app.';
+      });
+      try {
+        if (window.opener) window.opener.postMessage({ type: 'detectlab-google-callback', nonce: nonce,
+          code: code, error: !!error }, location.origin);
+      } catch (_) {}
+      setTimeout(function () {
+        if (acknowledged) return;
+        if (error) {
+          status.textContent = 'Google sign-in was cancelled or failed. Return to the app and cancel or retry.';
+        } else {
+          status.textContent = 'Return to the original installed app to finish signing in.';
+          document.getElementById('code').value = code;
+          document.getElementById('manual').hidden = false;
+        }
+      }, 1500);
+    })();
+  </script>
+</body>
+</html>

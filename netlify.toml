@@ -126,3 +126,11 @@
   from = "/api/geo/asig-heritage"
   to = "/.netlify/functions/asig-heritage"
   status = 200
+
+# Never cache or leak the one-time PKCE callback URL to another origin.
+[[headers]]
+  for = "/google-auth-callback.html"
+  [headers.values]
+    Cache-Control = "no-store"
+    Referrer-Policy = "no-referrer"
+    X-Robots-Tag = "noindex, nofollow"
