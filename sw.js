@@ -915,7 +915,7 @@
 // no longer appears at random on country views, and its red coverage rectangle
 // is the real sheet footprint (js/map-app.js). The notice names
 // the Supabase-hosted map data by its real scope, not as "Finnish" (js/wms-health.js).
-const CACHE_NAME = 'detectlab-v363-romania-train-only';
+const CACHE_NAME = 'detectlab-v364-google-popup';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1821,6 +1821,9 @@ const PRECACHE_URLS = [
   'js/vertical-opacity-control.js?v=20261001-persistent-layer-actions',
   'js/vertical-opacity-control.js?v=20261002-persistent-layer-actions-v2',
   'js/supabase.js?v=20260811-event-sync',
+  'js/supabase.js?v=20261101-google-popup',
+  'js/pwa-google-auth.js?v=20261101-google-popup',
+  'js/auth.js?v=20261101-google-popup',
   // v286: the shell is sized from a measured pixel height (--pwa-viewport-h)
   // instead of any CSS viewport unit, and the temporary on-device band probe
   // is gone. Only index.html + this file changed; the entry below is the live
@@ -2011,6 +2014,9 @@ self.addEventListener('fetch', function (event) {
     // Malformed URL — let the browser handle it
     return;
   }
+
+  // OAuth callbacks carry one-time codes. Never put their URLs in Cache Storage.
+  if (requestURL.origin === location.origin && requestURL.pathname === '/google-auth-callback.html') return;
 
   // ── Cross-origin tile lookup ──
   // Cache.match is cheap for normal requests and only returns a response when
