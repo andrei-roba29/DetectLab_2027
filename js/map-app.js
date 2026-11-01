@@ -13192,13 +13192,14 @@
                     // Carpați), cu litoralul dunărean. Rândul din panou folosește
                     // aceeași regiune (PREMIUM_VIEWPORT_REGIONS) și apare doar
                     // cât timp view-ul arată sudul țării.
-                    // Tile-urile sunt XYZ pornind de la z0, deci nu există un
-                    // interval „fără tile-uri” care să justifice dreptunghiul
-                    // roșu de acoperire (noCoverageRect).
-                    bounds: [[43.50, 21.90], [45.65, 28.65]],
+                    // Footprintul real al foii (muchiile tile-urilor z14 din
+                    // bucket-ul Harti/charta, rotunjite spre interior): dreptunghiul
+                    // roșu de acoperire arată exact unde există date, ca la celelalte
+                    // hărți premium. Același dreptunghi e în layer-ul Leaflet
+                    // (WALACHIA_BOUNDS) și în PREMIUM_VIEWPORT_REGIONS.
+                    bounds: [[43.405048, 22.258301], [45.844107, 28.388671]],
                     label: 'Valahia 1855-1859',
-                    layerVar: '_walachiaMapLayer',
-                    noCoverageRect: true
+                    layerVar: '_walachiaMapLayer'
                 },
 
                 transylvania1859: {
@@ -13637,7 +13638,7 @@
                     // of the visible latitude span and the view centre sits over
                     // Transylvania, so the row only appears once the view moves
                     // down into the south.
-                    walachia: { RO: { bounds: [[43.50, 21.90], [45.65, 28.65]], minShare: 0.55 } }
+                    walachia: { RO: { bounds: [[43.405048, 22.258301], [45.844107, 28.388671]], minShare: 0.55 } }
                 };
                 // Countries covered by that curated analysis (COUNTRIES_DATA
                 // entries; BE-LU is listed as BE + LU). For any other country

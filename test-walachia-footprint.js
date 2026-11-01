@@ -64,6 +64,16 @@ for (const z of Object.keys(STORAGE_INDEX).map(Number)) {
   }
 }
 
+/* The coverage rectangle of the row (premiumMapCoverageBounds, drawn as the red
+ * “where is this map” polygon) and the viewport region use the same footprint,
+ * and the rectangle is no longer suppressed. */
+const coverageEntry = app.match(/walachia: \{\n[\s\S]*?bounds: \[\[([\d.]+), ([\d.]+)\], \[([\d.]+), ([\d.]+)\]\],\n\s*label: 'Valahia 1855-1859',\n\s*layerVar: '_walachiaMapLayer'\n(\s*)\}/);
+assert(coverageEntry, 'premiumMapCoverageBounds.walachia has the footprint and no noCoverageRect');
+assert.deepStrictEqual(coverageEntry.slice(1, 5).map(Number), [south, west, north, east], 'coverage rectangle is the sheet footprint');
+const viewport = app.match(/walachia: \{ RO: \{ bounds: \[\[([\d.]+), ([\d.]+)\], \[([\d.]+), ([\d.]+)\]\], minShare: 0\.55 \} \}/);
+assert(viewport, 'PREMIUM_VIEWPORT_REGIONS.walachia is defined');
+assert.deepStrictEqual(viewport.slice(1, 5).map(Number), [south, west, north, east], 'viewport region is the sheet footprint');
+
 /* The layer keeps zooms 0–20 and the bounds option (passed through
  * DL.tile2dOptions, which copies extra options onto the Leaflet layer). */
 const valahia = app.slice(app.indexOf('// Valahia 1855-1859 — XYZ tiles'), app.indexOf('// ── HARTA TRANSILVANIEI 1859'));
@@ -130,10 +140,10 @@ function setup(delays) {
 }
 
 /* ── 3. Shipped: the new script tag and service-worker entry ─────────── */
-assert(html.includes('<script src="js/map-app.js?v=20261101-walachia-footprint"></script>'));
-assert(sw.includes("'js/map-app.js?v=20261101-walachia-footprint'"));
+assert(html.includes('<script src="js/map-app.js?v=20261101-walachia-coverage"></script>'));
+assert(sw.includes("'js/map-app.js?v=20261101-walachia-coverage'"));
 assert(html.includes('js/wms-health.js?v=20261101-supabase-provider') && sw.includes("'js/wms-health.js?v=20261101-supabase-provider'"));
 assert(read('js/wms-health.js').includes("'DetectLab hosted map data (Supabase)'") && !read('js/wms-health.js').includes('Finnish layer data (Supabase)'));
-assert(sw.includes("const CACHE_NAME = 'detectlab-v362-walachia-footprint';"));
+assert(sw.includes("const CACHE_NAME = 'detectlab-v362-walachia-coverage';"));
 
 console.log('Valahia 1855-1859 footprint and tile-retry checks passed.');

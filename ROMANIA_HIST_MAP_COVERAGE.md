@@ -24,7 +24,7 @@ Kept, but **viewport-gated** by the region the sheet really covers:
 | Row / sheet | CENAGIS id | Region | Rule |
 | --- | --- | --- | --- |
 | Harta tactică a Poloniei – WIG 1:100k (1919–1939) | `wig100k` | far north (`47.55 … 48.30 N, 22.25 … 27.25 E`) | listed only while the far north is the subject of the view |
-| Valahia 1855-1859 | `walachia` | southern half (`43.50 … 45.65 N, 21.90 … 28.65 E`) | listed only while the bottom half of Romania is the subject of the view |
+| Valahia 1855-1859 | `walachia` | southern half, the real sheet footprint (`43.41 … 45.84 N, 22.26 … 28.39 E`) | listed only while the bottom half of Romania is the subject of the view |
 
 ### Why a region gate instead of just dropping the rows
 
@@ -49,7 +49,8 @@ pass** decides from their region:
   minShare }`, attached to the premium `layerDefs` entry as `viewportRegions`:
   - `wig100k.RO = { bounds: [[47.55, 22.25], [48.30, 27.25]], minShare: 0.30 }`
     — Maramureș + northern Bucovina + the northern tip of Botoșani.
-  - `walachia.RO = { bounds: [[43.50, 21.90], [45.65, 28.65]], minShare: 0.55 }`
+  - `walachia.RO = { bounds: [[43.405, 22.258], [45.844, 28.389]], minShare: 0.55 }`
+    (the real sheet footprint, see “Valahia tile footprint” below)
     — Oltenia + Muntenia, Danube to the Carpathians.
 - `viewportShowsRegion(mapBounds, region)` requires the region to be the
   **subject of the view**: the two rectangles must intersect **and** either at
@@ -140,8 +141,8 @@ pass** decides from their region:
 5. Switch the dock to **Danemarca** → Mitteleuropa / Chrzanowski / Reymann /
    KDR 1:100k are listed again (curated coverage), WIG sheets and Valahia are
    not.
-6. **Exit view** → every row comes back; no red coverage rectangle appears for
-   Valahia at any zoom.
+6. **Exit view** → every row comes back; Valahia's red coverage rectangle is
+   drawn over the real sheet footprint (zoom 8 and up), like the other premium maps.
 7. `node test-country-layer-filter.js`, `node test-historical-eu-maps.js`,
    `node test-layer-visibility.js`.
 
@@ -166,7 +167,7 @@ livrat o imagine validă…”*. The provider label now reads “map data” ins
 - Separately, one transient Supabase error on any tile counted the same way.
 
 **Fix (`js/map-app.js`, `index.html` and `sw.js` tags bumped to
-`20261101-walachia-footprint` / `detectlab-v362-walachia-footprint`):**
+`20261101-walachia-coverage` / `detectlab-v362-walachia-coverage`):**
 
 - `L.tileLayer` gets `bounds: [[43.405048, 22.258301], [45.844107, 28.388671]]`
   (the sheet edges, rounded inward to 1e-6). Leaflet's `_isValidTile` then never
@@ -184,3 +185,9 @@ the retry sequence, and the shipped tags. `test-country-layer-filter.js` and
 Cluj and at zoom 10+ over Bucharest, and zoom out and in repeatedly. It should
 never show the notice for a healthy service. Off-sheet areas show no sheet
 (expected) instead of a notice.
+
+**Coverage rectangle:** the premium coverage entry for Valahia
+(`premiumMapCoverageBounds.walachia` in `js/map-app.js`) now carries the same
+footprint and is no longer `noCoverageRect`, so the red “where is this map”
+rectangle is drawn over the real sheet, as for the other premium maps. The
+viewport region (`PREMIUM_VIEWPORT_REGIONS.walachia`) uses the same rectangle.
