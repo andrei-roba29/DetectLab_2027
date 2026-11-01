@@ -15,6 +15,13 @@
     'use strict';
     var attempt = null;
     var lifetime = 10 * 60 * 1000;
+    var prepared = null;
+    var prepareLifetime = 2 * 60 * 1000;
+    function isIOSStandalone() {
+        var nav = window.navigator || {};
+        return nav.standalone === true ||
+            (/iPad|iPhone|iPod/i.test(nav.userAgent || '') && isStandalone());
+    }
     // A tap on "Continue with Google" only replaces a pending attempt once the
     // old one has clearly been abandoned, so a slow consent screen is safe.
     var replaceAfter = 120 * 1000;
@@ -149,6 +156,32 @@
         return true;
     }
 
+    // iOS must open the real OAuth URL directly inside the user's tap. Opening
+    // about:blank first and navigating that auxiliary PWA window later keeps
+    // the broken in-app WebKit keyboard on Google's cross-origin page. Prepare
+    // PKCE in the original app before the tap; the verifier stays in memory.
+    function prepare() {
+        if (!isIOSStandalone() || !originAllowed() || !window.createGooglePopupClient ||
+            !window.crypto || !window.crypto.subtle || !window.crypto.subtle.digest) return Promise.resolve(null);
+        if (prepared && Date.now() - prepared.at < prepareLifetime) return prepared.promise;
+        var p = { at: Date.now() };
+        prepared = p;
+        p.promise = (async function () {
+            var client = window.createGooglePopupClient();
+            var result = await client.auth.signInWithOAuth({ provider: 'google', options: {
+                redirectTo: window.location.origin + CALLBACK_PATH, skipBrowserRedirect: true,
+                queryParams: { access_type: 'offline', prompt: 'consent' }
+            }});
+            if (result.error || !result.data || !result.data.url) throw new Error('OAuth preparation failed');
+            var url = new URL(result.data.url);
+            if (url.searchParams.get('code_challenge_method') !== 's256' ||
+                !url.searchParams.get('code_challenge')) throw new Error('PKCE unavailable');
+            p.ready = { client: client, url: result.data.url };
+            return p.ready;
+        })().catch(function () { if (prepared === p) prepared = null; return null; });
+        return p.promise;
+    }
+
     function cancel() {
         if (!attempt) return;
         var a = attempt;
@@ -181,9 +214,23 @@
             return;
         }
         var nonce = Array.prototype.map.call(bytes, function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+        // iOS: open the actual cross-origin URL directly in the tap so WebKit
+        // can hand it to Safari instead of an about:blank in-app popup.
+        // If PKCE is still preparing, never open a blank window: ask for a
+        // second tap once ready (the preparation starts when auth opens).
+        var direct = null;
+        if (isIOSStandalone()) {
+            if (prepared && Date.now() - prepared.at < prepareLifetime) direct = prepared.ready;
+            if (!direct) {
+                prepare();
+                message('Preparing Google sign-in. Please tap Continue with Google again in a moment.');
+                return;
+            }
+            prepared = null;
+        }
         // Must happen synchronously in the user's click, before any await.
         var popup;
-        try { popup = window.open('about:blank', '_blank'); } catch (_) { popup = null; }
+        try { popup = window.open(direct ? direct.url : 'about:blank', '_blank'); } catch (_) { popup = null; }
         if (!popup) {
             message('The sign-in window was blocked. Allow pop-ups and try again, or use email and password.');
             return;
@@ -191,6 +238,7 @@
         clearHandoff();
         var a = { popup: popup, nonce: nonce, message: message, success: success,
             started: Date.now(), expires: Date.now() + lifetime, busy: false };
+        if (direct) a.client = direct.client;
         attempt = a;
         recordAttempt(a);
         a.listener = function (event) {
@@ -225,6 +273,7 @@
             if (attempt === a && !a.busy) { stop(a, true); message('Google sign-in expired. Please try again.'); }
         }, lifetime);
         message('Continue in the Google window, then return to the installed app.', 'success');
+        if (direct) return; // Safari was opened directly from the user's tap
         try {
             a.client = window.createGooglePopupClient();
             var callback = window.location.origin + CALLBACK_PATH;
@@ -249,5 +298,8 @@
 
     // Left in place for callers that start a sign-in and then leave the form.
     window.cancelGooglePopup = cancel;
-    window.DetectLabGooglePopup = { isStandalone: isStandalone, start: start, cancel: cancel };
+    window.DetectLabGooglePopup = { isStandalone: isStandalone, start: start, cancel: cancel, prepare: prepare };
+    // Ready the direct URL before the first tap even if the modal is opened
+    // immediately on launch. Opening the modal also refreshes stale attempts.
+    if (isIOSStandalone()) prepare();
 })();

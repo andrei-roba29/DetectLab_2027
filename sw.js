@@ -941,7 +941,7 @@
 //   Re-tags js/pwa-google-auth.js, js/auth.js, index.html and CACHE_NAME.
 // v374: installed iOS text fields get fallback keys without another bottom
 // spacer or a separate keyboard-toggle button; cache the new helper offline.
-const CACHE_NAME = 'detectlab-v374-ios-inline-fallback';
+const CACHE_NAME = 'detectlab-v375-ios-safari-oauth';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1859,6 +1859,8 @@ const PRECACHE_URLS = [
   // v367: the form no longer asks for a pasted code (see the CACHE_NAME note).
   'js/pwa-google-auth.js?v=20261101-google-origin',
   'js/auth.js?v=20261101-google-origin',
+  'js/pwa-google-auth.js?v=20261101-safari-direct-oauth',
+  'js/auth.js?v=20261101-safari-direct-oauth',
   // v286: the shell is sized from a measured pixel height (--pwa-viewport-h)
   // instead of any CSS viewport unit, and the temporary on-device band probe
   // is gone. Only index.html + this file changed; the entry below is the live

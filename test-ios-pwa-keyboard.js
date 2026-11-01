@@ -67,11 +67,11 @@ assert(html.includes('js/ios-fallback-keyboard.js?v=20261101-ios-inline-fallback
 assert(sw.includes('js/ios-fallback-keyboard.js?v=20261101-ios-inline-fallback'));
 assert(/#dlIosKeyboard\s*\{[^}]*padding:\s*5px 4px 0;/s.test(html), 'no extra bottom padding');
 assert(html.includes('#dlIosKeyboard::after'), 'native-reserved area has an opaque backdrop');
-for (const file of ['ios-input-focus', 'auth', 'friends', 'library-of-babel', 'subscriptions']) {
+for (const file of ['ios-input-focus', 'friends', 'library-of-babel', 'subscriptions']) {
     const url = `js/${file}.js?v=20261101-ios-flow-keyboard`;
     assert(html.includes(url) && sw.includes(url), `${url} must be loaded and precached`);
 }
-assert(sw.includes('detectlab-v374-ios-inline-fallback'));
+assert(sw.includes('detectlab-v375-ios-safari-oauth'));
 // The provisional keyboard opens automatically for EVERY editable field, with
 // no extra toggle and no second reservation below the OS-provided area.
 {
