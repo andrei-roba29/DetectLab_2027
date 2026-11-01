@@ -899,7 +899,9 @@
 // north of Romania (ROMANIA_HIST_MAP_COVERAGE.md).
 // v356: Valahia 1855-1859 gets its real Wallachia footprint: the layer-panel
 // row is listed only while the view shows the southern half of Romania.
-const CACHE_NAME = 'detectlab-v356-ro-region-sheets';
+// v357: keep map windows above floating controls, including the PWA stack.
+// v358: shared touch, mouse and keyboard resizing for application windows.
+const CACHE_NAME = 'detectlab-v358-window-resize';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -943,6 +945,9 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 const PRECACHE_URLS = [
   // v301: Next-Gen APM (MANUAL) — see the header note above.
   'css/next-gen-apm.css?v=20261101-panel-only-legend',
+  'css/map-window-layers.css?v=20261101-window-stacking',
+  'css/window-resize.css?v=20261101-window-resize',
+  'js/window-resize.js?v=20261101-window-resize',
   'js/apm-next/apm-core.js?v=20261101-robust-train',
   'js/apm-next/apm-raster.js?v=20261101-robust-train',
   'js/apm-next/apm-heatmap.js?v=20261101-spatial-exclusions',
