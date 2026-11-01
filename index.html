@@ -125,6 +125,20 @@
             -ms-touch-action: manipulation !important;
         }
 
+        /* The auth card must fit and scroll in the visible area, including
+           when the iOS keyboard reduces the visual viewport. */
+        body.is-pwa #authModal .auth-box {
+            box-sizing: border-box;
+            max-height: calc(100% - 16px);
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        body.is-pwa #authModal.pwa-auth-editing {
+            top: var(--pwa-auth-viewport-top, 0px);
+            bottom: auto;
+            height: var(--pwa-auth-viewport-height, 100%);
+        }
+
         /* Weather/account overlays remain vertically scrollable in PWA mode. */
         body.is-pwa #weatherPanel,
         body.is-pwa .pwa-account-overlay,
@@ -5060,6 +5074,7 @@
         </div>
     </footer>
 
+    <script src="js/ios-input-focus.js?v=20261101-ios-keyboard"></script>
     <script src="js/translations.js?v=20261030-report-exclusions"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
@@ -5107,7 +5122,7 @@
          the profile button = unread event chats (events.js) + pending friend
          requests + unread messages, and the pop-up card that appears when a
          request or a message arrives. -->
-    <script src="js/friends.js?v=20260918-social-notify"></script>
+    <script src="js/friends.js?v=20261101-ios-keyboard"></script>
     <!-- CORONA (Satellite imagery 60's) — the Corona Atlas tile-fetching logic
          (corona.cast.uark.edu/atlas) ported to Leaflet for the whole of Europe:
          the product catalogue (/corona/get_raster_names), one WMS 1.1.1 GetMap
@@ -5270,7 +5285,7 @@
     <script src="js/archeo-potential.js?v=20261101-train-source"></script>
     <script src="js/lidar-geo.js?v=20260811-latlon"></script>
     <script src="js/lidar-scanner.js?v=20261020-3d-analysis-points"></script>
-    <script src="js/library-of-babel.js?v=20261101-babel-eight"></script>
+    <script src="js/library-of-babel.js?v=20261101-ios-keyboard"></script>
     <!-- Premium "Archeological Report" / "Raport arheologic": PDF writer →
          PDF layout → the analysis layer itself (this order matters). -->
     <script src="js/pdf-writer.js?v=20260827-arch-report"></script>
@@ -5668,7 +5683,7 @@
     </div>
 
     <script src="js/pwa-google-auth.js?v=20261101-google-origin"></script>
-    <script src="js/auth.js?v=20261101-google-origin"></script>
+    <script src="js/auth.js?v=20261101-ios-keyboard"></script>
     <script src="js/newsletter.js?v=20260916-newsletter"></script>
 
 
@@ -5913,6 +5928,32 @@
             if (isPWA) {
                 document.body.classList.add('is-pwa');
                 document.documentElement.classList.add('is-pwa');
+
+                // Keep the login/register card in the visible part of the
+                // screen, not behind the iOS keyboard. Do not focus the input:
+                // the native tap must be allowed to open the keyboard itself.
+                var authViewport = window.visualViewport;
+                var pwaAuthModal = document.getElementById('authModal');
+                function syncAuthViewport() {
+                    if (!pwaAuthModal || !authViewport) return;
+                    var active = document.activeElement;
+                    var editing = active && pwaAuthModal.contains(active) &&
+                        /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName);
+                    pwaAuthModal.classList.toggle('pwa-auth-editing', !!editing);
+                    if (editing) {
+                        pwaAuthModal.style.setProperty('--pwa-auth-viewport-top', authViewport.offsetTop + 'px');
+                        pwaAuthModal.style.setProperty('--pwa-auth-viewport-height', authViewport.height + 'px');
+                    } else {
+                        pwaAuthModal.style.removeProperty('--pwa-auth-viewport-top');
+                        pwaAuthModal.style.removeProperty('--pwa-auth-viewport-height');
+                    }
+                }
+                if (authViewport && pwaAuthModal) {
+                    document.addEventListener('focusin', syncAuthViewport);
+                    document.addEventListener('focusout', function () { setTimeout(syncAuthViewport, 0); });
+                    authViewport.addEventListener('resize', syncAuthViewport);
+                    authViewport.addEventListener('scroll', syncAuthViewport);
+                }
 
                 // ── PWA ACCOUNT STACK RESTORED ──
                 // #pwa-br-stack holds the account trigger (initials / Log In)
@@ -6459,7 +6500,7 @@
     </div>
 
 <script src="js/account-legacy.js?v=20260814-promo"></script>
-<script src="js/subscriptions.js?v=20261101-profile-entitlement"></script>
+<script src="js/subscriptions.js?v=20261101-ios-keyboard"></script>
 
 
 
