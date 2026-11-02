@@ -6266,16 +6266,11 @@
         /* ── Archeological Report (premium) — "Raport arheologic" ── */
         .arch-report-row { border-color: rgba(102,200,255,0.20); }
         .arch-report-row.is-on { box-shadow: 0 0 22px rgba(41,182,246,0.12), inset 0 0 18px rgba(41,182,246,0.04); }
-        /* The report's configuration window IS the APM Next-Gen shell:
-           #archReportPanel carries .apm-panel (css/next-gen-apm.css), so it
-           inherits the exact size, Outfit type and gold-on-navy colours of
-           #apmNextPanel, plus the vertical drag handle that
-           js/window-resize.js attaches to every .apm-panel / .arch-report-panel.
-           It is anchored bottom-right so the two windows sit side by side;
-           the .map-frame prefix raises specificity above .apm-panel, so the
-           load order against next-gen-apm.css cannot flip it. */
-        .map-frame .arch-report-panel { left: auto; right: 12px; transform: none; z-index: 1402; }
-        @media (max-width: 720px) { .map-frame .arch-report-panel { right: 8px; } }
+        /* Geometry comes from the same flex host and card rules as LiDAR in
+           3D (css/map3d-terrain.css); keep APM's controls, not its anchor. */
+        .map-frame .arch-report-host .arch-report-panel {
+            position: static; left: auto; right: auto; bottom: auto; transform: none;
+        }
         .map-frame .arch-report-panel .apm-tabs { flex-direction: column; }
         .arch-report-panel .apm-field select.apm-select { grid-column: 1 / -1; width: 100%; }
         .arch-report-panel .apm-checks { display: flex; flex-direction: column; gap: 4px; }

@@ -26,12 +26,12 @@
     <link rel="stylesheet" href="css/leaflet.photon.css">
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20261102-arch-report-focus">
+    <link rel="stylesheet" href="css/styles.css?v=20261102-report-lidar-window">
     <!-- 3D TERRAIN VIEW (2D ⇄ 3D) — MapLibre GL JS, vendored like Leaflet.
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
     <link rel="stylesheet" href="css/maplibre-gl.css?v=20261013-3d-terrain">
-    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261102-lidar-gray-backing">
+    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261102-report-lidar-window">
     <link rel="stylesheet" href="css/hist-shift.css?v=20261014-hist-shift">
     <!-- „Alte hărți / Other maps” — punctele verzi + suprapunerea liberă a
          hărților ne-georeferențiate (Hungaricana + NLS Map Finder). -->
@@ -39,7 +39,7 @@
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
     <link rel="stylesheet" href="css/tutorial.css?v=20261102-video-speed">
     <link rel="stylesheet" href="css/offline-maps.css?v=20261025-layer-glass">
-    <link rel="stylesheet" href="css/next-gen-apm.css?v=20261101-dock-lower-1mm">
+    <link rel="stylesheet" href="css/next-gen-apm.css?v=20261102-apm-lidar-desktop">
     <style>
         /* PWA Specific Styles */
         body.is-pwa .nav-links {
@@ -4245,13 +4245,15 @@
 
                 </div><!-- /transpPanel -->
 
-                <!-- Archeological Report window. Same shell as APM Next-Gen:
-                     .apm-panel (width, max-height, Outfit type, gold-on-navy
-                     colours) + the shared vertical drag handle injected by
+                <!-- Archeological Report window. The host matches the LiDAR 3D card geometry;
+                     the panel keeps the APM Next-Gen controls and styling:
+                     .apm-panel (Outfit type, gold-on-navy colours) + the
+                     shared vertical drag handle injected by
                      js/window-resize.js. The user is asked here for the
                      baseline (APM 2.0 / Next-Gen custom / Next-Gen train + the
                      training period), the bonus scoring ticks and the
                      ignore-LIDAR switch; run, PDF and status live here too. -->
+                <div class="arch-report-host">
                 <section id="archReportPanel" class="apm-panel arch-report-panel" hidden aria-hidden="true" aria-label="Archeological Report">
                     <header class="apm-head">
                         <h3 class="t" data-key="arch_report_panel_title">Archeological Report</h3>
@@ -4321,6 +4323,7 @@
                     <div id="archReportStatus" class="arch-report-status t" data-key="arch_report_hint">Switch the layer on and pick a point on the map.</div>
                     <div id="archReportSummary" style="display:none;font-size:0.72rem;margin-top:4px;line-height:1.5"></div>
                 </section>
+                </div><!-- /arch-report-host -->
             </div><!-- /map-frame -->
             <div class="map-legend-bar" id="mapLegendBar">
                 <span style="font-size:0.78rem;color:rgba(245,240,235,0.4);margin-right:6px" class="t" data-key="apm_score">APM Score:</span>
@@ -5311,7 +5314,7 @@
     <script src="js/roman-roads.js?v=20261015-roman-roads"></script>
     <script src="js/map-app.js?v=20261101-walachia-coverage"></script>
     <link rel="stylesheet" href="css/rvt-panel.css?v=20261101-robust-train">
-    <link rel="stylesheet" href="css/map-window-layers.css?v=20261101-window-stacking">
+    <link rel="stylesheet" href="css/map-window-layers.css?v=20261102-report-lidar-window">
     <link rel="stylesheet" href="css/window-resize.css?v=20261102-pwa-window-resize-bottom-clearance">
     <script src="js/lidar-photo-filter.js?v=20261101-desktop-3d-hint" defer></script>
     <script src="js/map-window-dock.js?v=20261101-robust-train"></script>
@@ -6701,6 +6704,6 @@
     }
 </script>
 <script src="js/hybrid-tile-switch.js"></script>
-<script src="js/window-resize.js?v=20261102-arch-report-focus" defer></script>
+<script src="js/window-resize.js?v=20261102-apm-lidar-desktop" defer></script>
 </body>
 </html>

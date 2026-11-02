@@ -989,7 +989,9 @@
 //   for a few hundred KB.
 //   Re-tags apm-polygonise.js, apm-worker.js and apm-ui.js (which carries the
 //   worker URL).
-const CACHE_NAME = 'detectlab-v396-apm-mask-band';
+// v398: desktop APM matches the LiDAR 3D card.
+// v397: match the archaeological report window to the LiDAR 3D card, including PWA clearance.
+const CACHE_NAME = 'detectlab-v398-apm-lidar-desktop';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1032,6 +1034,7 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
   // v301: Next-Gen APM (MANUAL) — see the header note above.
+  'css/next-gen-apm.css?v=20261102-apm-lidar-desktop',
   'css/next-gen-apm.css?v=20261101-dock-lower-1mm',
   'css/map-window-layers.css?v=20261101-window-stacking',
   'css/window-resize.css?v=20261102-pwa-window-resize-bottom-clearance',
@@ -1834,6 +1837,11 @@ const PRECACHE_URLS = [
   'js/lidar-scanner.js?v=20260922-distance-mirror-close',
   'js/archeo-report.js?v=20260922-distance-mirror-close',
   'js/archeo-report.js?v=20261030-report-exclusions',
+  'css/map-window-layers.css?v=20261102-report-lidar-window',
+  'css/styles.css?v=20261102-report-lidar-window',
+  'css/map3d-terrain.css?v=20261102-report-lidar-window',
+  'js/window-resize.js?v=20261102-apm-lidar-desktop',
+  'js/window-resize.js?v=20261102-report-lidar-window',
   'js/archeo-report.js?v=20261102-arch-report-focus',
   'js/archeo-report-pdf.js?v=20261102-arch-report-focus',
   'js/translations.js?v=20261102-arch-report-focus',

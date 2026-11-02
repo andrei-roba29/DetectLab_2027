@@ -122,24 +122,20 @@
         viewport = viewport || document.documentElement.clientHeight || 600;
         var frame = panel.closest('.map-frame');
         var frameHeight = frame ? frame.getBoundingClientRect().height : 0;
-        // On desktop the normal (non-fullscreen) map is only 560px tall, but
-        // its overflow is visible. Let APM grow above it while keeping the
-        // bottom anchored to the map and the grip inside the visible viewport.
-        if (frame && (panel.id === 'apmNextPanel' || panel.id === 'archReportPanel') && !isPwa() &&
-            !frame.classList.contains('is-fullscreen') &&
-            window.matchMedia('(min-width: 721px)').matches) {
-            var bottomEdge = panel.getBoundingClientRect().bottom;
-            var viewportTop = window.visualViewport ? window.visualViewport.offsetTop : 0;
-            var desktopMax = Math.max(MIN_HEIGHT, Math.min(viewport - TOP_GUARD,
-                bottomEdge - (viewportTop || 0) - TOP_GUARD));
-            return { min: Math.min(MIN_HEIGHT, desktopMax), max: desktopMax };
-        }
         // `bottom` is measured from the containing block's bottom edge. In a
         // PWA that block is the map frame, whose height is --pwa-viewport-h
         // (the visible viewport PLUS --pwa-bleed).
         var blockHeight = frameHeight > 0 ? frameHeight : viewport;
         var clearance = Math.max(0, geometry.bottom || 0);
+        // On desktop APM mirrors LiDAR's flex card. Its 16px bottom inset is
+        // host padding rather than an absolute anchor, so use the same resize
+        // bounds as that card while leaving PWA/mobile anchors unchanged.
         var topOffset = Math.max(0, geometry.top || 0);
+        if (panel.id === 'apmNextPanel' && !isPwa() &&
+            window.matchMedia('(min-width: 721px)').matches) {
+            clearance = 0;
+            topOffset = 0; // computed `top: auto` can resolve to a pixel position
+        }
         var max = Math.max(MIN_HEIGHT, viewport - TOP_GUARD);
         if (frameHeight > 0) {
             max = Math.min(max, Math.max(MIN_HEIGHT, frameHeight - TOP_GUARD));

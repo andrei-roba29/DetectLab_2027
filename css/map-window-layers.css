@@ -24,6 +24,7 @@ body.is-pwa .map-frame .transp-arrow-tab,
 .map-frame .apm-panel,
 .map-frame #rvt-panel,
 .map-frame #map3d-focus,
+.map-frame .arch-report-host,
 .map-frame.is-fullscreen .apm-panel,
 .map-frame.is-fullscreen #rvt-panel {
     z-index: 10400;

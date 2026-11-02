@@ -53,7 +53,7 @@ const focusSource = read('js/lidar-3d-focus.js');
 const TAG = '20261102-lidar-disc-zoom-anchor';
 const TAG_MIRROR = '20261030-lidar-photo-3d';
 const TAG_VIEWER = '20261102-lidar-gray-backing';
-const TAG_CSS = '20261102-lidar-gray-backing';
+const TAG_CSS = '20261102-report-lidar-window';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,
  * so the dialog is not in the DOM in the same tick as open(). */
@@ -331,7 +331,7 @@ const fakeCanvas = function () {
     assert(focusTag > viewerTag, 'the focus module loads after the viewer it installs its gate on');
     assert(indexHtml.includes('css/map3d-terrain.css?v=' + TAG_CSS), 'index.html loads the tagged 3D skin');
 
-    assert(/#map3d-focus \{[\s\S]*?z-index: 1400/.test(skin),
+    assert(/#map3d-focus,[\s\S]*?\{[\s\S]*?z-index: 1400/.test(skin),
         'the dialog sits above the layer panel and the search bar (it decides what 3D may load)');
     ['#map3d-focus .m3d-focus-card', '#map3d-focus .m3d-focus-layers', '#map3d-focus .m3d-focus-radius',
      '#map3d-focus .m3d-focus-chips', '#map3d-focus .m3d-focus-fixed',
@@ -342,7 +342,7 @@ const fakeCanvas = function () {
     });
     assert(!/\.m3d-lidar\b/.test(skin) && !/\.m3d-lidar\b/.test(viewerSource),
         'the duplicate LiDAR row in #map3d-bar is removed on both desktop and PWA (the expandable #map3d-focus window owns LiDAR in 3D)');
-    const cardRule = (skin.match(/#map3d-focus \.m3d-focus-card \{[^}]*\}/) || [''])[0];
+    const cardRule = (skin.match(/#map3d-focus \.m3d-focus-card,[^{]*\{[^}]*\}/) || [''])[0];
     assert(/width: min\(400px, calc\(100% - 16px\)\)/.test(cardRule) &&
            /max-height: min\(76vh, 620px\)/.test(cardRule) && /overflow-y: auto/.test(cardRule),
         'the dialog card is narrower and height-capped while keeping its contents scrollable');
