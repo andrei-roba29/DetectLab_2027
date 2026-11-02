@@ -945,7 +945,8 @@
 // instead of an auxiliary PWA window; Android keeps its popup flow.
 // v377: rely on the native iOS keyboard instead of the temporary app keys.
 // v378: keep the app alive during iOS OAuth and provide a callback exit.
-const CACHE_NAME = 'detectlab-v378-ios-oauth-return';
+// v379: prewarm prediction exclusions in bounded blocks for TRAIN heatmaps.
+const CACHE_NAME = 'detectlab-v379-apm-train-heat';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1000,9 +1001,9 @@ const PRECACHE_URLS = [
   'js/apm-next/romania-periods.config.js?v=20261101-train-source',
   'js/apm-next/apm-providers.js?v=20261101-train-source',
   'js/apm-next/apm-romania-sites.js?v=20261101-train-source',
-  'js/apm-next/apm-pipeline.js?v=20261101-train-source',
+  'js/apm-next/apm-pipeline.js?v=20261102-apm-train-heat',
   'js/apm-next/apm-ui.js?v=20261101-apm-start-minimized',
-  'js/apm-next/apm-i18n.js?v=20261101-train-source',
+  'js/apm-next/apm-i18n.js?v=20261102-apm-train-heat',
   'js/apm-next/apm-worker.js?v=20261101-train-source',
   'js/apm-next/apm-worker.js',
   'js/apm-next/apm-polygonise.js',
@@ -1760,7 +1761,7 @@ const PRECACHE_URLS = [
   // v138: archeo potential canvas must not swallow detectorist pin taps after
   // the layer is switched off (click-through pane + renderer detach).
   'js/archeo-potential.js?v=20261017-archeo-3d-projection',
-  'js/archeo-potential.js?v=20261101-train-source',
+  'js/archeo-potential.js?v=20261102-apm-train-heat',
   'js/lidar-scanner.js?v=20260922-distance-mirror-close',
   'js/archeo-report.js?v=20260922-distance-mirror-close',
   'js/archeo-report.js?v=20261030-report-exclusions',
