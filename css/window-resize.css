@@ -30,14 +30,29 @@
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
 }
-/* Top-attached, full-height panels now resize upward from the bottom edge.
-   Only the resized panel changes geometry; the map and backdrops stay put. */
+/* A drag may change ONLY the window's height — never its bottom edge.
+   The old blanket `top:auto; bottom:0` rule snapped every resized window to
+   the very bottom of its containing block. In the installed Android PWA the
+   map frame is taller than the visible viewport by --pwa-bleed, so that put
+   windows (APM Next Gen first, but also offline maps, RVT, info cards, …)
+   under the home indicator and below the "© Leafleet" tag, no matter what
+   bottom clearance their own stylesheet had given them. js/window-resize.js
+   now keeps each window's own `bottom` and only clamps the height so the TOP
+   moves up. Windows stretched between both edges (inset:0 chat panels) just
+   need `top` released for the explicit height to take effect. */
 #friendsManagerPanel.dl-window-resized,
 .fr-chat-panel.dl-window-resized,
 #eventsManagerPanel.dl-window-resize-centered { translate: 0 var(--dl-resize-shift, 0px); }
-.dl-window-resized {
+.dl-window-resized.dl-window-release-top {
     top: auto !important;
-    bottom: 0 !important;
+}
+/* PWA floor: a resized, bottom-anchored window whose own clearance is smaller
+   than the "© Leafleet" line is lifted to it (the class is managed by
+   js/window-resize.js; no inline offset is ever overwritten). The expression
+   is live — it follows --pwa-bleed and the device safe-area inset on rotation,
+   with no re-measuring needed. Stretched full-screen overlays never get it. */
+body.is-pwa .dl-window-resized.dl-window-bottom-safe {
+    bottom: calc(12px + var(--pwa-bleed, 0px) + env(safe-area-inset-bottom, 0px)) !important;
 }
 /* Flex-based dialogs keep their internal lists scrollable at small heights. */
 .dl-window-resized .dl-tut-card-body,

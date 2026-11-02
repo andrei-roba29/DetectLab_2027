@@ -256,7 +256,7 @@ function workerHarness() {
     assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + TAG));
     assert.ok(html.includes('js/archeo-potential.js?v=' + TAG));
     assert.ok(sw.includes('js/archeo-potential.js?v=' + TAG));
-    assert.match(sw, /const CACHE_NAME = 'detectlab-v380-apm-train-bounded-grid'/);
+    assert.match(sw, /const CACHE_NAME = 'detectlab-v385-pwa-window-resize-bottom-clearance'/);
     console.log('  ok  updated prediction, mask, worker and display assets are wired into the PWA cache');
     console.log('\nAll APM spatial-exclusion checks passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
