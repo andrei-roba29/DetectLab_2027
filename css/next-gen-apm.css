@@ -275,5 +275,8 @@ body.is-pwa .apm-panel {
    share the same bottom edge, so the two values are directly comparable. */
 body.is-pwa .apm-dock {
     bottom: calc(4px + var(--pwa-bleed, 0px));
+    /* PWA only: the arrow and its panel sit 1 mm lower than on the web
+       (1 mm base offset above + 1 mm here = 2 mm). */
+    transform: translate(-50%, 2mm);
 }
 .apm-dock-list { overscroll-behavior: contain; touch-action: pan-x; -webkit-overflow-scrolling: touch; }
