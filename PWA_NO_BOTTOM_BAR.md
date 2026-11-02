@@ -1,5 +1,31 @@
 # PWA instalat: fără bară / fâșie jos, ecran plin (v286)
 
+## Actualizare iOS — 2 noiembrie 2026 (v383)
+
+Pe iOS instalat, secțiunile despre `screen.height` de mai jos sunt istorice:
+`js/ios-input-focus.js` păstrează harta în flux normal, la înălțimea viewport-ului
+layout (`innerHeight`), pentru a permite tastatura nativă. Problema benzii
+intermitente venea din documentul lăsat permanent derulabil și din măsurarea
+incompletă a viewport-ului după tastatură/resume.
+
+- La repaus, `html` și `body` au `overflow: hidden`, fără margin/padding.
+- `dl-ios-editing` permite derularea documentului doar pentru editare și cât
+  timp tastatura se închide; panourile cu scroll propriu rămân independente.
+- Resize, visualViewport resize/scroll, rotația și pageshow re-măsoară după
+  stabilizare. Înălțimea nu se schimbă sub un câmp activ sau pe baza unui
+  viewport încă micșorat de tastatura în curs de închidere.
+- La revenirea la repaus se elimină offset-ul de scroll rămas de la WebKit și
+  se publică aceeași înălțime în `--dl-ios-screen-h` / `--pwa-viewport-h`, cu
+  `--pwa-bleed: 0px`. Safe-area rămâne rezervată pentru controale, nu pentru
+  o bandă suplimentară sub hartă.
+- Android și taburile Safari nu sunt schimbate.
+
+Verificare: `node test-ios-pwa-keyboard.js`, `node test-pwa-viewport-fit.js`,
+`node test-pwa-no-bottom-strip.js`. Testele Node simulează evenimentele native;
+tastatura și home-indicator-ul trebuie verificate și într-un PWA pe iPhone real.
+
+---
+
 Documentul acesta înlocuiește toată seria anterioară de „reparații” pentru banda
 de jos a PWA-ului instalat (`PWA_BOTTOM_BAND.md` a fost șters). Nu mai există
 niciun mecanism separat pentru bandă: ecranul este dimensionat o singură dată,

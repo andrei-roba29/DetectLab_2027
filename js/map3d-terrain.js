@@ -1851,8 +1851,25 @@
         return toggleBtn;
     }
 
+    // Use the same authoritative, expiry-aware predicate as other Premium
+    // tools. Missing/loading auth and a failed check must never grant 3D.
+    function hasPremiumAccess() {
+        try { return typeof root._dlIsPremium === 'function' && !!root._dlIsPremium(); }
+        catch (e) { return false; }
+    }
+
+    function syncPremiumAccess() {
+        if (!hasPremiumAccess() && (state.open || map)) close();
+        refreshToggle();
+        queueAnchorSync();
+    }
+
     function refreshToggle() {
         if (!toggleBtn) return;
+        var premium = hasPremiumAccess();
+        if (toggleGroup) toggleGroup.hidden = !premium;
+        toggleBtn.disabled = !premium;
+        toggleBtn.setAttribute('aria-disabled', premium ? 'false' : 'true');
         toggleBtn.querySelector('.m3d-label').textContent = state.open ? t('buttonOn') : t('button');
         toggleBtn.title = state.open ? t('buttonTitleOn') : t('buttonTitle');
         toggleBtn.setAttribute('aria-label', state.open ? t('buttonTitleOn') : t('buttonTitle'));
@@ -4146,7 +4163,7 @@
         if (state.gateRunning) return state.gateRunning;
         var gate = state.entryGate;
         state.gateRunning = Promise.resolve()
-            .then(function () { return gate(); })
+            .then(function () { return hasPremiumAccess() ? gate() : false; })
             .then(function (allowed) {
                 state.gateRunning = null;
                 if (!allowed || state.open) return !!state.open;
@@ -4166,6 +4183,10 @@
     }
 
     function open() {
+        if (!hasPremiumAccess()) {
+            syncPremiumAccess();
+            return Promise.resolve(false);
+        }
         if (state.open) return Promise.resolve(true);
         if (typeof state.entryGate === 'function') return runEntryGate();
         return openNow();
@@ -4190,6 +4211,10 @@
     }
 
     function openNow() {
+        if (!hasPremiumAccess()) {
+            syncPremiumAccess();
+            return Promise.resolve(false);
+        }
         if (state.open) return Promise.resolve(true);
         if (!wrapper()) {
             console.warn('[Map3D] #detectlab-map is not in the DOM yet');
@@ -4220,6 +4245,11 @@
         }
 
         return loadMapLibre().then(function (maplibre) {
+            // Entitlement may change while the SDK or LiDAR gate is pending.
+            if (!hasPremiumAccess()) {
+                syncPremiumAccess();
+                return false;
+            }
             if (!state.open || generation !== openGeneration) return false;
             registerProtocols(maplibre);
             var cfg = REGISTRY.config();
@@ -4927,7 +4957,22 @@
 
     root.DetectLabMap3D = api;
 
-    /* ── boot: the button appears as soon as the map container exists ─────── */
+    // Auth resolves after this module on some installs. Keep both the button
+    // and an already-open viewer in sync on login/logout, renewal and resume.
+    // The small idle poll also notices expiry without an authchange event.
+    if (typeof root.addEventListener === 'function') {
+        root.addEventListener('detectlab:authchange', syncPremiumAccess);
+        root.addEventListener('pageshow', syncPremiumAccess);
+    }
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) syncPremiumAccess();
+    });
+    if (root._authReadyPromise && typeof root._authReadyPromise.then === 'function') {
+        root._authReadyPromise.then(syncPremiumAccess, syncPremiumAccess);
+    }
+    root.setInterval(syncPremiumAccess, 30000);
+
+    /* ── boot: only active Premium members see the 3D button ──────────────── */
     function boot() {
         if (!wrapper()) return;
         ensureToggle();

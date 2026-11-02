@@ -42,7 +42,7 @@ async function testCountryRace() {
     const state = { open: false, healthTimers: [] };
     const noop = () => {};
     const ctx = vm.createContext({ state, map: null, openGeneration: 0,
-        wrapper: () => true, ensureSurface: noop, ensureBar: noop, ensureToggle: noop,
+        hasPremiumAccess: () => true, wrapper: () => true, ensureSurface: noop, ensureBar: noop, ensureToggle: noop,
         document: { body: { classList: { add: noop } }, addEventListener: noop },
         refreshToggle: noop, queueAnchorSync: noop, showVeil: noop, t: x => x,
         webglProbe: () => ({ webgl2: true }), loadMapLibre: () => sdk,
@@ -95,8 +95,8 @@ function testOpeningSettle() {
     frames[0]();
     assert.strictEqual(calls.length, 6, 'replacement map is not touched');
     assert(source.includes('settleOpeningView(map, generation);'));
-    assert(fs.readFileSync('index.html', 'utf8').includes('js/map3d-terrain.js?v=20261101-lidar-settings-reset'));
-    assert(fs.readFileSync('sw.js', 'utf8').includes('js/map3d-terrain.js?v=20261101-lidar-settings-reset'));
+    assert(fs.readFileSync('index.html', 'utf8').includes('js/map3d-terrain.js?v=20261102-premium-3d'));
+    assert(fs.readFileSync('sw.js', 'utf8').includes('js/map3d-terrain.js?v=20261102-premium-3d'));
 }
 (async () => {
     await testLoader(0);

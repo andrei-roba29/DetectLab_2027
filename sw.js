@@ -948,7 +948,14 @@
 // v379: prewarm prediction exclusions in bounded blocks for TRAIN heatmaps.
 // v380: bound the 50 km TRAIN prediction raster and use one coarse UAT pyramid
 //   pass, so the heatmap no longer exhausts the tab at the final score step.
-const CACHE_NAME = 'detectlab-v380-apm-train-bounded-grid';
+// v381: Anchor the 1 km LiDAR disc SVG to its actual drawn pixel origin,
+// including rotated 2D views restored from the 3D camera.
+// v382: remove the 3D ArcGIS atlas tab from the main map header.
+// v383: settle the iOS PWA viewport after native keyboard/resume/rotation;
+// lock idle document scrolling so no empty bottom tail survives text entry.
+// v384: 3D is available only with active Premium; hide its controls otherwise
+// and recheck entitlement before/after async entry and on auth changes.
+const CACHE_NAME = 'detectlab-v384-premium-3d';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1141,7 +1148,7 @@ const PRECACHE_URLS = [
   /* LiDAR in the 3D view: the focus dialog, the prefetch and the entry gate. */
   'js/lidar-3d-focus.js?v=20261028-lidar-photo-bridge',
   'js/lidar-3d-focus.js?v=20261030-lidar-photo-3d',
-  'js/lidar-3d-focus.js?v=20261031-lidar-dock-minimized',
+  'js/lidar-3d-focus.js?v=20261102-lidar-disc-zoom-anchor',
   'js/lidar-photo-filter.js?v=1',
   'js/lidar-photo-filter.js?v=20261030-area-first',
   'js/lidar-photo-filter.js?v=20261030-no-photo-toast',
@@ -1183,13 +1190,13 @@ const PRECACHE_URLS = [
   'css/map3d-terrain.css?v=20261029-web-3d-basemap-row',
   'css/map3d-terrain.css?v=20261030-3d-analysis-dock',
   'css/map3d-terrain.css?v=20261030-lidar-pwa-bottom',
-  'css/map3d-terrain.css?v=20261031-lidar-dock-minimized',
+  'css/map3d-terrain.css?v=20261102-premium-3d',
   'js/map3d-terrain.js?v=20261029-no-cesium',
   'js/map3d-terrain.js?v=20261029-3d-startup-repaint',
   'js/map3d-terrain.js?v=20261030-lidar-photo-3d',
   'js/map3d-terrain.js?v=20261030-3d-analysis-dock',
   'js/map3d-terrain.js?v=20261031-3d-bearing-handoff',
-  'js/map3d-terrain.js?v=20261101-desktop-3d-hint',
+  'js/map3d-terrain.js?v=20261102-premium-3d',
   'js/map-app.js?v=20261026-lidar-whole-or-disc',
   'js/lidar-3d-focus.js?v=20261026-lidar-whole-or-disc',
   'js/map3d-terrain.js?v=20261024-gesture-only-camera',
@@ -1256,7 +1263,7 @@ const PRECACHE_URLS = [
   'js/translations.js?v=20260918-report-evidence',
   '.',
   'index.html',
-  'js/ios-input-focus.js?v=20261101-ios-flow-keyboard',
+  'js/ios-input-focus.js?v=20261102-ios-viewport-settle',
   'js/auth.js?v=20261101-ios-flow-keyboard',
   'js/friends.js?v=20261101-ios-flow-keyboard',
   'js/library-of-babel.js?v=20261101-ios-flow-keyboard',

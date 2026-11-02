@@ -15,6 +15,18 @@ take the same route through the tile proxy.
 
 ## 1. What it is, and how to open it
 
+**Premium-only access (2026-11-02).** The 3D control group is hidden and its
+button disabled for guests, Free accounts and expired memberships, on both web
+and PWA. The viewer uses `subscriptions.js`'s `_dlIsPremium()` predicate and
+fails closed while that predicate/auth is unavailable. `open()` checks before
+LiDAR planning; `openNow()` checks again after the async LiDAR gate; SDK
+completion checks before constructing WebGL. Logout/revocation returns to 2D.
+Auth changes, auth readiness, pageshow/visibility resume and a 30-second expiry
+poll keep the control in sync. Closing 3D is always allowed. This is the app's
+client-side feature gate, not an authorization change to public tile providers.
+Verify with `node test-map3d-premium.js` and `node test-lidar-3d-focus.js`.
+
+
 The Leaflet map keeps working exactly as before. A **“3D” button** (bottom-centre of
 the map, added by `js/map3d-terrain.js`) switches to a second renderer of the **same**
 map: a MapLibre GL JS view in which every layer that is switched on in the 2D panel is

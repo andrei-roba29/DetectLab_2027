@@ -1031,3 +1031,9 @@ body.is-pwa #map3d-focus {
 body.is-pwa #map3d-focus .m3d-focus-card {
     max-height: min(76vh, 620px, calc(100% - 16px - var(--m3d-focus-bottom-clearance)));
 }
+
+/* Entitlement hiding must beat the control group's flex/display overrides
+   in both the website and installed PWA (the UA [hidden] rule is weaker). */
+#map3d-toggle-group[hidden] {
+    display: none !important;
+}
