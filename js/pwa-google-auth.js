@@ -214,13 +214,8 @@
             return;
         }
         var nonce = Array.prototype.map.call(bytes, function (b) { return b.toString(16).padStart(2, '0'); }).join('');
-        // iOS: leave the standalone PWA via a top-level cross-origin
-        // navigation. Even window.open(realURL) was kept in an in-app popup
-        // on some iPhones, where Google's text fields have no keyboard.
-        // WebKit decides whether an out-of-scope navigation opens Safari; no
-        // web API can force Safari or promise the PWA session survives.
-        // If PKCE is still preparing, never open a blank window: ask for a
-        // second tap once ready (the preparation starts when auth opens).
+        // Keep the app and its in-memory PKCE verifier alive while Google is
+        // open. On iOS the prepared URL can be opened directly in the tap.
         var direct = null;
         if (isIOSStandalone()) {
             if (prepared && Date.now() - prepared.at < prepareLifetime) direct = prepared.ready;
@@ -231,14 +226,13 @@
             }
             prepared = null;
         }
-        // Android retains its existing auxiliary window; iOS never creates a
-        // popup. Its top-level navigation happens after the attempt listeners
-        // and nonce are recorded, still synchronously inside the user's tap.
         var popup = null;
-        if (!direct) try { popup = window.open('about:blank', '_blank'); } catch (_) {}
-        if (!direct && !popup) {
-            message('The sign-in window was blocked. Allow pop-ups and try again, or use email and password.');
-            return;
+        if (!direct) {
+            try { popup = window.open('about:blank', '_blank'); } catch (_) {}
+            if (!popup) {
+                message('The sign-in window was blocked. Allow pop-ups and try again, or use email and password.');
+                return;
+            }
         }
         clearHandoff();
         var a = { popup: popup, nonce: nonce, message: message, success: success,
@@ -278,14 +272,15 @@
         a.timer = setTimeout(function () {
             if (attempt === a && !a.busy) { stop(a, true); message('Google sign-in expired. Please try again.'); }
         }, lifetime);
-        message(direct ? 'Opening Google sign-in. iOS may switch to Safari; return to DetectLab afterwards.' :
-            'Continue in the Google window, then return to the installed app.', 'success');
+        message('Continue in the Google window, then return to the installed app.', 'success');
         if (direct) {
-            try { window.location.assign(direct.url); }
-            catch (_) {
+            try { popup = window.open(direct.url, '_blank'); } catch (_) {}
+            if (!popup) {
                 stop(a, false);
-                message('Could not leave the app for Google sign-in. Please try Safari directly or use email and password.');
+                message('The sign-in window was blocked. Allow pop-ups and try again, or use email and password.');
+                return;
             }
+            a.popup = popup;
             return;
         }
         try {

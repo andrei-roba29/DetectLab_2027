@@ -145,9 +145,8 @@
             padding-top: calc(var(--pwa-auth-viewport-top, 0px) + 8px);
         }
         body.is-pwa #authModal.pwa-auth-editing .auth-box {
-            /* Keep the form above the drawn keys; this does not add any
-               space beneath the keyboard or beyond the OS-reserved area. */
-            max-height: calc(var(--pwa-auth-viewport-height, 100%) - var(--dl-ios-keys-height, 0px) - 16px);
+            /* Fit the form within the native keyboard’s visible viewport. */
+            max-height: calc(var(--pwa-auth-viewport-height, 100%) - 16px);
             margin: 0 auto;
         }
 
@@ -955,59 +954,6 @@
             height: var(--dl-ios-screen-h, 100dvh) !important;
         }
 
-        /* iOS fallback keys use ONLY the space the OS already reserves.
-           There is no extra bottom padding, no separate keyboard toggle, and
-           the opaque continuation below covers the map where WebKit exposes
-           its empty native keyboard area. */
-        #dlIosKeyboard[hidden] { display: none !important; }
-        #dlIosKeyboard {
-            position: fixed;
-            z-index: 2147483647;
-            left: 0;
-            right: 0;
-            box-sizing: border-box;
-            padding: 5px 4px 0;
-            background: #252a36;
-            color: #fff;
-            box-shadow: 0 -3px 14px rgba(0, 0, 0, .45);
-            font: 16px system-ui, sans-serif;
-            -webkit-user-select: none;
-            user-select: none;
-            touch-action: manipulation !important;
-        }
-        #dlIosKeyboard::after {
-            content: '';
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            height: var(--dl-os-reserved, 0px);
-            background: #252a36;
-            pointer-events: none;
-        }
-        #dlIosKeyboard .dl-ios-key-row {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            margin-bottom: 5px;
-        }
-        #dlIosKeyboard .dl-ios-key-row:last-child { margin-bottom: 0; }
-        #dlIosKeyboard .dl-ios-key-header { justify-content: space-between; padding: 0 6px; }
-        #dlIosKeyboard .dl-ios-key {
-            flex: 1;
-            min-width: 0;
-            height: 40px;
-            padding: 0 2px;
-            border: 0;
-            border-radius: 5px;
-            background: #596375;
-            color: #fff;
-            font: inherit;
-            touch-action: manipulation !important;
-        }
-        #dlIosKeyboard .dl-ios-key-header .dl-ios-key { flex: 0 0 68px; }
-        #dlIosKeyboard .dl-ios-key-wide { flex: 5; }
     </style>
     <script>
         // Standalone (installed PWA) layout. `?pwa=1` forces the same layout in a
@@ -5165,7 +5111,6 @@
     </footer>
 
     <script src="js/ios-input-focus.js?v=20261101-ios-flow-keyboard"></script>
-    <script src="js/ios-fallback-keyboard.js?v=20261101-ios-inline-fallback"></script>
     <script src="js/translations.js?v=20261030-report-exclusions"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
@@ -5773,7 +5718,7 @@
           </div>
     </div>
 
-    <script src="js/pwa-google-auth.js?v=20261101-ios-top-level-oauth"></script>
+    <script src="js/pwa-google-auth.js?v=20261102-ios-popup-return"></script>
     <script src="js/auth.js?v=20261101-safari-direct-oauth"></script>
     <script src="js/newsletter.js?v=20260916-newsletter"></script>
 

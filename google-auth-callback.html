@@ -10,6 +10,9 @@
   <main>
     <h1>Return to DetectLab</h1>
     <p id="status">Returning the sign-in result to the app…</p>
+    <button type="button" onclick="window.close()">Close and return to DetectLab</button>
+    <p>If this window does not close, close this tab or use the app switcher to return to the DetectLab app. Do not open a new copy of the app.</p>
+    <a href="/">Open DetectLab in this browser</a>
   </main>
   <script>
     (function () {
@@ -64,7 +67,7 @@
         } else if (acknowledged) {
           status.textContent = 'Signed in. Return to DetectLab.';
         } else {
-          status.textContent = 'Sign-in finished. Return to DetectLab to continue.';
+          status.textContent = 'Sign-in result sent. Return to the original DetectLab app to finish signing in.';
         }
         // Closing is best-effort: some platforms ignore it, which is harmless
         // now that the result is already waiting for the app.

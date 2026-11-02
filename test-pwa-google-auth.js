@@ -94,18 +94,17 @@ async function run() {
   let h = await readyHarness({ios:true});
   assert.equal(h.window.DetectLabGooglePopup.isStandalone(), true);
   const start = h.start();
-  assert.equal(h.opened, 0, 'installed iOS uses no in-app popup');
-  assert.equal(h.window.location.navigatedTo,
-    'https://supabase.example/authorize?code_challenge_method=s256&code_challenge=challenge',
-    'top-level external navigation starts inside the user gesture');
+  assert.equal(h.opened, 1, 'iOS opens Google without replacing the app');
+  assert.equal(h.popup.openedWith,
+    'https://supabase.example/authorize?code_challenge_method=s256&code_challenge=challenge');
   await start;
   assert.equal(h.oauth.options.skipBrowserRedirect, true);
-  assert.equal(h.oauth.options.redirectTo, callbackUrl,
-    'the callback URL must be an exact path, with no query for Supabase to match');
-  assert.equal(h.window.location.navigatedTo, 'https://supabase.example/authorize?code_challenge_method=s256&code_challenge=challenge');
+  assert.equal(h.oauth.options.redirectTo, callbackUrl);
   h.deliver({origin:'https://detectlab.ro', source:h.popup,
-    data:{type:'detectlab-google-callback', nonce:attemptNonce(h.storage), code:'fake'}});
-  assert.equal(h.exchanged, undefined, 'iOS without a popup accepts only the storage handoff');
+    data:{type:'detectlab-google-callback', nonce:attemptNonce(h.storage), code:'ios-code'}});
+  await tick();
+  assert.equal(h.exchanged, 'ios-code');
+  assert.equal(h.successes, 1, 'the original app installs the session');
 
   h = harness({android:true}); await h.start();
   assert.equal(h.popup.openedWith, 'about:blank', 'Android keeps the existing popup flow');
@@ -123,15 +122,20 @@ async function run() {
   assert.equal(h.successes, 1);
   assert.equal(h.popup.closed, true);
 
-  // Slow PKCE preparation must never open a blank in-app iOS popup.
+  // Preparation may still be in progress on the first tap.
   h = harness({ios:true});
   await h.start();
-  assert.equal(h.opened, 0, 'no about:blank popup while direct URL is preparing');
+  assert.equal(h.opened, 0);
   assert.match(h.messages.at(-1).msg, /tap Continue with Google again/);
   await h.window.DetectLabGooglePopup.prepare();
   await h.start();
-  assert.equal(h.opened, 0);
-  assert.equal(h.window.location.navigatedTo, 'https://supabase.example/authorize?code_challenge_method=s256&code_challenge=challenge');
+  assert.equal(h.opened, 1);
+  assert.match(h.popup.openedWith, /^https:\/\/supabase/);
+
+  h = await readyHarness({ios:true, blocked:true});
+  await h.start();
+  assert.match(h.messages.at(-1).msg, /blocked/);
+  assert.equal(h.storage.getItem(ATTEMPT_KEY), null);
 
   // ── Handoff record left by the callback window (opener severed) ──
   h = harness({android:true});
@@ -196,10 +200,10 @@ async function run() {
 
   // One attempt at a time; an abandoned one is replaced after the grace period.
   h = await readyHarness({ios:true}); await h.start(); await h.start();
-  assert.equal(h.opened, 0); assert.match(h.messages.at(-1).msg, /already in progress/);
+  assert.equal(h.opened, 1); assert.match(h.messages.at(-1).msg, /already in progress/);
   h = await readyHarness({ios:true}); await h.start();
   h.window.DetectLabGooglePopup.cancel();
-  assert.equal(h.storage.getItem(ATTEMPT_KEY), null, 'iOS cancellation clears the attempt without a popup');
+  assert.equal(h.storage.getItem(ATTEMPT_KEY), null, 'iOS cancellation clears the attempt');
   h = await readyHarness({ios:true}); await h.start(); h.expire();
   assert.match(h.messages.at(-1).msg, /expired/);
 
@@ -212,7 +216,7 @@ async function run() {
   const stored = JSON.parse(cb.storage.getItem(HANDOFF_KEY));
   assert.equal(stored.nonce, 'abc'); assert.equal(stored.code, 'secret');
   cb.flush();
-  assert.match(cb.elements.status.textContent, /Return to DetectLab/);
+  assert.match(cb.elements.status.textContent, /Return to the original DetectLab/);
   assert.equal(cb.window.closedByPage, true, 'closing is attempted');
   cb = callbackHarness('https://detectlab.ro/google-auth-callback.html?code=secret', true,
     {[ATTEMPT_KEY]: JSON.stringify({nonce: 'abc', origin: 'https://detectlab.ro', at: Date.now()})});
@@ -221,7 +225,7 @@ async function run() {
   assert.equal(cb.sent.data.type, 'detectlab-google-callback');
   cb.deliver({origin:'https://evil.example', source:cb.opener, data:{type:'detectlab-google-ack',nonce:'abc'}});
   cb.flush();
-  assert.match(cb.elements.status.textContent, /Sign-in finished/);
+  assert.match(cb.elements.status.textContent, /Sign-in result sent/);
   cb = callbackHarness('https://detectlab.ro/google-auth-callback.html?code=secret', true,
     {[ATTEMPT_KEY]: JSON.stringify({nonce: 'abc', origin: 'https://detectlab.ro', at: Date.now()})});
   cb.deliver({origin:'https://detectlab.ro', source:cb.opener, data:{type:'detectlab-google-ack',nonce:'abc'}});
@@ -268,13 +272,14 @@ async function run() {
   assert.match(auth, /signInWithPassword\(/);
   assert.match(auth, /detectLabOAuthOriginAllowed/, 'the browser path checks the origin list too');
   assert.match(auth, /DetectLabOAuthOrigins/, 'the allow-list can be extended per deployment');
-  assert.match(html, /js\/pwa-google-auth\.js\?v=20261101-ios-top-level-oauth/);
-  assert.match(sw, /js\/pwa-google-auth\.js\?v=20261101-ios-top-level-oauth/);
+  assert.match(html, /js\/pwa-google-auth\.js\?v=20261102-ios-popup-return/);
+  assert.match(sw, /js\/pwa-google-auth\.js\?v=20261102-ios-popup-return/);
   assert.match(html, /js\/auth\.js\?v=20261101-safari-direct-oauth/);
   assert.match(sw, /js\/auth\.js\?v=20261101-safari-direct-oauth/);
   assert.match(sw, /pathname === '\/google-auth-callback\.html'\) return/);
   assert.match(callback, /history\.replaceState\(null, '', location\.pathname\)/);
   assert.match(callback, /event\.origin !== location\.origin/);
+  assert.match(callback, /Close and return to DetectLab/);
   console.log('Google PWA OAuth regression tests passed');
 }
 run().catch(err => {console.error(err); process.exitCode = 1;});
