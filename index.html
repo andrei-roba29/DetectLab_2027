@@ -31,7 +31,7 @@
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
     <link rel="stylesheet" href="css/maplibre-gl.css?v=20261013-3d-terrain">
-    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261102-premium-3d">
+    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261102-lidar-gray-backing">
     <link rel="stylesheet" href="css/hist-shift.css?v=20261014-hist-shift">
     <!-- „Alte hărți / Other maps” — punctele verzi + suprapunerea liberă a
          hărților ne-georeferențiate (Hungaricana + NLS Map Finder). -->
@@ -2422,6 +2422,10 @@
                                 <input type="range" class="transp-slider" id="lidarRo2mOpacitySlider"
                                        min="0" max="100" value="0"
                                        oninput="setLidarRo2mOpacity(this.value)">
+                                <label class="lidar-gray-backing-option">
+                                    <input type="checkbox" id="lidarRo2mDisableTransparency">
+                                    <span class="t" data-key="lidar_disable_transparency">Disable transparency</span>
+                                </label>
                             </div>
 
                             <!-- Romania 5m/pixel (Ro5m) sub-layer -->
@@ -2443,6 +2447,10 @@
                                 <input type="range" class="transp-slider" id="lidarRo5mOpacitySlider"
                                        min="0" max="100" value="0"
                                        oninput="setLidarRo5mOpacity(this.value)">
+                                <label class="lidar-gray-backing-option">
+                                    <input type="checkbox" id="lidarRo5mDisableTransparency">
+                                    <span class="t" data-key="lidar_disable_transparency">Disable transparency</span>
+                                </label>
                             </div>
 
                             <!-- Romania 1m/pixel agregare (1m) sub-layer -->
@@ -2464,6 +2472,10 @@
                                 <input type="range" class="transp-slider" id="lidarRo1mOpacitySlider"
                                        min="0" max="100" value="0"
                                        oninput="setLidarRo1mOpacity(this.value)">
+                                <label class="lidar-gray-backing-option">
+                                    <input type="checkbox" id="lidarRo1mDisableTransparency">
+                                    <span class="t" data-key="lidar_disable_transparency">Disable transparency</span>
+                                </label>
                             </div>
 
                             <!-- CS917 (CS - LAKI III) sub-layer -->
@@ -5181,7 +5193,7 @@
     </footer>
 
     <script src="js/ios-input-focus.js?v=20261102-ios-viewport-settle"></script>
-    <script src="js/translations.js?v=20261102-arch-report-focus"></script>
+    <script src="js/translations.js?v=20261102-lidar-gray-backing"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
     <script src="js/leaflet.js"></script>
@@ -5340,7 +5352,7 @@
          — so nothing can be visible in 2D and missing in 3D. MapLibre GL
          itself is downloaded only when 3D is opened (js/map3d-terrain.js). -->
     <script src="js/map3d-mirror.js?v=20261030-lidar-photo-3d"></script>
-    <script src="js/map3d-terrain.js?v=20261102-premium-3d"></script>
+    <script src="js/map3d-terrain.js?v=20261102-lidar-gray-backing"></script>
     <!-- LiDAR in the 3D view (js/lidar-3d-focus.js): a national LiDAR pyramid
          cannot be draped the way a historical sheet is, so pressing 3D with a
          LiDAR layer switched on asks first — HOW MUCH (the chosen layers in

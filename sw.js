@@ -977,7 +977,8 @@
 //   the prediction DEM download to finish first; it now starts at the same
 //   time, which is what made the run step feel like it loaded forever.
 //   Re-tags apm-pipeline.js.
-const CACHE_NAME = 'detectlab-v393-arch-report-focus';
+// v394: optional gray 3D backing for the three Romanian LiDAR layers.
+const CACHE_NAME = 'detectlab-v394-lidar-gray-backing';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1230,6 +1231,9 @@ const PRECACHE_URLS = [
   'js/map3d-terrain.js?v=20261030-lidar-photo-3d',
   'js/map3d-terrain.js?v=20261030-3d-analysis-dock',
   'js/map3d-terrain.js?v=20261031-3d-bearing-handoff',
+  'js/map3d-terrain.js?v=20261102-lidar-gray-backing',
+  'css/map3d-terrain.css?v=20261102-lidar-gray-backing',
+  'js/translations.js?v=20261102-lidar-gray-backing',
   'js/map3d-terrain.js?v=20261102-premium-3d',
   'js/map-app.js?v=20261026-lidar-whole-or-disc',
   'js/lidar-3d-focus.js?v=20261026-lidar-whole-or-disc',

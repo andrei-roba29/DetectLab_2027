@@ -1,6 +1,7 @@
         // ── TRANSLATIONS ──
                                                         const translations = {
             en: {
+                lidar_disable_transparency: 'Disable transparency',
                 pin_title: 'Title',
                 pin_notes: 'Notes',
                 pin_create_event: 'Create event',
@@ -645,6 +646,7 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             ro: {
+                lidar_disable_transparency: 'Dezactivează transparența',
                 pin_title: 'Titlu',
                 pin_notes: 'Note',
                 pin_create_event: 'Creează eveniment',

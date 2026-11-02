@@ -1037,3 +1037,16 @@ body.is-pwa #map3d-focus .m3d-focus-card {
 #map3d-toggle-group[hidden] {
     display: none !important;
 }
+
+/* This backing affects only the 3D rendering, never the 2D LiDAR. */
+.lidar-gray-backing-option { display: none; }
+body.is-3d .lidar-gray-backing-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 5px;
+    font-size: 0.72rem;
+    color: rgba(245, 240, 235, 0.8);
+    cursor: pointer;
+}
+.lidar-gray-backing-option input { margin: 0; accent-color: #4fc3f7; }
