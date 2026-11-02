@@ -5,6 +5,21 @@ serverless/Express proxy routes. This repository's map is extended in place;
 there is no separate frontend build or client-side environment-variable
 injection. The Danish WMS credentials are server-only.
 
+## Romanian Heritage sublayers
+
+The free **Patrimoniu / Heritage** group has an on/off switch only. Its two
+children — **Patrimoniu arheologic / Archeological heritage** (the existing
+CIMEC/RAN source) and **Arii naturale protejate / Natural protected sites**
+(the supplied Supabase GeoPackage) — each have their own switch and opacity.
+The protected-sites source is read lazily through HTTP Range queries rather
+than downloading its 75 MB GeoPackage on map startup. Controls, limits, source
+provenance and tests: **`ROMANIA_HERITAGE_SUBLAYERS.md`**.
+
+```sh
+node test-romania-heritage.js
+node test-romania-heritage-browser.js  # optional Playwright/Chromium + Python 3
+```
+
 ## Finnish heritage, cadastral and terrain layers
 
 The Finnish layer catalogue is `js/finland-layers.config.js` (52 entries:

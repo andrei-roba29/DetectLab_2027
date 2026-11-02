@@ -245,6 +245,8 @@
   "layer_osm_places": "OSM Places",
   "layer_uat": "UAT",
   "layer_heritage": "Heritage",
+  "layer_archaeological_heritage": "Archeological heritage",
+  "layer_natural_protected_sites": "Natural protected sites",
   "heritage_legend_title": "Legend",
   "heritage_legend_red": "Sites with correct coordinates",
   "heritage_legend_green": "Sites with approximate coordinates",

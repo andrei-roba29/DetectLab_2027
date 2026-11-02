@@ -34,7 +34,7 @@ const opacityIds = rangeTags.filter(function (tag) {
 }).map(function (tag) {
     return (tag.match(/id="([^"]+)"/) || [])[1];
 });
-assert.strictEqual(opacityIds.length, 55, 'all 55 shipped layer opacity ranges should be discoverable (46 prior + 8 UK historical maps + the UK heritage group)');
+assert.strictEqual(opacityIds.length, 57, 'all 57 shipped opacity ranges are discoverable (including Romania 5 m LiDAR and natural protected sites)');
 opacityIds.forEach(function (id) {
     if (id === 'satOpacitySlider') {
         assert(!(id in LAYER_TOGGLE_MAP) && !(id in LIDAR_SUB_TOGGLE_KEYS),
@@ -49,7 +49,9 @@ assert(!('satPeriodSlider' in LAYER_TOGGLE_MAP), 'the satellite period mirror ha
 Object.keys(LIDAR_SUB_TOGGLE_KEYS).forEach(function (id) {
     assert(opacityIds.includes(id), 'LIDAR sub key ' + id + ' must be a shipped opacity slider');
 });
-assert.strictEqual(Object.keys(LIDAR_SUB_TOGGLE_KEYS).length, 11, 'all 11 LIDAR sub-layers are linked');
+assert.strictEqual(Object.keys(LIDAR_SUB_TOGGLE_KEYS).length, 12, 'all 12 LIDAR sub-layers are linked');
+assert.strictEqual(LAYER_TOGGLE_MAP.patrimoniuOpacitySlider, 'patrimoniuToggle', 'archaeology mirror only controls its child');
+assert.strictEqual(LAYER_TOGGLE_MAP.naturalProtectedOpacitySlider, 'naturalProtectedToggle', 'nature mirror only controls its child');
 Object.keys(LAYER_TOGGLE_MAP).forEach(function (sliderId) {
     const toggleId = LAYER_TOGGLE_MAP[sliderId];
     assert(indexHtml.includes('id="' + toggleId + '"'),

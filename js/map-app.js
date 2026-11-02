@@ -4044,6 +4044,9 @@
                             window._detectlabApiFailed = true;
                         });
                 }));
+                // An early Heritage/sublayer click is the first caller, before
+                // the idle preload. It needs the same promise as later calls.
+                return _localLayerDataPromise;
             }
 
             // A canvas renderer handles tens of thousands of markers/shapes far
@@ -4101,7 +4104,7 @@
                         transparent: true,
                         version: '1.1.1',
                         pane: 'pane_patrimoniu',
-                        opacity: 0.9,
+                        opacity: 0.9 * FLAT_OPACITY,
                         attribution: '© CIMEC — eism.geo-spatial.ro (fallback)'
                     }
                 );
@@ -4247,7 +4250,7 @@
                     var html6 = _buildHeritagePopupContent(info6.ran, info6.name);
                     var gj = L.geoJSON(feature, {
                         renderer: _patrimoniuCanvasRenderer,
-                        style: { color: '#E60000', weight: 2, fillOpacity: 0, opacity: 0.85 }
+                        style: { color: '#E60000', weight: 2, fillOpacity: 0, opacity: 0.85 * FLAT_OPACITY }
                     });
                     gj.eachLayer(function (layer) {
                         layer._dlHeritageHit = function (latlng) {
@@ -4568,6 +4571,7 @@
                     return;
                 }
 
+                _sitesCanvas.style.opacity = String(FLAT_OPACITY);
                 var size = map.getSize();
                 if (_sitesCanvas.width !== size.x) _sitesCanvas.width = size.x;
                 if (_sitesCanvas.height !== size.y) _sitesCanvas.height = size.y;
@@ -5005,7 +5009,21 @@
                 });
             }
             window._scheduleRedraw = _scheduleRedraw;
-            window._setFlatOpacity = function (v) { FLAT_OPACITY = v; };
+            // The archaeology sublayer's opacity applies to ALL its visuals,
+            // not just the protection-radius canvas. Paths keep their paint in
+            // Leaflet too, so the live 3D mirror sees exactly the same opacity.
+            function _syncPatrimoniuOpacity() {
+                _sitesCanvas.style.opacity = String(FLAT_OPACITY);
+                patrimoniuLayer.eachLayer(function (layer) {
+                    if (typeof layer.setStyle === 'function') layer.setStyle({ opacity: 0.85 * FLAT_OPACITY });
+                });
+                if (window._patrimoniuWmsFallback) window._patrimoniuWmsFallback.setOpacity(0.9 * FLAT_OPACITY);
+                Object.keys(_heritageImageStore).forEach(function (key) {
+                    var image = _heritageImageStore[key];
+                    if (image && typeof image.setOpacity === 'function') image.setOpacity(FLAT_OPACITY);
+                });
+            }
+            window._setFlatOpacity = function (v) { FLAT_OPACITY = v; _syncPatrimoniuOpacity(); };
             window._loadSiteCircles = loadSiteCircles;
             window._setCirclesVisible = function (v) { _circlesVisible = v; };
             window._resetFetchedBounds = function () { _fetchedBounds = null; };
@@ -5699,7 +5717,7 @@
                             seenRadius[key] = true;
                             features.push({
                                 type: 'Feature',
-                                properties: { color: '#C42B2B', fillColor: '#C42B2B', fillOpacity: Math.round(FLAT_OPACITY * 100) / 100, opacity: 0.6, kind: 'radius' },
+                                properties: { color: '#C42B2B', fillColor: '#C42B2B', fillOpacity: Math.round(FLAT_OPACITY * 100) / 100, opacity: 0.6 * FLAT_OPACITY, kind: 'radius' },
                                 geometry: { type: 'Polygon', coordinates: [_heritageCirclePolygon(shape.latlng, radius)] }
                             });
                         });
@@ -5713,7 +5731,7 @@
                         type: 'Feature',
                         properties: {
                             color: record.color || '#C42B2B', fillColor: record.color || '#C42B2B',
-                            radius: record.radius || 5, fillOpacity: 0.9, kind: 'site',
+                            radius: record.radius || 5, fillOpacity: 0.9 * FLAT_OPACITY, opacity: 0.9 * FLAT_OPACITY, kind: 'site',
                             popup: popupHtml
                         },
                         geometry: { type: 'Point', coordinates: [record.latlng.lng, record.latlng.lat] }
@@ -5768,6 +5786,7 @@
                         document.getElementById('patrimoniuPct').textContent = '25%';
                     }
                     _displayCanvas.style.display = '';
+                    _syncPatrimoniuOpacity();
                     loadSiteCircles();
                 } else {
                     _displayCanvas.style.display = 'none';
@@ -8979,10 +8998,12 @@
             };
 
             window.setPatrimoniuOpacity = function (val) {
-                // Radius opacity slider controls ONLY the canvas FLAT_OPACITY.
-                // It has no effect on the Heritage Sites WMS layer or its toggle.
+                // Archaeological heritage opacity: radius canvas, pins, paths,
+                // imagery and the WMS fallback. Group/switch synchronisation is
+                // handled by js/romania-heritage.js, not by this paint helper.
                 var wasZero = (FLAT_OPACITY === 0);
                 FLAT_OPACITY = val / 100;
+                _syncPatrimoniuOpacity();
                 document.getElementById('patrimoniuPct').textContent = val + '%';
 
                 if (val > 0 && !_circlesVisible) {
