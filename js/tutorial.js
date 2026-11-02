@@ -44,6 +44,7 @@
         next:        { ro: 'Înainte', en: 'Next' },
         close:       { ro: 'Închide ghidul', en: 'Close guide' },
         finish:      { ro: 'Am înțeles', en: 'Got it' },
+        video_speed: { ro: 'Viteza de redare', en: 'Playback speed' },
         hint:        { ro: 'Atinge oriunde pentru slide-ul următor', en: 'Tap anywhere for the next slide' },
         free_tab:    { ro: 'GRATIS', en: 'FREE' },
         prem_tab:    { ro: 'PREMIUM', en: 'PREMIUM' }
@@ -691,6 +692,7 @@
         open: false,
         idx: 0,
         tab: 'free',
+        videoSpeed: 1,
         openedPanel: false,
         panelTabRestore: null,
         openedFriends: false,
@@ -830,6 +832,7 @@
         document.addEventListener('keydown', function (e) {
             if (!state.open) return;
             if (e.key === 'Escape') { close(); }
+            else if (e.target && (e.target.id === 'dlTutVideoSpeed' || e.target.id === 'dlTutVideo')) return;
             else if (e.key === 'ArrowRight') { go(state.idx + 1); }
             else if (e.key === 'ArrowLeft') { go(state.idx - 1); }
         });
@@ -1632,8 +1635,42 @@
                     '<video id="dlTutVideo" playsinline webkit-playsinline controls preload="metadata">' +
                         '<source src="' + TUTORIAL_VIDEO_URL + '" type="video/quicktime">' +
                     '</video>' +
+                    '<div class="dl-tut-video-speed">' +
+                        '<div class="dl-tut-video-speed-heading">' +
+                            '<label for="dlTutVideoSpeed">' + tr(UI.video_speed) + '</label>' +
+                            '<output id="dlTutVideoSpeedValue" for="dlTutVideoSpeed"></output>' +
+                        '</div>' +
+                        '<input id="dlTutVideoSpeed" type="range" min="0.5" max="2" step="0.25" value="1">' +
+                        '<div class="dl-tut-video-speed-limits" aria-hidden="true"><span>0.5×</span><span>2×</span></div>' +
+                    '</div>' +
                 '</div>' +
             '</div>';
+
+        var video = body.querySelector('#dlTutVideo');
+        var speed = body.querySelector('#dlTutVideoSpeed');
+        var speedValue = body.querySelector('#dlTutVideoSpeedValue');
+        function syncSpeed() {
+            // Ignore queued media events from a slide that has been rebuilt.
+            if (!video.isConnected) return;
+            var value = video.playbackRate;
+            // Keep the slider and video in sync if a native control changes speed.
+            var supported = Math.max(0.5, Math.min(2, Math.round(value * 4) / 4));
+            if (value !== supported) {
+                video.playbackRate = supported;
+                value = supported;
+            }
+            state.videoSpeed = value;
+            speed.value = value;
+            speedValue.textContent = value + '×';
+            speed.setAttribute('aria-valuetext', value + '×');
+        }
+        video.playbackRate = state.videoSpeed;
+        syncSpeed();
+        speed.addEventListener('input', function () {
+            video.playbackRate = Number(speed.value);
+            syncSpeed();
+        });
+        video.addEventListener('ratechange', syncSpeed);
 
         var fin = el('button', 'dl-tut-finish', card);
         fin.type = 'button';

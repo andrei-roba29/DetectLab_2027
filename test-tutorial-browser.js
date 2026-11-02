@@ -82,6 +82,34 @@ async function main() {
                     await page.locator('.dl-tut-nav-btn').nth(1).click();
                 }
                 assert(await page.locator('.dl-tut-finish').isVisible());
+                const slider = page.locator('#dlTutVideoSpeed');
+                const speedValue = page.locator('#dlTutVideoSpeedValue');
+                assert.equal(await slider.getAttribute('min'), '0.5');
+                assert.equal(await slider.getAttribute('max'), '2');
+                assert.equal(await slider.getAttribute('step'), '0.25');
+                assert.equal(await slider.inputValue(), '1');
+                assert.equal(await speedValue.innerText(), '1×');
+                assert.equal(await page.locator('label[for="dlTutVideoSpeed"]').innerText(),
+                    language === 'ro' ? 'Viteza de redare' : 'Playback speed');
+                for (const value of ['0.5', '2']) {
+                    await slider.evaluate((node, value) => {
+                        node.value = value;
+                        node.dispatchEvent(new Event('input', { bubbles: true }));
+                    }, value);
+                    assert.equal(await page.locator('#dlTutVideo').evaluate(video => video.playbackRate), Number(value));
+                    assert.equal(await speedValue.innerText(), value + '×');
+                    assert.equal(await slider.getAttribute('aria-valuetext'), value + '×');
+                }
+                await slider.focus();
+                await page.keyboard.press('ArrowLeft');
+                assert.equal(await slider.inputValue(), '1.75', 'arrow key adjusts speed, not slide');
+                assert.match(await page.locator('.dl-tut-title').innerText(), /^13\/13/);
+                await page.locator('#dlTutVideo').evaluate(video => { video.playbackRate = 1.25; });
+                await page.waitForFunction(() => document.querySelector('#dlTutVideoSpeed').value === '1.25');
+                assert.equal(await speedValue.innerText(), '1.25×');
+                await page.setViewportSize({ width: scenario.width + 1, height: scenario.height });
+                await page.waitForTimeout(200);
+                assert.equal(await slider.inputValue(), '1.25', 'speed survives repaint');
                 await page.keyboard.press('ArrowLeft');
                 await page.waitForFunction(() => document.querySelector('.dl-tut-title').textContent.startsWith('12/13'));
                 const otherLanguage = language === 'en' ? 'ro' : 'en';
@@ -102,6 +130,13 @@ async function main() {
                 assert.equal(await page.locator('#dlTutorial').isVisible(), false);
                 await page.click('#mapHelpBtn');
                 await page.locator('.dl-tut-dot').last().click();
+                assert.equal(await page.locator('#dlTutVideoSpeed').inputValue(), '1.25', 'speed survives navigation and reopen');
+                assert.equal(await page.locator('label[for="dlTutVideoSpeed"]').innerText(),
+                    otherLanguage === 'ro' ? 'Viteza de redare' : 'Playback speed');
+                await page.locator('#dlTutVideoSpeed').scrollIntoViewIfNeeded();
+                const controlGeometry = await page.locator('#dlTutVideoSpeed').boundingBox();
+                assert(controlGeometry.x >= 0 && controlGeometry.x + controlGeometry.width <= scenario.height + 1,
+                    'slider fits the resized viewport');
                 await page.locator('.dl-tut-finish').click();
                 assert.equal(await page.locator('#dlTutorial').isVisible(), false);
                 assert.deepEqual(errors, [], 'no browser errors');
