@@ -37,7 +37,7 @@ assert.match(css, /body\.is-pwa \.apm-dock\s*\{\s*bottom: calc\(4px \+ var\(--pw
 const indexHtml = fs.readFileSync('index.html', 'utf8');
 assert.match(indexHtml, /body\.is-pwa \.leaflet-container::after\s*\{\s*bottom: calc\(4px \+ var\(--pwa-bleed, 0px\)\) !important;/);
 assert.match(css, /\.apm-dock\s*\{[^}]*bottom: 0;/);
-const cssUrl = 'css/next-gen-apm.css?v=20261101-dock-lower-1mm';
+const cssUrl = 'css/next-gen-apm.css?v=20261102-apm-lidar-desktop';
 for (const file of ['index.html', 'sw.js']) {
     assert(fs.readFileSync(file, 'utf8').includes(cssUrl), `${file} uses the updated drawer stylesheet`);
 }

@@ -5,9 +5,9 @@ const css = fs.readFileSync('css/map3d-terrain.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 const sw = fs.readFileSync('sw.js', 'utf8');
 function rule(selector) {
-  const start = css.indexOf(selector + ' {');
+  const start = css.indexOf(selector);
   assert(start >= 0, `missing ${selector}`);
-  return css.slice(start, css.indexOf('}', start));
+  return css.slice(start, css.indexOf('}', css.indexOf('{', start)));
 }
 const group = rule('body.is-pwa.is-3d .m3d-toggle-group');
 const layer = rule('body.is-pwa.is-3d #detectlab-map #arcgisBasemapCtrl');
@@ -38,8 +38,8 @@ assert.equal(clearance(0, 34), 60, 'safe area is not added a second time');
 assert.equal(clearance(0, 64), 80, 'larger OS insets are respected');
 assert(rule('body.is-pwa #map3d-focus .m3d-focus-card').includes('calc(100% - 16px - var(--m3d-focus-bottom-clearance))'));
 assert(rule('body.is-pwa.is-3d #map3d-bar').includes('142px'));
-assert(html.includes('css/map3d-terrain.css?v=20261102-lidar-gray-backing'));
-assert(sw.includes('css/map3d-terrain.css?v=20261102-lidar-gray-backing'));
+assert(html.includes('css/map3d-terrain.css?v=20261102-report-lidar-window'));
+assert(sw.includes('css/map3d-terrain.css?v=20261102-report-lidar-window'));
 console.log('PWA 3D clearance checks passed');
 assert(css.includes('body.is-pwa.is-3d #map3d-bar .m3d-basemap-row { display: none; }'));
 assert(rule('body.is-pwa.is-3d #map3d-bar.collapsed .m3d-actions').includes('display: flex'));

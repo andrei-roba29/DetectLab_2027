@@ -18,12 +18,12 @@ window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
 const handle = panel.querySelector('.dl-window-resize-handle');
 function end() { handle.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true })); }
 end();
-assert.equal(panel.style.height, '784px', 'desktop APM grows beyond the map, stopping at the viewport top');
-assert.equal(handle.getAttribute('aria-valuemax'), '784');
+assert.equal(panel.style.height, '544px', 'desktop APM uses the same map-frame bounds as LiDAR');
+assert.equal(handle.getAttribute('aria-valuemax'), '544');
 assert.equal(panel.style.bottom, '16px', 'bottom stays anchored');
 frame.classList.add('is-fullscreen');
 end();
-assert.equal(panel.style.height, '528px', 'fullscreen retains frame limits');
+assert.equal(panel.style.height, '544px', 'fullscreen retains LiDAR frame limits');
 frame.classList.remove('is-fullscreen');
 window.document.body.classList.add('is-pwa');
 end();

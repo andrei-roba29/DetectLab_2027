@@ -631,7 +631,8 @@ body:not(.is-pwa).is-3d #map3d-bar.collapsed .m3d-actions { display: flex; }
  * 3D surface (its veil and bar) so the dialog reads as part of the same step.
  * ══════════════════════════════════════════════════════════════════════════ */
 
-#map3d-focus {
+#map3d-focus,
+.map-frame .arch-report-host {
     position: absolute;
     inset: 0;
     /* Above the layer panel (1001/1002) and the search bar: this is a modal
@@ -647,7 +648,8 @@ body:not(.is-pwa).is-3d #map3d-bar.collapsed .m3d-actions { display: flex; }
     color: rgba(245, 240, 235, 0.94);
 }
 
-#map3d-focus .m3d-focus-card {
+#map3d-focus .m3d-focus-card,
+.map-frame .arch-report-host .arch-report-panel {
     pointer-events: auto;
     box-sizing: border-box;
     width: min(400px, calc(100% - 16px));
@@ -1009,10 +1011,12 @@ body:not(.is-pwa).is-3d #map3d-bar.collapsed .m3d-actions { display: flex; }
 #detectlab-map.m3d-picking * { cursor: crosshair !important; }
 
 @media (max-width: 720px) {
-    #map3d-focus { padding: 10px 10px calc(10px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px))); }
+    #map3d-focus,
+    .map-frame .arch-report-host { padding: 10px 10px calc(10px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px))); }
     #map3d-focus .m3d-focus-scope-opt { min-height: 34px; font-size: 0.72rem; }
 
-    #map3d-focus .m3d-focus-card {
+    #map3d-focus .m3d-focus-card,
+    .map-frame .arch-report-host .arch-report-panel {
         width: min(360px, calc(100% - 16px));
         max-height: min(76vh, 560px);
         padding: 10px 11px 12px;
@@ -1024,11 +1028,13 @@ body:not(.is-pwa).is-3d #map3d-bar.collapsed .m3d-actions { display: flex; }
  * Use the shell's navigation-bar clearance, not just the OS safe-area inset:
  * Android can report zero even while the phone's bottom bar covers the map.
  * Keep a 16px visual gap above that area for both the card and folded pill. */
-body.is-pwa #map3d-focus {
+body.is-pwa #map3d-focus,
+body.is-pwa .map-frame .arch-report-host {
     --m3d-focus-bottom-clearance: calc(16px + max(var(--pwa-bottom-controls-clearance, 44px), var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px))));
     padding-bottom: var(--m3d-focus-bottom-clearance);
 }
-body.is-pwa #map3d-focus .m3d-focus-card {
+body.is-pwa #map3d-focus .m3d-focus-card,
+body.is-pwa .map-frame .arch-report-host .arch-report-panel {
     max-height: min(76vh, 620px, calc(100% - 16px - var(--m3d-focus-bottom-clearance)));
 }
 

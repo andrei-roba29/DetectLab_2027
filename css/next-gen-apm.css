@@ -178,6 +178,15 @@
 .apm-hotspot-swatch { width: 18px; height: 12px; box-sizing: border-box; border: 2px solid #d9f5ff; border-radius: 4px; background: transparent; flex-shrink: 0; }
 .apm-result-scale { margin-bottom: 6px; }
 
+/* On desktop web, match the LiDAR 3D flex host: its 16px padding on
+   each side and the card's own 16px width allowance leave 48px in total.
+   The existing 76vh / 620px height cap already matches the LiDAR card. */
+@media (min-width: 721px) {
+    body:not(.is-pwa) .map-frame #apmNextPanel {
+        width: min(400px, calc(100% - 48px));
+    }
+}
+
 /* Configuration and minimized windows live within the map frame, including fullscreen/PWA.
    Matches the dimensions, placement and responsive clearance of the LiDAR in 3D window (#map3d-focus). */
 @media (max-width: 720px) {

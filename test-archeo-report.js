@@ -718,15 +718,15 @@ section('Report window: baseline, period, bonuses');
      'archReportBonusRoads', 'archReportBonusPotential', 'archReportBonusLidar']
         .forEach(id => check('index.html has #' + id, html.indexOf('id="' + id + '"') !== -1));
 
-    // Drag handle: the shared resize grip targets the panel and the desktop
-    // growth rule covers it alongside #apmNextPanel.
+    // Both cards use the shared resize grip and stay inside their map frame.
     check('the drag-handle system targets the report window',
         wr.indexOf("'.arch-report-panel'") !== -1);
-    check('the report window shares the desktop growth rule with the APM panel',
-        wr.indexOf("panel.id === 'archReportPanel'") !== -1);
-    check('the window keeps the APM panel look (anchored bottom-right, no restyle)',
-        css.indexOf('.map-frame .arch-report-panel') !== -1 &&
-        css.indexOf('.map-frame .arch-report-panel { left: auto;') !== -1);
+    check('the report does not use the APM desktop-only growth rule',
+        wr.indexOf("panel.id === 'archReportPanel'") === -1);
+    check('the window uses the LiDAR card host instead of the APM anchor',
+        html.includes('class="arch-report-host"') &&
+        css.includes('.map-frame .arch-report-host .arch-report-panel') &&
+        css.includes('position: static; left: auto; right: auto; bottom: auto; transform: none;'));
 
     // Layer toggle opens the window (mirrors APM Next-Gen).
     check('the layer switch controls the window', /id="archReportToggle"[^>]*aria-controls="archReportPanel"/.test(html));
