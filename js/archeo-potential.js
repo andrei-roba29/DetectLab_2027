@@ -1065,24 +1065,33 @@
         var half = Math.max(0, (cellM || 0)) / 2;
         var k = Math.max(1, Math.min(maxAxis, Math.ceil((cellM || step) / step)));
         var kLat = 111320;
-        var kLng = Math.max(1, 111320 * Math.cos(lat * Math.PI / 180));
+        var sameRow = !!(merc && merc.z === z && Math.abs(merc.lat - lat) < 1e-9);
+        var kLng;
+        if (sameRow) {
+            if (merc.kLng === undefined) merc.kLng = Math.max(1, 111320 * Math.cos(lat * Math.PI / 180));
+            kLng = merc.kLng;
+        } else kLng = Math.max(1, 111320 * Math.cos(lat * Math.PI / 180));
         var red = 0, known = 0, samples = 0;
-        var scale = Math.pow(2, z);
+        var scale = sameRow ? (merc.scale || (merc.scale = Math.pow(2, z))) : Math.pow(2, z);
         // Web Mercator y is almost perfectly linear across one prediction cell.
         // Callers scanning a raster can pass the row's value/derivative, so the
         // expensive log/tan conversion runs once per row instead of k² per cell.
-        var y0 = uatLatToTileYF(lat, z), dY = 0;
+        var y0, dY = 0;
         // With a single probe sLat === lat, so no derivative is needed.
-        if (k > 1) {
-            if (merc && merc.z === z && Math.abs(merc.lat - lat) < 1e-9) {
-                y0 = merc.y0; dY = merc.dY;
-            } else {
-                dY = (uatLatToTileYF(lat + 1e-4, z) - uatLatToTileYF(lat - 1e-4, z)) / 2e-4;
-            }
-        } else if (merc && merc.z === z && Math.abs(merc.lat - lat) < 1e-9) {
+        if (sameRow) {
             y0 = merc.y0;
+            if (k > 1) dY = merc.dY;
+        } else {
+            y0 = uatLatToTileYF(lat, z);
+            if (k > 1) dY = (uatLatToTileYF(lat + 1e-4, z) - uatLatToTileYF(lat - 1e-4, z)) / 2e-4;
         }
+        // A row scan visits the same tile for hundreds of consecutive cells:
+        // keep the last resolved tile on the row object instead of rebuilding
+        // the cache key string for every probe.
         var lastTx = NaN, lastTy = NaN, tile = null;
+        if (sameRow && merc._tileSrc === runTiles && merc._tx !== undefined) {
+            lastTx = merc._tx; lastTy = merc._ty; tile = merc._tile;
+        }
 
         for (var i = 0; i < k; i++) {
             var fy = (k === 1) ? 0.5 : i / (k - 1);
@@ -1108,6 +1117,12 @@
                 known++;
                 if (tile.mask[py * size + px]) red++;
             }
+        }
+        // Only a resolved tile is remembered: a missing/pending tile is looked
+        // up again on the next cell (it may have been decoded meanwhile).
+        if (sameRow) {
+            if (tile) { merc._tileSrc = runTiles; merc._tx = lastTx; merc._ty = lastTy; merc._tile = tile; }
+            else merc._tx = undefined;
         }
         return { red: known > 0 ? red / known : 0, samples: samples, known: known };
     }
@@ -1392,8 +1407,92 @@
         return null;
     }
 
+    /** Rasterise every known-site protection footprint (radius + buffer disc
+     * and site polygons) onto the prediction grid. Exactly the predicates of
+     * exclusionReason() ('heritage'), evaluated per site instead of per cell. */
+    function rasteriseHeritageFootprint(grid, ctx, colX, rowY, kLng) {
+        var w = grid.w, h = grid.h, out = new Uint8Array(w * h);
+        var minDist = ctx.siteRadius + ctx.siteBuffer, minDist2 = minDist * minDist;
+        function colRange(x0, x1) {
+            var a = Math.floor((x0 / kLng - grid.west) / grid.dLon - 0.5) - 1;
+            var b = Math.ceil((x1 / kLng - grid.west) / grid.dLon - 0.5) + 1;
+            return [Math.max(0, a), Math.min(w - 1, b)];
+        }
+        function rowRange(y0, y1) {             // y grows northwards, rows southwards
+            var a = Math.floor((grid.north - y1 / 111320) / grid.dLat - 0.5) - 1;
+            var b = Math.ceil((grid.north - y0 / 111320) / grid.dLat - 0.5) + 1;
+            return [Math.max(0, a), Math.min(h - 1, b)];
+        }
+        var sites = ctx.sites || [];
+        for (var s = 0; s < sites.length; s++) {
+            var sx = sites[s].x, sy = sites[s].y;
+            if (!Number.isFinite(sx) || !Number.isFinite(sy)) continue;
+            var cr = colRange(sx - minDist, sx + minDist), rr = rowRange(sy - minDist, sy + minDist);
+            for (var r = rr[0]; r <= rr[1]; r++) {
+                var ddy = rowY[r] - sy, ddy2 = ddy * ddy;
+                if (ddy2 >= minDist2) continue;
+                var base = r * w;
+                for (var c = cr[0]; c <= cr[1]; c++) {
+                    var ddx = colX[c] - sx;
+                    if (ddx * ddx + ddy2 < minDist2) out[base + c] = 1;
+                }
+            }
+        }
+        var polygons = ctx.polygons || [];
+        for (var p = 0; p < polygons.length; p++) {
+            var rings = polygons[p].rings || [];
+            for (var q = 0; q < rings.length; q++) {
+                var ring = rings[q];
+                if (!ring || ring.length < 3) continue;
+                var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+                for (var v = 0; v < ring.length; v++) {
+                    if (ring[v].x < minX) minX = ring[v].x; if (ring[v].x > maxX) maxX = ring[v].x;
+                    if (ring[v].y < minY) minY = ring[v].y; if (ring[v].y > maxY) maxY = ring[v].y;
+                }
+                var pc = colRange(minX, maxX), pr = rowRange(minY, maxY);
+                for (var pr0 = pr[0]; pr0 <= pr[1]; pr0++) {
+                    var py = rowY[pr0];
+                    if (py < minY || py > maxY) continue;
+                    for (var pc0 = pc[0]; pc0 <= pc[1]; pc0++) {
+                        var idx = pr0 * w + pc0;
+                        if (out[idx]) continue;
+                        if (pointInPolygon(colX[pc0], py, ring)) out[idx] = 1;
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    var MASK_SLICE_MS = 10;
+    function nowMs() {
+        return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    }
+    // Yield without the 4 ms nested-setTimeout clamp so a time-sliced loop
+    // stays fast while still letting the browser paint and handle gestures.
+    var _yieldPort = null, _yieldQueue = [];
+    function yieldToEventLoop() {
+        try {
+            if (typeof scheduler !== 'undefined' && scheduler && typeof scheduler.yield === 'function') {
+                return scheduler.yield();
+            }
+        } catch (e) { /* fall through */ }
+        if (typeof MessageChannel === 'function' && typeof window !== 'undefined' && window.document &&
+            typeof window.document.createElement === 'function') {
+            if (!_yieldPort) {
+                var channel = new MessageChannel();
+                channel.port1.onmessage = function () { var next = _yieldQueue.shift(); if (next) next(); };
+                _yieldPort = channel.port2;
+            }
+            return new Promise(function (resolve) { _yieldQueue.push(resolve); _yieldPort.postMessage(0); });
+        }
+        return new Promise(function (resolve) { setTimeout(resolve, 0); });
+    }
+
     /** Shared prediction exclusions for Next-Gen APM. Independent of layer visibility,
-     * scoring, triangulation and selected training period. 1 = forbidden cell.
+     * scoring, triangulation and selected training period. Any non-zero value is a
+     * forbidden cell: 1 = forbidden and transparent in the heatmap, 2 = known-site
+     * protection zone on verified free land (forbidden for results, heat may show).
      * Fail closed on unavailable UAT data: an unverified cell is never a result. */
     async function computeExclusionMask(grid, centerLat, centerLng, radiusM, opts) {
         opts = opts || {};
@@ -1439,10 +1538,23 @@
         ctx.radius = radiusM;
         ctx.siteRadius = CONFIG.SITE_RADIUS_M;
         ctx.siteBuffer = CONFIG.SITE_BUFFER_M + halfDiagonal;
-        ctx.siteIndex = createGridIndex(1200, 1200);
-        ctx.sites.forEach(function (site) { ctx.siteIndex.insert(site.x, site.y, site); });
+        // Local-metre coordinates are separable (x depends on the column only,
+        // y on the row only), so the protection footprint can be rasterised
+        // once per site instead of querying a spatial index for every cell.
+        // Same expressions as projectToLocalMeters() → identical predicates.
+        var kLngLocal = 111320 * Math.cos(centerLat * Math.PI / 180);
+        var colX = new Float64Array(grid.w), rowY = new Float64Array(grid.h);
+        for (var cx0 = 0; cx0 < grid.w; cx0++) colX[cx0] = (grid.west + (cx0 + 0.5) * grid.dLon) * kLngLocal;
+        for (var ry0 = 0; ry0 < grid.h; ry0++) rowY[ry0] = (grid.north - (ry0 + 0.5) * grid.dLat) * 111320;
+        var heritageCells = rasteriseHeritageFootprint(grid, ctx, colX, rowY, kLngLocal);
+        checkCancelled();
+        // Mask values: 0 = scoreable; 1 = forbidden and hidden (built-up,
+        // unverified, outside); 2 = known-site protection zone on verified free
+        // land. Value 2 is still forbidden for hotspots, areas and exports, but
+        // the score heatmap may stay continuous there, so the protection radii
+        // are not drawn as circular holes when the Heritage layer is off.
         var mask = new Uint8Array(grid.w * grid.h);
-        var stats = { heritage: 0, uat: 0, unknown: 0, outside: 0 };
+        var stats = { heritage: 0, uat: 0, unknown: 0, outside: 0, protectedDisplay: 0 };
         // A 50 km TRAIN window covers about 4,000 native z14 UAT tiles. Loading
         // them block by block, then evicting them from the bounded cache before
         // the mask is sampled, dominated the run time and left unknown cells.
@@ -1483,6 +1595,7 @@
             }
         }
         checkCancelled();
+        var lastYield = nowMs();
         var tileLon = 360 / Math.pow(2, z);
         var tileLat = tileLon * Math.cos(edgeLat * Math.PI / 180);
         var blockCols = Math.max(1, Math.floor(8 * tileLon / grid.dLon));
@@ -1512,22 +1625,34 @@
                         // probes per large prediction cell are enough and keep the
                         // 50 km mask pass off the UI thread for minutes.
                         stepM: runTiles ? Math.max(dx, dy) / 2 : undefined };
+                    var cellDy = rowY[row] - ctx.center.y, cellDy2 = cellDy * cellDy;
+                    var radius2 = ctx.radius * ctx.radius;
                     for (var col = col0; col < colEnd; col++) {
                         var i = row * grid.w + col;
-                        var lng = grid.west + (col + 0.5) * grid.dLon;
-                        var cell = projectToLocalMeters(rowLat, lng, centerLat);
-                        var reason = exclusionReason(cell, ctx);
-                        if (!reason) {
+                        var cellDx = colX[col] - ctx.center.x;
+                        var reason = null, displayable = false;
+                        if (cellDx * cellDx + cellDy2 > radius2) reason = 'outside';
+                        else if (heritageCells[i]) { reason = 'heritage'; displayable = true; }
+                        if (!reason || displayable) {
+                            var lng = grid.west + (col + 0.5) * grid.dLon;
                             var sample = uatCellRedFraction(rowLat, lng, Math.max(dx, dy), z, runTiles, merc);
-                            // Unknown data and built-up land must remain excluded.
-                            if (sample.known < sample.samples) reason = 'unknown';
-                            else if (sample.red < 1) reason = 'uat';
+                            // Unknown data and built-up land must remain excluded
+                            // (and hidden, even inside a protection radius).
+                            if (sample.known < sample.samples) { if (!reason) reason = 'unknown'; displayable = false; }
+                            else if (sample.red < 1) { if (!reason) reason = 'uat'; displayable = false; }
                         }
-                        if (reason) { mask[i] = 1; stats[reason]++; }
+                        if (reason) {
+                            mask[i] = displayable ? 2 : 1;
+                            stats[reason]++;
+                            if (displayable) stats.protectedDisplay++;
+                        }
                     }
-                    if (row % 16 === 0) {
+                    // Time-sliced instead of every N rows: a 1024-column TRAIN
+                    // grid used to block the UI for long stretches on phones.
+                    if (nowMs() - lastYield > MASK_SLICE_MS) {
                         checkCancelled();
-                        await new Promise(function (resolve) { setTimeout(resolve, 0); });
+                        await yieldToEventLoop();
+                        lastYield = nowMs();
                     }
                 }
             }
