@@ -991,7 +991,10 @@
 //   worker URL).
 // v398: desktop APM matches the LiDAR 3D card.
 // v397: match the archaeological report window to the LiDAR 3D card, including PWA clearance.
-const CACHE_NAME = 'detectlab-v398-apm-lidar-desktop';
+// v399: Romanian Heritage is a switch-only group with archaeology + protected
+// nature sublayers. The range reader/worker are lazy; the 75 MB GPKG is NEVER
+// precached. Shell assets are updated for installed PWAs.
+const CACHE_NAME = 'detectlab-v399-ro-heritage-sublayers';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1033,6 +1036,19 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 //   and js/map3d-terrain.js.
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
+  // v399: Romanian Heritage sublayers (reader dependencies are local).
+  'js/map-app.js?v=20261102-ro-heritage',
+  'css/romania-heritage.css?v=20261102-ro-heritage',
+  'js/romania-heritage.js?v=20261102-ro-heritage',
+  'js/geopackage-reader.js?v=20261102-ro-heritage',
+  'js/geopackage-worker.js?v=20261102-ro-heritage',
+  'js/vendor/geopackage/comlink.js',
+  'js/vendor/geopackage/proj4.js',
+  'js/vendor/geopackage/sqlite.worker.js',
+  'js/vendor/geopackage/sql-wasm.wasm',
+  'js/translations.js?v=20261102-ro-heritage',
+  'js/vertical-opacity-control.js?v=20261102-ro-heritage',
+
   // v301: Next-Gen APM (MANUAL) — see the header note above.
   'css/next-gen-apm.css?v=20261102-apm-lidar-desktop',
   'css/next-gen-apm.css?v=20261101-dock-lower-1mm',

@@ -40,6 +40,25 @@ sees one origin, and the responses are cacheable (`public, max-age=604800,
 immutable` for tiles, `max-age=300`/`s-maxage=3600` for the heritage query), so
 repeated panning costs the providers nothing new.
 
+## Romanian Heritage (free)
+
+`js/romania-heritage.js` groups the existing CIMEC/RAN source and the
+user-supplied natural protected sites. The group has no opacity slider; each
+source has its own switch and opacity. All are off by default.
+
+| RO / EN | Source | Attribution / provenance | Credentials |
+|---|---|---|---|
+| Patrimoniu arheologic / Archeological heritage | Existing DetectLab API GeoJSON layers 0, 5, 6; fallback `https://eism.geo-spatial.ro/eismgeo/services/Patrimoniu/PatrimoniuWM/MapServer/WmsServer` | © CIMEC / `ran.cimec.ro`; existing site and protection-radius data retained | None added; existing backend unchanged |
+| Arii naturale protejate / Natural protected sites | `https://dacboefvooxgsngxkavx.supabase.co/storage/v1/object/public/Harti/ariinaturaleprotejate.gpkg` | User-supplied GeoPackage, hosted in Supabase bucket `Harti`; no additional provider licence supplied. Original is read-only and is not copied into Git. | Public object; no API key |
+
+The natural-area boundary/fill is green. It loads only the visible area, from
+zoom 8, using SQLite HTTP Range queries in a worker; projected coordinates
+are converted to WGS84. The source info panel identifies the file and reminds
+users to verify restrictions with the responsible authority. It does not
+claim that absence of a feature grants access or detection permission.
+See **`ROMANIA_HERITAGE_SUBLAYERS.md`** for resource limits, validation coverage
+and the live-source verification limitation.
+
 ## The Danish layers (Denmark · Danish maps)
 
 | # | id | what it is | provider endpoint | LAYERS | licence | attribution as shown | credential / permission |

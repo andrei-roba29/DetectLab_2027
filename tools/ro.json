@@ -245,6 +245,8 @@
   "layer_osm_places": "Localități OSM",
   "layer_uat": "UAT",
   "layer_heritage": "Patrimoniu",
+  "layer_archaeological_heritage": "Patrimoniu arheologic",
+  "layer_natural_protected_sites": "Arii naturale protejate",
   "heritage_legend_title": "Legendă",
   "heritage_legend_red": "Situri cu coordonate corecte",
   "heritage_legend_green": "Situri cu coordonate aproximate",
