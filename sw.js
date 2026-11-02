@@ -970,7 +970,7 @@
 //   65,536 JS samples), and the exclusion mask rasterises site footprints once
 //   and time-slices its loop. Re-tags apm-heatmap/apm-ui/apm-worker and
 //   archeo-potential.js.
-const CACHE_NAME = 'detectlab-v386-apm-continuous-heat';
+const CACHE_NAME = 'detectlab-v387-pwa-map-bottom-dark';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.

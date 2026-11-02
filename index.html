@@ -198,6 +198,16 @@
             background: #060E1E;
         }
 
+        /* Android installed app: the map containers must never show Leaflet's
+           light #ddd fill (leaflet.css) at their edges. Anything the tiles do
+           not cover — including the sub-millimetre band at the bottom edge,
+           above the system navigation bar — is the app's navy, not a white line. */
+        body.is-pwa #detectlab-map,
+        body.is-pwa .map-frame,
+        body.is-pwa .map-wrapper {
+            background-color: #060E1E !important;
+        }
+
         /* styles.css normally paints a solid strip behind the iPhone notch.
            In standalone mode the map itself is the safe-area background. */
         body.is-pwa::before {
