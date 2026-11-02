@@ -977,7 +977,7 @@
 //   the prediction DEM download to finish first; it now starts at the same
 //   time, which is what made the run step feel like it loaded forever.
 //   Re-tags apm-pipeline.js.
-const CACHE_NAME = 'detectlab-v388-apm-parallel-fetch';
+const CACHE_NAME = 'detectlab-v391-conversation-no-grip';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1023,6 +1023,7 @@ const PRECACHE_URLS = [
   'css/next-gen-apm.css?v=20261101-dock-lower-1mm',
   'css/map-window-layers.css?v=20261101-window-stacking',
   'css/window-resize.css?v=20261102-pwa-window-resize-bottom-clearance',
+  'js/window-resize.js?v=20261102-conversation-no-grip',
   'js/window-resize.js?v=20261102-pwa-window-resize-bottom-clearance',
   // Older tags stay listed on purpose: an installed PWA still running an older
   // index.html keeps working offline through its own versioned URL.

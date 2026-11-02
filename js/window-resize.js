@@ -5,7 +5,8 @@
     // Target the visible window, not its backdrop or map-sized positioning host.
     // The layers window (.transp-panel / #transpPanel) is deliberately absent:
     // it is anchored top→bottom of the map frame and gets no resize grip.
-    // Login/register, account management, Friends and Events also stay grip-free.
+    // Login/register, account management, Friends, friend chats, Events and tutorial slides
+    // also stay grip-free.
     var selector = [
         '#iosBldSettingsPanel', '#iosfreeModalInner',
         '.hist-shift-panel', '.om-panel',
@@ -13,8 +14,8 @@
         '#map3d-focus .m3d-focus-card', '.om-modal-card', '.layer-info-box',
         '.ios-modal-card', '.babel-dialog', '.premium-box',
         '.terms-box', '.nearby-dialog',
-        '#weatherPanel', '.site-alert-box', '.pwa-help-card', '.dl-tut-card',
-        '.fr-chat-panel', '.fr-modal-box',
+        '#weatherPanel', '.site-alert-box', '.pwa-help-card',
+        '.fr-modal-box',
         '#eventChatModal > div',
         '#createEventModal > div', '#inquiryModal > div',
         '#manageEventModal > div', '#eventNotifModal > div'
@@ -121,6 +122,18 @@
         viewport = viewport || document.documentElement.clientHeight || 600;
         var frame = panel.closest('.map-frame');
         var frameHeight = frame ? frame.getBoundingClientRect().height : 0;
+        // On desktop the normal (non-fullscreen) map is only 560px tall, but
+        // its overflow is visible. Let APM grow above it while keeping the
+        // bottom anchored to the map and the grip inside the visible viewport.
+        if (frame && panel.id === 'apmNextPanel' && !isPwa() &&
+            !frame.classList.contains('is-fullscreen') &&
+            window.matchMedia('(min-width: 721px)').matches) {
+            var bottomEdge = panel.getBoundingClientRect().bottom;
+            var viewportTop = window.visualViewport ? window.visualViewport.offsetTop : 0;
+            var desktopMax = Math.max(MIN_HEIGHT, Math.min(viewport - TOP_GUARD,
+                bottomEdge - (viewportTop || 0) - TOP_GUARD));
+            return { min: Math.min(MIN_HEIGHT, desktopMax), max: desktopMax };
+        }
         // `bottom` is measured from the containing block's bottom edge. In a
         // PWA that block is the map frame, whose height is --pwa-viewport-h
         // (the visible viewport PLUS --pwa-bleed).
