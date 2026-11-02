@@ -63,75 +63,12 @@ assert(/body\.is-pwa\.dl-ios-native-layout #map-section\s*\{[^}]*position:\s*rel
 assert(html.includes("classList.contains('dl-ios-native-layout')"), 'iOS bypasses physical screen.height map fitter');
 assert(/body\.is-pwa #authModal\.pwa-auth-editing\s*\{[^}]*bottom:\s*0;[^}]*height:\s*100%/s.test(html));
 assert(!html.includes('dlKeyboardToggle'), 'no standalone keyboard toggle button');
-assert(html.includes('js/ios-fallback-keyboard.js?v=20261101-ios-inline-fallback'));
-assert(sw.includes('js/ios-fallback-keyboard.js?v=20261101-ios-inline-fallback'));
-assert(/#dlIosKeyboard\s*\{[^}]*padding:\s*5px 4px 0;/s.test(html), 'no extra bottom padding');
-assert(html.includes('#dlIosKeyboard::after'), 'native-reserved area has an opaque backdrop');
+assert(!html.includes('ios-fallback-keyboard'), 'native keyboard is not overlaid by app keys');
+assert(!sw.includes('js/ios-fallback-keyboard.js'), 'fallback keyboard is not precached');
+assert(!html.includes('dlIosKeyboard') && !html.includes('--dl-ios-keys-height'));
 for (const file of ['ios-input-focus', 'friends', 'library-of-babel', 'subscriptions']) {
     const url = `js/${file}.js?v=20261101-ios-flow-keyboard`;
     assert(html.includes(url) && sw.includes(url), `${url} must be loaded and precached`);
 }
-assert(sw.includes('detectlab-v376-ios-top-level-oauth'));
-// The provisional keyboard opens automatically for EVERY editable field, with
-// no extra toggle and no second reservation below the OS-provided area.
-{
-    const source = fs.readFileSync('js/ios-fallback-keyboard.js', 'utf8');
-    const events = {}, vvEvents = {}, timers = [];
-    function el(tag) {
-        const children = [];
-        return {
-            tagName: tag.toUpperCase(), nodeType: 1, children, offsetHeight: 220,
-            style: { setProperty(key, value) { this[key] = value; }, removeProperty(key) { delete this[key]; } },
-            setAttribute() {},
-            addEventListener(type, cb) { this['on' + type] = cb; },
-            appendChild(child) { children.push(child); },
-            removeChild(child) { children.splice(children.indexOf(child), 1); },
-            get firstChild() { return children[0]; }
-        };
-    }
-    const body = el('body');
-    const input = {
-        tagName: 'INPUT', type: 'text', nodeType: 1, isConnected: true,
-        value: 'Hi', selectionStart: 2, selectionEnd: 2, calls: 0,
-        setRangeText(text, start, end) {
-            this.value = this.value.slice(0, start) + text + this.value.slice(end);
-            this.selectionStart = this.selectionEnd = start + text.length;
-        },
-        dispatchEvent() { this.calls++; return true; },
-        blur() { doc.activeElement = body; events.focusout({ target: input }); }
-    };
-    const doc = { body, activeElement: body, createElement: el,
-        addEventListener(type, cb) { events[type] = cb; } };
-    const vv = { height: 480, offsetTop: 0,
-        addEventListener(type, cb) { vvEvents[type] = cb; } };
-    const win = { navigator: { userAgent: 'iPhone', standalone: true },
-        innerHeight: 800, visualViewport: vv,
-        matchMedia: () => ({ matches: true }),
-        addEventListener(type, cb) { events['window-' + type] = cb; } };
-    vm.runInNewContext(source, { document: doc, window: win,
-        Event: class { constructor(type) { this.type = type; } },
-        KeyboardEvent: class { constructor(type) { this.type = type; } },
-        setTimeout(cb) { timers.push(cb); }
-    });
-    doc.activeElement = input;
-    events.focusin({ target: input });
-    assert.strictEqual(body.children.length, 1, 'only the keyboard is created, no toggle');
-    const keyboard = body.children[0];
-    assert.strictEqual(keyboard.id, 'dlIosKeyboard');
-    assert.strictEqual(keyboard.style.bottom, '320px', 'keyboard sits above the native reserved space');
-    assert.strictEqual(body.style['--dl-ios-keys-height'], '220px', 'auth form gets space above keys, not below them');
-    assert.strictEqual(keyboard.style['--dl-os-reserved'], '320px', 'same native space gets an opaque backing, not extra padding');
-    keyboard.children[1].children[0].onpointerdown({ preventDefault() {} });
-    assert.strictEqual(input.value, 'Hiq');
-    assert.strictEqual(input.calls, 1);
-    keyboard.children[1].children[0].onclick({ preventDefault() {} });
-    assert.strictEqual(input.value, 'Hiq', 'touch does not type twice');
-    vv.height = 550;
-    vvEvents.resize();
-    assert.strictEqual(keyboard.style.bottom, '250px');
-    input.blur();
-    timers.shift()();
-    assert(keyboard.hidden, 'keyboard closes when editing ends');
-    assert.strictEqual(body.style['--dl-ios-keys-height'], undefined, 'form height restores after editing');
-}
-console.log('iOS standalone layout and fallback text-entry regression checks passed');
+assert(sw.includes('detectlab-v378-ios-oauth-return'));
+console.log('iOS standalone layout and native text-entry regression checks passed');

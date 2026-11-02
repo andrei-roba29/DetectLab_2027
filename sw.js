@@ -943,7 +943,9 @@
 // spacer or a separate keyboard-toggle button; cache the new helper offline.
 // v376: iOS Google sign-in attempts an out-of-scope top-level navigation
 // instead of an auxiliary PWA window; Android keeps its popup flow.
-const CACHE_NAME = 'detectlab-v376-ios-top-level-oauth';
+// v377: rely on the native iOS keyboard instead of the temporary app keys.
+// v378: keep the app alive during iOS OAuth and provide a callback exit.
+const CACHE_NAME = 'detectlab-v378-ios-oauth-return';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1246,7 +1248,6 @@ const PRECACHE_URLS = [
   '.',
   'index.html',
   'js/ios-input-focus.js?v=20261101-ios-flow-keyboard',
-  'js/ios-fallback-keyboard.js?v=20261101-ios-inline-fallback',
   'js/auth.js?v=20261101-ios-flow-keyboard',
   'js/friends.js?v=20261101-ios-flow-keyboard',
   'js/library-of-babel.js?v=20261101-ios-flow-keyboard',
@@ -1862,7 +1863,7 @@ const PRECACHE_URLS = [
   'js/pwa-google-auth.js?v=20261101-google-origin',
   'js/auth.js?v=20261101-google-origin',
   'js/pwa-google-auth.js?v=20261101-safari-direct-oauth',
-  'js/pwa-google-auth.js?v=20261101-ios-top-level-oauth',
+  'js/pwa-google-auth.js?v=20261102-ios-popup-return',
   'js/auth.js?v=20261101-safari-direct-oauth',
   // v286: the shell is sized from a measured pixel height (--pwa-viewport-h)
   // instead of any CSS viewport unit, and the temporary on-device band probe
