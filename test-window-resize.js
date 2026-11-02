@@ -9,7 +9,7 @@ const script = fs.readFileSync('js/window-resize.js', 'utf8');
 const css = fs.readFileSync('css/window-resize.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 const sw = fs.readFileSync('sw.js', 'utf8');
-for (const asset of ['css/window-resize.css?v=20261102-pwa-window-resize-bottom-clearance', 'js/window-resize.js?v=20261102-pwa-window-resize-bottom-clearance']) {
+for (const asset of ['css/window-resize.css?v=20261102-pwa-window-resize-bottom-clearance', 'js/window-resize.js?v=20261102-conversation-no-grip']) {
     assert(html.includes(asset) && sw.includes(asset), 'new asset is loaded and precached');
 }
 assert(!/'\\.transp-panel'/.test(script), 'the layers window is never given a resize grip');
@@ -23,6 +23,8 @@ assert(/overflow-y:\s*auto\s*!important/.test(css), 'content remains scrollable'
         <div id="authModal" style="display:flex;align-items:center;flex-direction:row"><div class="auth-box"><input id="email"></div></div>
         <div style="display:flex;align-items:center"><div class="premium-box"></div></div>
         <div id="friendsManagerPanel"></div><div id="eventsManagerPanel"></div>
+        <div class="dl-tut-card"><div class="dl-tut-card-body">Tutorial slide</div></div>
+        <div id="friendChatPanel" class="fr-chat-panel"><div class="fr-chat-messages">Messages</div></div>
         <div class="pwa-account-wrapper"><div id="accountPanel"><button>Account</button></div></div>
         </body></html>`, { runScripts: 'outside-only', pretendToBeVisual: true });
     const { window } = dom;
@@ -35,7 +37,7 @@ assert(/overflow-y:\s*auto\s*!important/.test(css), 'content remains scrollable'
     const layer = window.document.querySelector('.transp-panel');
     const rvt = window.document.querySelector('#rvt-body');
     const auth = window.document.querySelector('.premium-box');
-    const gripFree = '.auth-box, #accountPanel, .pwa-account-wrapper, #friendsManagerPanel, #eventsManagerPanel';
+    const gripFree = '.auth-box, #accountPanel, .pwa-account-wrapper, #friendsManagerPanel, #eventsManagerPanel, .dl-tut-card, .fr-chat-panel';
     function assertGripFree() {
         window.document.querySelectorAll(gripFree).forEach(panel => {
             assert(!panel.querySelector('.dl-window-resize-handle'), panel.className || panel.id);
@@ -79,10 +81,20 @@ assert(/overflow-y:\s*auto\s*!important/.test(css), 'content remains scrollable'
     assert(rvt.querySelector('button'), 'existing controls survive resizing');
     assert(!layer.style.height && !layer.classList.contains('dl-window-compact'), 'the layers window keeps its docked geometry while dialogs resize');
     rvt.innerHTML = '<button>Re-rendered settings</button>';
+    const chat = window.document.createElement('div');
+    chat.className = 'fr-chat-panel';
+    chat.innerHTML = '<div class="fr-chat-messages">New conversation</div>';
+    window.document.body.appendChild(chat);
+    const slide = window.document.createElement('div');
+    slide.className = 'dl-tut-card';
+    slide.innerHTML = '<div class="dl-tut-card-body">New slide</div>';
+    window.document.body.appendChild(slide);
     const created = window.document.createElement('div');
     created.className = 'offline-library';
     frame.appendChild(created);
     await new Promise(resolve => window.setTimeout(resolve, 0));
+    assert(!slide.querySelector('.dl-window-resize-handle'), 'dynamically rendered tutorial slides have no grip');
+    assert(!chat.querySelector('.dl-window-resize-handle'), 'dynamically opened conversations have no grip');
     assert.equal(rvt.querySelectorAll('.dl-window-resize-handle').length, 1, 'grip returns after rerender');
     assert.equal(created.querySelectorAll('.dl-window-resize-handle').length, 1, 'dynamically added windows get a grip');
     window.document.body.appendChild(window.document.querySelector('#accountPanel'));

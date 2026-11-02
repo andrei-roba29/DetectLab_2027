@@ -12,7 +12,7 @@ const css = fs.readFileSync('css/window-resize.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 const sw = fs.readFileSync('sw.js', 'utf8');
 const tag = '20261102-pwa-window-resize-bottom-clearance';
-for (const asset of [`css/window-resize.css?v=${tag}`, `js/window-resize.js?v=${tag}`]) {
+for (const asset of [`css/window-resize.css?v=${tag}`, 'js/window-resize.js?v=20261102-conversation-no-grip']) {
     assert(html.includes(asset), `${asset} is loaded by index.html`);
     assert(sw.includes(asset), `${asset} is precached for offline PWA`);
 }
@@ -33,7 +33,7 @@ assert(script.includes('PWA_BOTTOM_FLOOR') && script.includes('clearBottomGuard'
           <div class="om-panel" style="position:absolute;top:70px">Top-anchored panel</div>
           <div class="hist-shift-panel" style="position:absolute;top:50%;transform:translateY(-50%)">Centred panel</div>
         </div>
-        <div class="fr-chat-panel" style="position:fixed;top:0px;bottom:0px">Chat</div>
+        <div id="eventChatModal"><div style="position:fixed;top:0px;bottom:0px">Event chat</div></div>
         </body></html>`, { runScripts: 'outside-only', pretendToBeVisual: true });
     const { window } = dom;
     const doc = window.document;
@@ -47,7 +47,7 @@ assert(script.includes('PWA_BOTTOM_FLOOR') && script.includes('clearBottomGuard'
     };
     const apm = doc.querySelector('#apmNextPanel');
     const offline = doc.querySelector('.offline-map-panel');
-    const chat = doc.querySelector('.fr-chat-panel');
+    const chat = doc.querySelector('#eventChatModal > div');
     const topAnchored = doc.querySelector('.om-panel');
     const centred = doc.querySelector('.hist-shift-panel');
     [apm, offline, chat, topAnchored, centred].forEach(mockHeight);
