@@ -61,6 +61,9 @@ function harness(mode='ok') {
     };
     // The REAL protection mask is loaded. Legacy heritage loaders must never run.
     w._loadLocalLayerData=()=>{throw Error('Legacy heritage download forbidden during TRAIN');};
+    // A cold UAT cache backed by free-land tiles; the real mask must load them.
+    let uatRequests = 0;
+    w._uatGetTile=async()=>{uatRequests++;return {data:new Uint8ClampedArray([0,0,0,255]),size:1};};
     w.eval(read('js/archeo-potential.js'));
     for(const s of scripts)w.eval(read('js/apm-next/'+s+'.js'));
     w.DetectLabApmUi.init();w.DetectLabApmUi.setEnabled(true);
@@ -78,7 +81,7 @@ function harness(mode='ok') {
         assert(events.click,'map picker active');events.click({latlng:{lat,lng:lon}});
         await until(()=>!w.document.querySelector('.apm-status').textContent.includes('Loading exact-position'),'site loading');
     };
-    return {w,dom,requests,ops,pick,clickText,get completed(){return completed;},get runError(){return runError;},get params(){return params;}};
+    return {w,dom,requests,ops,pick,clickText,get completed(){return completed;},get runError(){return runError;},get params(){return params;},get uatRequests(){return uatRequests;}};
 }
 (async()=>{
     const h=harness();
@@ -93,6 +96,8 @@ function harness(mode='ok') {
         assert.equal(h.completed.mode,'train');
         assert.equal(h.completed.diagnostics.sitesUsed,40,'distinct names at identical positions survive the entire training pipeline');
         assert(h.ops.includes('train')&&h.ops.includes('score'),'real worker fitted and scored');
+        assert(h.uatRequests > 0, 'TRAIN loads exclusion tiles on a cold cache');
+        assert(h.completed.scoreStats.cells > 0 && h.completed.heatmap.rgba.some((v,i)=>i%4===3 && v>0), 'TRAIN produces visible heat');
         assert.equal(h.requests.filter(u=>u.includes('/rpc/apm_sites_within')).length,1);
         assert(h.requests.some(u=>u.includes('GetCoverage'))&&h.requests.some(u=>u.includes('EUHydro')));
         assert(h.requests.every(u=>['project.supabase.example','image.discomap.eea.europa.eu','overpass-api.de'].includes(new URL(u).host)), JSON.stringify(h.requests));

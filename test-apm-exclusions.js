@@ -149,9 +149,50 @@ function workerHarness() {
     await ctx.setPredictionAnalysis(session, analysis, {}, warnings);
     assert.equal(received.analysis.exclusionMask, split.mask);
     assert.equal(warnings[0].key, 'warn.exclusionUnknown');
+    // TRAIN must request UAT prewarming even when it provides authoritative sites.
+    let options;
+    ctx.root.computeArcheoExclusionMask = async (...args) => { options = args[4]; return { mask: split.mask, stats: { unknown: 0 } }; };
+    const records = [{ lat, lon }];
+    records._protectionRecords = [{ lat: lat + .001, lon }];
+    await ctx.setPredictionAnalysis(session, analysis, { records }, []);
+    assert.equal(options.siteRecords, records._protectionRecords);
+    assert.notEqual(options.cacheOnly, true, 'TRAIN must load UAT tiles on a cold cache');
+    ctx.root.computeArcheoExclusionMask = async () => ({ mask: split.mask, stats: { unknown: 5 } });
+    const emptySession = { worker: { call: async () => ({ stats: { valid: 0 } }) } };
+    await assert.rejects(ctx.setPredictionAnalysis(emptySession, analysis, { records }, []), e => e.key === 'err.noPredictionUat');
+    ctx.root.computeArcheoExclusionMask = async () => ({ mask: split.mask, stats: { unknown: 0 } });
+    await assert.rejects(ctx.setPredictionAnalysis(emptySession, analysis, { records }, []), e => e.key === 'err.noPredictionCells');
     ctx.root.computeArcheoExclusionMask = undefined;
     await assert.rejects(ctx.setPredictionAnalysis(session, analysis, {}, []), /exclusion service is unavailable/);
     console.log('  ok  both prediction modes use the shared mask before sending data to the worker');
+
+    // Cold cache and a 50 km window larger than the bounded tile cache: all
+    // blocks must be sampled before their tiles are evicted, and TRAIN scores
+    // must produce visible heat while still excluding known-site buffers.
+    reset();
+    const savedLoader = window._uatGetTile, savedMax = debug.config.UAT.MAX_CACHED_TILES;
+    const tileData = new Uint8ClampedArray([0, 0, 0, 255]);
+    window._uatGetTile = async () => ({ data: tileData, size: 1 });
+    debug.config.UAT.MAX_CACHED_TILES = 120;
+    const largeGrid = raster.gridForBBox(core.circleBBox(lat, lon, 51000), 1000);
+    const largeAnalysis = { grid: largeGrid, circle: { lat, lon, radiusM: 50000 } };
+    const largeElev = new Float32Array(largeGrid.w * largeGrid.h);
+    for (let i = 0; i < largeElev.length; i++) largeElev[i] = (i % largeGrid.w) * 3;
+    const largeWorker = workerHarness();
+    const largeSession = { worker: { call: async (op, payload) => largeWorker(op, { ...payload, elev: largeElev }) } };
+    ctx.root.computeArcheoExclusionMask = window.computeArcheoExclusionMask;
+    const prepared = await ctx.setPredictionAnalysis(largeSession, largeAnalysis, { records: [{ lat, lon }] }, []);
+    assert.equal(largeSession.exclusionStats.unknown, 0, 'large cold-cache area is fully verified');
+    assert.ok(largeSession.exclusionStats.heritage > 0, 'training sites still protect their surroundings');
+    assert.ok(prepared.stats.valid > 0);
+    const trainedModel = { weights: { altitude: 1 }, curves: { altitude: [[0, .4], [1, .9]] } };
+    const largeResult = largeWorker('score', { mode: 'train', model: trainedModel, waterClasses: [], thresholds, minAreaM2: 1e12 });
+    assert.ok(largeResult.scoreStats.cells > 0);
+    assert.ok(largeResult.heatmap.rgba.some((v, i) => i % 4 === 3 && v > 0), 'TRAIN produces visible heat');
+    window._uatGetTile = savedLoader;
+    debug.config.UAT.MAX_CACHED_TILES = savedMax;
+    reset();
+    console.log('  ok  cold-cache TRAIN produces heat across a 50 km window without evicting its UAT masks');
 
     // Real worker: MANUAL, TRAIN, and repeated scoring retain the same forbidden cells.
     const send = workerHarness();
@@ -204,13 +245,16 @@ function workerHarness() {
     assert.equal(pixel[3], 0, 'downsampling/interpolation cannot fill protected holes');
     console.log('  ok  tiny holes survive area filtering, smoothing, heat downsampling and interpolation');
     const html = read('index.html'), sw = read('sw.js');
-    for (const file of ['apm-heatmap', 'apm-i18n', 'apm-pipeline', 'apm-ui']) {
-        const tag = 'js/apm-next/' + file + '.js?v=20261101-train-source';
+    for (const [file, version] of [['apm-heatmap', '20261101-train-source'],
+        ['apm-i18n', '20261102-apm-train-heat'], ['apm-pipeline', '20261102-apm-train-heat'],
+        ['apm-ui', '20261101-apm-start-minimized']]) {
+        const tag = 'js/apm-next/' + file + '.js?v=' + version;
         assert.ok(html.includes(tag) && sw.includes(tag), file + ' is versioned and precached');
     }
     assert.ok(sw.includes('js/apm-next/apm-polygonise.js?v=20261101-train-source'));
     assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=20261101-train-source'));
-    assert.ok(html.includes('js/archeo-potential.js?v=20261101-train-source'));
+    assert.ok(html.includes('js/archeo-potential.js?v=20261102-apm-train-heat'));
+    assert.ok(sw.includes('js/archeo-potential.js?v=20261102-apm-train-heat'));
     console.log('  ok  updated prediction, mask, worker and display assets are wired into the PWA cache');
     console.log('\nAll APM spatial-exclusion checks passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

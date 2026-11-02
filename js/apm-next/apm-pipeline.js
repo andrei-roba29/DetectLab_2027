@@ -35,8 +35,7 @@
         }
         return root.computeArcheoExclusionMask(analysis.grid, analysis.circle.lat, analysis.circle.lon,
             analysis.circle.radiusM, { isCancelled: function () { return !!(params.token && params.token.cancelled); },
-                siteRecords: params.records ? (params.records._protectionRecords || params.records) : undefined,
-                cacheOnly: !!params.records })
+                siteRecords: params.records ? (params.records._protectionRecords || params.records) : undefined })
             .then(function (result) {
                 checkToken(params.token);
                 if (!result || !result.mask || result.mask.length !== analysis.grid.w * analysis.grid.h) {
@@ -46,8 +45,22 @@
                 session.exclusionStats = result.stats;
                 if (result.stats.unknown) warnings.push(core.msg('warn.exclusionUnknown', { n: result.stats.unknown },
                     'Cells with unavailable UAT exclusion data were left unscored.'));
-                return session.worker.call('setAnalysis', analysis);
+                return session.worker.call('setAnalysis', analysis).then(function (prepared) {
+                    if (prepared.stats && prepared.stats.valid === 0) {
+                        var unknown = result.stats.unknown > 0;
+                        throw core.keyedError(unknown ? 'err.noPredictionUat' : 'err.noPredictionCells', {},
+                            unknown ? 'No prediction cells could be verified. Built-up area data may be unavailable; retry when it is accessible.' :
+                                'No valid prediction cells remain after terrain and spatial exclusions.');
+                    }
+                    return prepared;
+                });
             });
+    }
+
+    function requireScores(res) {
+        if (res.scoreStats && res.scoreStats.cells === 0) throw core.keyedError('err.noScores', {},
+            'The model could not score any prediction cells. Try another area or training dataset.');
+        return res;
     }
 
     /* ── Worker client ─────────────────────────────────────────────────────── */
@@ -312,6 +325,7 @@
                 minAreaM2: params.minAreaM2,
                 smoothIters: 1
             }).then(function (res) {
+                requireScores(res);
                 progress('prog.done', 100);
                 return {
                     geojson: res.geojson,
@@ -606,6 +620,7 @@
                 mode: 'train', model: tr.model, waterClasses: t.built.waterClasses,
                 thresholds: thr, minAreaM2: params.minAreaM2, smoothIters: 1
             }).then(function (res) {
+                requireScores(res);
                 progress('prog.done', 100);
                 var periodCount = sel.sites.length;
                 var output = {
@@ -659,6 +674,7 @@
         return session.worker.call('train',{S:cache.S,waterClasses:cache.waterClasses,minSlopeDeg:cache.minSlopeDeg,folds:5,robustConfig:config}).then(function(reply){
             var tr=reply.result;
             return session.worker.call('score',{mode:'train',model:tr.model,waterClasses:cache.waterClasses,thresholds:tr.thresholds,minAreaM2:cache.minAreaM2,smoothIters:1}).then(function(scored){
+                requireScores(scored);
                 var out=Object.assign({},cache.output),d=Object.assign({},out.diagnostics),robustSites=tr.robust.flagged.map(function(x){var p=cache.built.samples[x.index]||{};return {id:p.id||null,sampleIndex:x.index,lat:p.lat,lon:p.lon,weight:x.weight,reason:x.reason};});
                 d.weights=tr.model.weights;d.curves=tr.model.curves;d.cv=tr.cv;d.cvRobust=tr.cv;d.cvPlain=tr.cvPlain;d.downweightedSites=robustSites;d.robustSkipped=tr.robust.skipped;d.possibleSecondPattern=tr.robust.possibleSecondPattern.map(function(i){var p=cache.built.samples[i]||{};return {id:p.id||null,sampleIndex:i,lat:p.lat,lon:p.lon};});d.robustIterations=tr.robust.iterations;d.weightChange=tr.robust.weightChange;d.thresholds=tr.thresholds;d.confidence=tr.confidence;
                 out.geojson=scored.geojson;out.heatmap=scored.heatmap;out.thresholds=scored.thresholds;out.areaKm2=scored.areaKm2;out.scoreStats=scored.scoreStats;out.diagnostics=d;

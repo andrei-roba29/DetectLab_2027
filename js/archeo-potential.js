@@ -1378,31 +1378,55 @@
         ctx.siteBuffer = CONFIG.SITE_BUFFER_M + halfDiagonal;
         ctx.siteIndex = createGridIndex(1200, 1200);
         ctx.sites.forEach(function (site) { ctx.siteIndex.insert(site.x, site.y, site); });
-        var latR = radiusM / 111320, lngR = radiusM / Math.max(1, 111320 * Math.cos(centerLat * Math.PI / 180));
-        if (!opts.cacheOnly) await prewarmUatTiles({ minLat: centerLat - latR, maxLat: centerLat + latR,
-            minLng: centerLng - lngR, maxLng: centerLng + lngR });
-        checkCancelled();
         var mask = new Uint8Array(grid.w * grid.h);
         var stats = { heritage: 0, uat: 0, unknown: 0, outside: 0 };
-        for (var row = 0; row < grid.h; row++) {
-            for (var col = 0; col < grid.w; col++) {
-                var i = row * grid.w + col;
-                var lat = grid.north - (row + 0.5) * grid.dLat;
-                var lng = grid.west + (col + 0.5) * grid.dLon;
-                var cell = projectToLocalMeters(lat, lng, centerLat);
-                var reason = exclusionReason(cell, ctx);
-                if (!reason) {
-                    var sample = uatCellRedFraction(lat, lng, Math.max(dx, dy));
-                    // Every sampled part of a prediction cell must be verified free land.
-                    // This is conservative at built-up boundaries, unlike averaging scores.
-                    if (sample.known < sample.samples) reason = 'unknown';
-                    else if (sample.red < 1) reason = 'uat';
+        // Prewarm and consume small blocks, rather than the whole 50 km TRAIN
+        // window at once: its tiles exceed the bounded UAT cache and would be
+        // evicted before the mask is sampled. Include the sampling footprint.
+        var z = uatTileZ();
+        var tileLon = 360 / Math.pow(2, z);
+        var edgeLat = Math.min(85, Math.abs(centerLat) + radiusM / 111320);
+        var tileLat = tileLon * Math.cos(edgeLat * Math.PI / 180);
+        var blockCols = Math.max(1, Math.floor(8 * tileLon / grid.dLon));
+        var blockRows = Math.max(1, Math.floor(8 * tileLat / grid.dLat));
+        var halfSampleLat = Math.max(dx, dy) / (2 * 111320);
+        var halfSampleLng = Math.max(dx, dy) / (2 * Math.max(1, 111320 * Math.cos(edgeLat * Math.PI / 180)));
+        for (var row0 = 0; row0 < grid.h; row0 += blockRows) {
+            var rowEnd = Math.min(grid.h, row0 + blockRows);
+            for (var col0 = 0; col0 < grid.w; col0 += blockCols) {
+                var colEnd = Math.min(grid.w, col0 + blockCols);
+                // Skip prewarming blocks entirely outside the circle.
+                var nearLat = Math.max(grid.north - rowEnd * grid.dLat, Math.min(centerLat, grid.north - row0 * grid.dLat));
+                var nearLng = Math.max(grid.west + col0 * grid.dLon, Math.min(centerLng, grid.west + colEnd * grid.dLon));
+                var near = projectToLocalMeters(nearLat, nearLng, centerLat);
+                var intersects = Math.hypot(near.x - ctx.center.x, near.y - ctx.center.y) <= radiusM;
+                if (!opts.cacheOnly && intersects) {
+                    await prewarmUatTiles({ minLat: grid.north - rowEnd * grid.dLat - halfSampleLat,
+                        maxLat: grid.north - row0 * grid.dLat + halfSampleLat,
+                        minLng: grid.west + col0 * grid.dLon - halfSampleLng,
+                        maxLng: grid.west + colEnd * grid.dLon + halfSampleLng });
                 }
-                if (reason) { mask[i] = 1; stats[reason]++; }
-            }
-            if (row % 16 === 0) {
                 checkCancelled();
-                await new Promise(function (resolve) { setTimeout(resolve, 0); });
+                for (var row = row0; row < rowEnd; row++) {
+                    for (var col = col0; col < colEnd; col++) {
+                        var i = row * grid.w + col;
+                        var lat = grid.north - (row + 0.5) * grid.dLat;
+                        var lng = grid.west + (col + 0.5) * grid.dLon;
+                        var cell = projectToLocalMeters(lat, lng, centerLat);
+                        var reason = exclusionReason(cell, ctx);
+                        if (!reason) {
+                            var sample = uatCellRedFraction(lat, lng, Math.max(dx, dy));
+                            // Unknown data and built-up land must remain excluded.
+                            if (sample.known < sample.samples) reason = 'unknown';
+                            else if (sample.red < 1) reason = 'uat';
+                        }
+                        if (reason) { mask[i] = 1; stats[reason]++; }
+                    }
+                    if (row % 16 === 0) {
+                        checkCancelled();
+                        await new Promise(function (resolve) { setTimeout(resolve, 0); });
+                    }
+                }
             }
         }
         checkCancelled();
