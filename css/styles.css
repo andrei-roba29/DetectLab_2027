@@ -4134,7 +4134,7 @@
         .transp-arrow-tab {
             position: absolute;
             right: 0;
-            top: 280px; /* vertically centred on the 560px map-wrapper */
+            top: 282px; /* vertically centred, shifted down by 0.5 mm */
             transform: translateY(-50%);
             z-index: 1002; /* above map-wrapper stacking context */
             width: 28px;
@@ -7797,7 +7797,7 @@
             position: fixed;
             z-index: 1;
             left: 50%;
-            bottom: max(16px, env(safe-area-inset-bottom));
+            bottom: calc(max(16px, env(safe-area-inset-bottom)) - 2px);
             transform: translateX(-50%);
             display: flex;
             gap: 6px;
