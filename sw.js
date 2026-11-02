@@ -970,7 +970,14 @@
 //   65,536 JS samples), and the exclusion mask rasterises site footprints once
 //   and time-slices its loop. Re-tags apm-heatmap/apm-ui/apm-worker and
 //   archeo-potential.js.
-const CACHE_NAME = 'detectlab-v387-pwa-map-bottom-dark';
+// v388: MANUAL/TRAIN "Run" no longer fetches the DEM raster, the water
+//   geometry and the UAT protection mask one after another — none of the
+//   three needs another's result, so they now run together. The 50 km TRAIN
+//   window's exclusion mask (often ~hundreds of UAT tiles) used to wait for
+//   the prediction DEM download to finish first; it now starts at the same
+//   time, which is what made the run step feel like it loaded forever.
+//   Re-tags apm-pipeline.js.
+const CACHE_NAME = 'detectlab-v388-apm-parallel-fetch';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1054,6 +1061,8 @@ const PRECACHE_URLS = [
   'js/apm-next/apm-ui.js?v=20261102-apm-continuous-heat',
   'js/apm-next/apm-worker.js?v=20261102-apm-continuous-heat',
   'js/archeo-potential.js?v=20261102-apm-continuous-heat',
+  // v388: DEM/water/UAT-mask fetches run in parallel instead of in sequence.
+  'js/apm-next/apm-pipeline.js?v=20261102-apm-parallel-fetch',
   'js/d3.min.js',
   'js/rbush.min.js',
   'js/vendor/polygon-clipping.umd.min.js',

@@ -280,7 +280,7 @@ function redTileData(size, alpha = 255) {
 
     test('changed assets are re-tagged for the browser and the PWA shell cache', () => {
         const html = read('index.html'), sw = read('sw.js');
-        for (const f of ['apm-raster.js', 'apm-i18n.js', 'apm-pipeline.js']) {
+        for (const f of ['apm-raster.js', 'apm-i18n.js']) {
             const tag = 'js/apm-next/' + f + '?v=' + TAG;
             assert.ok(html.includes(tag) && sw.includes(tag), tag);
         }
@@ -293,9 +293,17 @@ function redTileData(size, alpha = 255) {
         assert.ok(sw.includes('js/archeo-potential.js?v=' + HEAT_TAG));
         assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + HEAT_TAG));
         assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + HEAT_TAG));
-        assert.match(sw, /const CACHE_NAME = 'detectlab-v386-apm-continuous-heat'/);
+        // Latest fix: the pipeline's DEM/water/UAT-mask fetches run in parallel
+        // instead of in sequence (TRAIN's "run" step no longer sums their times).
+        const PARALLEL_TAG = '20261102-apm-parallel-fetch';
+        const pipelineTag = 'js/apm-next/apm-pipeline.js?v=' + PARALLEL_TAG;
+        assert.ok(html.includes(pipelineTag) && sw.includes(pipelineTag), pipelineTag);
+        assert.ok(sw.includes('js/apm-next/apm-pipeline.js?v=' + TAG), 'older pipeline tag stays precached for older shells');
+        assert.match(sw, /const CACHE_NAME = 'detectlab-v388-apm-parallel-fetch'/);
         assert.match(read('js/apm-next/apm-worker.js'), /MAX_SCORE_CELLS/);
         assert.match(read('js/apm-next/apm-pipeline.js'), /boundedGridForBBox/);
+        assert.match(read('js/apm-next/apm-pipeline.js'), /startExclusionMask/,
+            'DEM and the UAT exclusion mask are requested together, not one after another');
     });
 
     console.log('\n' + passed + ' TRAIN performance checks passed.');

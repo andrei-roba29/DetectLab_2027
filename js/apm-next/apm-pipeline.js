@@ -27,15 +27,26 @@
     function cancelledError() { var e = new Error('Cancelled'); e.code = CANCELLED; return e; }
     function isCancelled(e) { return e && e.code === CANCELLED; }
 
-    /** Both prediction modes must pass through the same protection mask. */
+    /** Both prediction modes must pass through the same protection mask.
+     * `analysis._exclusionResult`, when present, is an already-settled { mask, stats }
+     * that the caller started fetching in parallel with the DEM/water requests
+     * (the UAT exclusion mask does not depend on either, so there is no reason to
+     * wait for them before starting it — see runManual/runTrain). When absent,
+     * the mask is requested here exactly as before (used directly by callers/tests
+     * that have not pre-started it). */
     function setPredictionAnalysis(session, analysis, params, warnings) {
         checkToken(params.token);
-        if (typeof root.computeArcheoExclusionMask !== 'function') {
-            return Promise.reject(new Error('Spatial exclusion service is unavailable. Please reload and try again.'));
+        var exclusionPromise;
+        if (analysis._exclusionResult) {
+            exclusionPromise = Promise.resolve(analysis._exclusionResult);
+        } else if (typeof root.computeArcheoExclusionMask !== 'function') {
+            exclusionPromise = Promise.reject(new Error('Spatial exclusion service is unavailable. Please reload and try again.'));
+        } else {
+            exclusionPromise = root.computeArcheoExclusionMask(analysis.grid, analysis.circle.lat, analysis.circle.lon,
+                analysis.circle.radiusM, { isCancelled: function () { return !!(params.token && params.token.cancelled); },
+                    siteRecords: params.records ? (params.records._protectionRecords || params.records) : undefined });
         }
-        return root.computeArcheoExclusionMask(analysis.grid, analysis.circle.lat, analysis.circle.lon,
-            analysis.circle.radiusM, { isCancelled: function () { return !!(params.token && params.token.cancelled); },
-                siteRecords: params.records ? (params.records._protectionRecords || params.records) : undefined })
+        return exclusionPromise
             .then(function (result) {
                 checkToken(params.token);
                 if (!result || !result.mask || result.mask.length !== analysis.grid.w * analysis.grid.h) {
@@ -55,6 +66,17 @@
                     return prepared;
                 });
             });
+    }
+
+    /** Starts the UAT protection-mask request right away, exactly as setPredictionAnalysis
+     * would, so the caller can run it alongside the DEM/water fetches instead of after them. */
+    function startExclusionMask(grid, lat, lon, radiusM, params) {
+        if (typeof root.computeArcheoExclusionMask !== 'function') {
+            return Promise.reject(new Error('Spatial exclusion service is unavailable. Please reload and try again.'));
+        }
+        return root.computeArcheoExclusionMask(grid, lat, lon, radiusM,
+            { isCancelled: function () { return !!(params.token && params.token.cancelled); },
+                siteRecords: params.records ? (params.records._protectionRecords || params.records) : undefined });
     }
 
     function requireScores(res) {
@@ -302,26 +324,31 @@
                     var bbox = core.circleBBox(params.centre.lat, params.centre.lon, radiusM + BUFFER_M);
                     var grid = predictionGridFor(bbox, dem, warnings);
                     progress('prog.downloadDem', 15, { label: dem.label });
-                    return prov.loadDemGrid(dem, grid, dem.tilePx || 1000).then(function (elev) {
+                    // The DEM raster, the water geometry and the UAT protection mask are
+                    // three independent network fetches — none needs another's result —
+                    // so they run together instead of one after another. That is what
+                    // keeps MANUAL/TRAIN from feeling like they "load forever": fetching
+                    // them in sequence added their times instead of taking the longest.
+                    var demP = prov.loadDemGrid(dem, grid, dem.tilePx || 1000);
+                    var waterP = fetchWaterChain(params.centre, bbox, params.token, warnings, waterOptions(params));
+                    var exclusionP = startExclusionMask(grid, params.centre.lat, params.centre.lon, radiusM, params);
+                    return Promise.all([demP, waterP, exclusionP]).then(function (r) {
+                        var elev = r[0], wr = r[1], exclusionResult = r[2];
                         checkToken(params.token);
-                        progress('prog.water', 40);
-                        return fetchWaterChain(params.centre, bbox, params.token, warnings, waterOptions(params)).then(function (wr) {
-                            checkToken(params.token);
-                            progress('prog.terrain', 60);
-                            var masks = rasteriseWater(wr.water, grid);
-                            if (session.worker) session.worker.terminate();
-                            session.worker = createWorkerClient(params.workerUrl);
-                            session.analysisKey = null;
-                            return setPredictionAnalysis(session, {
-                                grid: grid, elev: elev, smooth: !!params.smoothDem, nodata: undefined,
-                                circle: { lat: params.centre.lat, lon: params.centre.lon, radiusM: radiusM },
-                                waterMasks: masks, altRef: null, soilRef: null
-                            }, params, warnings).then(function (res) {
-                                session.analysisKey = session.exclusionStats.unknown ? null : key;
-                                session.provenance = provenanceFor(dem, grid, wr.water, wr.provider, pick.decision);
-                                session.stats = res.stats;
-                                session.waterClasses = Object.keys(masks);
-                            });
+                        progress('prog.terrain', 60);
+                        var masks = rasteriseWater(wr.water, grid);
+                        if (session.worker) session.worker.terminate();
+                        session.worker = createWorkerClient(params.workerUrl);
+                        session.analysisKey = null;
+                        return setPredictionAnalysis(session, {
+                            grid: grid, elev: elev, smooth: !!params.smoothDem, nodata: undefined,
+                            circle: { lat: params.centre.lat, lon: params.centre.lon, radiusM: radiusM },
+                            waterMasks: masks, altRef: null, soilRef: null, _exclusionResult: exclusionResult
+                        }, params, warnings).then(function (res) {
+                            session.analysisKey = session.exclusionStats.unknown ? null : key;
+                            session.provenance = provenanceFor(dem, grid, wr.water, wr.provider, pick.decision);
+                            session.stats = res.stats;
+                            session.waterClasses = Object.keys(masks);
                         });
                     });
                 });
@@ -612,13 +639,19 @@
             progress('prog.window', 80);
             var wb = core.circleBBox(centre.lat, centre.lon, radiusM + BUFFER_M);
             var wgrid = predictionGridFor(wb, dem, warnings);
-            return prov.loadDemGrid(dem, wgrid, dem.tilePx || 1000).then(function (elev) {
+            // The prediction DEM raster and the UAT protection mask (often ~hundreds
+            // of tiles for a 50 km TRAIN window) do not depend on each other: fetch
+            // them together instead of the mask waiting for the DEM to finish first.
+            var demP = prov.loadDemGrid(dem, wgrid, dem.tilePx || 1000);
+            var exclusionP = startExclusionMask(wgrid, centre.lat, centre.lon, radiusM, params);
+            return Promise.all([demP, exclusionP]).then(function (r) {
+                var elev = r[0], exclusionResult = r[1];
                 var masks = rasteriseWater(water.water, wgrid);
                 return setPredictionAnalysis(session, {
                     grid: wgrid, elev: elev, smooth: !!params.smoothDem, nodata: undefined,
                     circle: { lat: centre.lat, lon: centre.lon, radiusM: radiusM },
                     waterMasks: masks,
-                    altRef: t.built.altRef, soilRef: t.built.soilRef
+                    altRef: t.built.altRef, soilRef: t.built.soilRef, _exclusionResult: exclusionResult
                 }, params, warnings).then(function (res) {
                     session.analysisKey = null;
                     session.provenance = provenanceFor(dem, wgrid, water.water, water.provider, demDecision);
