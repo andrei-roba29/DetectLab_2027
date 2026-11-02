@@ -672,6 +672,46 @@
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
+/* Playback control stays directly beneath the video on desktop and mobile. */
+.dl-tut-video-speed {
+    margin-top: 10px;
+    color: #f3ebff;
+    font-size: 0.72rem;
+}
+
+.dl-tut-video-speed-heading,
+.dl-tut-video-speed-limits {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.dl-tut-video-speed output {
+    font-weight: 700;
+    color: #e6d4ff;
+    white-space: nowrap;
+}
+
+.dl-tut-video-speed input {
+    display: block;
+    width: 100%;
+    margin: 6px 0 2px;
+    min-height: 24px;
+    accent-color: var(--tut-purple-soft);
+    cursor: pointer;
+    touch-action: pan-x;
+}
+
+.dl-tut-video-speed input:focus-visible {
+    outline: 2px solid var(--tut-purple-soft);
+    outline-offset: 2px;
+}
+
+.dl-tut-video-speed-limits {
+    color: rgba(243, 235, 255, 0.7);
+    font-size: 0.66rem;
+}
+
 @media (max-width: 620px) {
     .dl-tut-perf-layout {
         flex-direction: column;
