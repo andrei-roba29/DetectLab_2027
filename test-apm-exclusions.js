@@ -312,7 +312,7 @@ function assertTextureMasked(heatmap, sourceMask, label) {
     const PARALLEL = '20261102-apm-parallel-fetch';
     for (const [file, version] of [['apm-heatmap', TAG],
         ['apm-raster', BOUNDED], ['apm-i18n', BOUNDED], ['apm-pipeline', PARALLEL],
-        ['apm-ui', '20261102-arch-report-focus']]) {
+        ['apm-ui', '20261102-apm-mask-band']]) {
         const tag = 'js/apm-next/' + file + '.js?v=' + version;
         assert.ok(html.includes(tag) && sw.includes(tag), file + ' is versioned and precached');
     }
@@ -322,7 +322,13 @@ function assertTextureMasked(heatmap, sourceMask, label) {
     assert.ok(sw.includes('js/apm-next/apm-pipeline.js?v=' + BOUNDED), 'older pipeline tag stays precached for older shells');
     assert.ok(sw.includes('js/apm-next/apm-polygonise.js?v=20261101-train-source'));
     assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + TAG));
-    assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + TAG));
+    // v396: the worker now imports the band-based polygoniser and apm-ui
+    // points at the matching worker URL; the older tags above stay precached.
+    const BAND_TAG = '20261102-apm-mask-band';
+    assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + BAND_TAG));
+    assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + BAND_TAG));
+    assert.ok(sw.includes('js/apm-next/apm-polygonise.js?v=' + BAND_TAG));
+    assert.ok(read('js/apm-next/apm-worker.js').includes("'apm-polygonise.js?v=" + BAND_TAG + "'"));
     assert.ok(html.includes('js/archeo-potential.js?v=' + TAG));
     assert.ok(sw.includes('js/archeo-potential.js?v=' + TAG));
     assert.ok(read('js/apm-next/apm-worker.js').includes("'apm-heatmap.js?v=" + TAG + "'"), 'worker imports the new heat module');

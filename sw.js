@@ -979,7 +979,17 @@
 //   Re-tags apm-pipeline.js.
 // v394: optional gray 3D backing for the three Romanian LiDAR layers.
 // v395: tutorial video playback speed control.
-const CACHE_NAME = 'detectlab-v395-tutorial-video-speed';
+// v396: Next-Gen APM TRAIN on phones — the final heatmap step no longer kills
+//   the tab. Polygonising the scored grid subtracted one polygon-clipping
+//   rectangle per exclusion-mask run (outside-circle cells, UAT blobs, a disc
+//   per known site): tens of thousands of rings, a few hundred MB and about a
+//   second inside the worker exactly when the result was about to appear. The
+//   mask is now applied as a one-cell band of NaN contour values (below every
+//   threshold), which keeps the same "no result in forbidden land" contract
+//   for a few hundred KB.
+//   Re-tags apm-polygonise.js, apm-worker.js and apm-ui.js (which carries the
+//   worker URL).
+const CACHE_NAME = 'detectlab-v396-apm-mask-band';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1064,6 +1074,11 @@ const PRECACHE_URLS = [
   'js/apm-next/apm-ui.js?v=20261102-apm-continuous-heat',
   'js/apm-next/apm-worker.js?v=20261102-apm-continuous-heat',
   'js/archeo-potential.js?v=20261102-apm-continuous-heat',
+  // v396: exclusion mask applied as a raster band, not thousands of clipping
+  // rings — the TRAIN heatmap no longer exhausts the phone at display time.
+  'js/apm-next/apm-polygonise.js?v=20261102-apm-mask-band',
+  'js/apm-next/apm-worker.js?v=20261102-apm-mask-band',
+  'js/apm-next/apm-ui.js?v=20261102-apm-mask-band',
   // v388: DEM/water/UAT-mask fetches run in parallel instead of in sequence.
   'js/apm-next/apm-pipeline.js?v=20261102-apm-parallel-fetch',
   'js/d3.min.js',

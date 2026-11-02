@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261102-apm-continuous-heat';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261102-apm-mask-band';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
