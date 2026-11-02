@@ -45,6 +45,33 @@
         };
     }
 
+    /* Prediction rasters must stay inside a fixed cell budget. A 50 km TRAIN
+     * window at the native 25 m DEM resolution is about 4240 x 4240 = 18 million
+     * cells: terrain, EDT, d3 contours, polygon clipping and the display raster
+     * each allocate one or more full-size arrays, which exhausts a browser tab at
+     * the final score step (just before the heatmap is returned). MANUAL's 1–10 km
+     * windows stay below the budget and keep their native resolution. */
+    var MAX_PREDICTION_CELLS = 1024 * 1024;      // ~1 million cells (1024 x 1024)
+    var MAX_SAMPLING_CELLS = 4 * 1024 * 1024;    // terrain sampling tiles for TRAIN
+
+    /** Same geographic extent as gridForBBox, coarsened only when needed to fit
+     * `maxCells`. Cell size grows by sqrt(overshoot), preserving the aspect ratio.
+     * The returned grid has the ordinary {w,h,west,north,dLon,dLat} shape. */
+    function boundedGridForBBox(bbox, cellM, maxCells) {
+        var limit = Math.max(1, maxCells || MAX_PREDICTION_CELLS);
+        var grid = gridForBBox(bbox, cellM);
+        if (grid.w * grid.h <= limit) return grid;
+        var stepM = cellM * Math.sqrt((grid.w * grid.h) / limit);
+        var bounded = gridForBBox(bbox, stepM);
+        var guard = 0;
+        // Rounding of w/h can leave us a fraction above the budget; nudge until it fits.
+        while (bounded.w * bounded.h > limit && guard++ < 16) {
+            stepM *= 1.02;
+            bounded = gridForBBox(bbox, stepM);
+        }
+        return bounded;
+    }
+
     /* ── Terrain: Horn 3×3 slope / aspect, with per-axis metric spacing ────── */
     /**
      * @param elev    Float32Array (h×w), row 0 = north
@@ -350,6 +377,9 @@
         cellLon: cellLon,
         cellLat: cellLat,
         gridForBBox: gridForBBox,
+        boundedGridForBBox: boundedGridForBBox,
+        MAX_PREDICTION_CELLS: MAX_PREDICTION_CELLS,
+        MAX_SAMPLING_CELLS: MAX_SAMPLING_CELLS,
         horn: horn,
         smoothElevation: smoothElevation,
         terrain: terrain,

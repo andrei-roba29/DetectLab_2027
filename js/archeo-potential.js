@@ -138,7 +138,12 @@
             CONCURRENCY: 6,               // tile-uri descărcate simultan
             FAILURE_TTL_MS: 60000,        // un tile eșuat e reîncercat după acest timp
             FAIL_OPEN_WHEN_UNREADABLE: true, // fără date UAT → nu excludem nimic
-            MAX_CACHED_TILES: 600         // măști „roșu" compacte (65 kB/tile), FIFO
+            MAX_CACHED_TILES: 600,        // măști „roșu" compacte (65 kB/tile), FIFO
+            // Ferestre APM mari (TRAIN 50 km): nivel de piramidă mai gross, cu
+            // toate tile-urile păstrate într-o hartă locală rulării. Sub 400 de
+            // tile-uri în loc de ~4.000 la z14, fără evacuări din cache.
+            MAX_TILES_PER_RUN: 400,
+            LARGE_RUN_CONCURRENCY: 16
         },
 
         // Score field --------------------------------------------------------
@@ -977,11 +982,12 @@
 
     // Pre-încărcarea tile-urilor pentru o zonă (paralelism limitat).
     // @returns Promise<{total, ok, missing, unreadable, timeout, tiles:[...]}>
-    function prewarmUatTiles(bounds, onProgress) {
-        var z = uatTileZ();
+    function prewarmUatTiles(bounds, onProgress, zoom, parallel) {
+        var z = Number.isFinite(zoom) ? zoom : uatTileZ();
         var tiles = uatTileRange(bounds.minLat, bounds.minLng, bounds.maxLat, bounds.maxLng, z);
         var U = uatCfg();
-        var concurrency = Math.max(1, (typeof U.CONCURRENCY === 'number') ? U.CONCURRENCY : 6);
+        var concurrency = Math.max(1, Number.isFinite(parallel) ? parallel :
+            ((typeof U.CONCURRENCY === 'number') ? U.CONCURRENCY : 6));
         var summary = { total: tiles.length, ok: 0, missing: 0, unreadable: 0, timeout: 0, tiles: tiles, z: z };
         if (!tiles.length) return Promise.resolve(summary);
 
@@ -1003,6 +1009,40 @@
         });
     }
 
+    /** Coarsest pyramid level (max 3 steps below native) whose tile count for a
+     * bounding box fits a run budget. Used only for very large APM windows. */
+    function uatZoomForBounds(bounds, nativeZ, maxTiles) {
+        var z = nativeZ, minZ = Math.max(0, nativeZ - 3);
+        while (z > minZ && uatTileRange(bounds.minLat, bounds.minLng, bounds.maxLat, bounds.maxLng, z).length > maxTiles) z--;
+        return z;
+    }
+
+    /** Load every UAT tile of one analysis into a run-local map. Keeping the
+     * records here (rather than only in the bounded FIFO cache) means a large
+     * window can be sampled after the downloads without evictions, missing
+     * tiles, or repeated requests. The map is discarded when the run ends. */
+    async function loadUatTilesForRun(tiles, z, concurrency, isCancelled) {
+        var out = new Map(), next = 0, ok = 0, red = 0, pixels = 0;
+        async function worker() {
+            while (next < tiles.length) {
+                if (isCancelled) isCancelled();
+                var t = tiles[next++];
+                var rec = await fetchUatTile(z, t.x, t.y);
+                out.set(uatTileKey(z, t.x, t.y), rec);
+                if (rec.state === 'ok' && rec.mask) {
+                    ok++;
+                    for (var p = 0; p < rec.mask.length; p++) red += rec.mask[p];
+                    pixels += rec.mask.length;
+                }
+            }
+        }
+        var workers = [];
+        for (var i = 0; i < Math.min(Math.max(1, concurrency), tiles.length); i++) workers.push(worker());
+        await Promise.all(workers);
+        return { tiles: out, ok: ok, total: tiles.length,
+            redFraction: pixels ? red / pixels : 0 };
+    }
+
     // Citire sincronă (după pre-încărcare): null dacă tile-ul nu e disponibil.
     function uatTileDataSync(z, x, y) {
         var rec = _uatTileStates[uatTileKey(z, x, y)];
@@ -1016,16 +1056,33 @@
      * @returns {{red:number, samples:number, known:number}} red ∈ 0..1 (0 dacă
      *          nicio probă nu a putut fi citită), known = probe cu date.
      */
-    function uatCellRedFraction(lat, lng, cellM) {
+    function uatCellRedFraction(lat, lng, cellM, zoom, runTiles, merc) {
         var U = uatCfg();
-        var z = uatTileZ();
-        var step = (typeof U.SAMPLE_STEP_M === 'number') ? U.SAMPLE_STEP_M : 50;
+        var z = Number.isFinite(zoom) ? zoom : uatTileZ();
+        var step = (merc && Number.isFinite(merc.stepM)) ? merc.stepM :
+            ((typeof U.SAMPLE_STEP_M === 'number') ? U.SAMPLE_STEP_M : 50);
         var maxAxis = (typeof U.MAX_SAMPLES_PER_AXIS === 'number') ? U.MAX_SAMPLES_PER_AXIS : 8;
         var half = Math.max(0, (cellM || 0)) / 2;
         var k = Math.max(1, Math.min(maxAxis, Math.ceil((cellM || step) / step)));
         var kLat = 111320;
         var kLng = Math.max(1, 111320 * Math.cos(lat * Math.PI / 180));
         var red = 0, known = 0, samples = 0;
+        var scale = Math.pow(2, z);
+        // Web Mercator y is almost perfectly linear across one prediction cell.
+        // Callers scanning a raster can pass the row's value/derivative, so the
+        // expensive log/tan conversion runs once per row instead of k² per cell.
+        var y0 = uatLatToTileYF(lat, z), dY = 0;
+        // With a single probe sLat === lat, so no derivative is needed.
+        if (k > 1) {
+            if (merc && merc.z === z && Math.abs(merc.lat - lat) < 1e-9) {
+                y0 = merc.y0; dY = merc.dY;
+            } else {
+                dY = (uatLatToTileYF(lat + 1e-4, z) - uatLatToTileYF(lat - 1e-4, z)) / 2e-4;
+            }
+        } else if (merc && merc.z === z && Math.abs(merc.lat - lat) < 1e-9) {
+            y0 = merc.y0;
+        }
+        var lastTx = NaN, lastTy = NaN, tile = null;
 
         for (var i = 0; i < k; i++) {
             var fy = (k === 1) ? 0.5 : i / (k - 1);
@@ -1034,9 +1091,15 @@
                 var fx = (k === 1) ? 0.5 : j / (k - 1);
                 var sLng = lng + (fx * 2 - 1) * half / kLng;
                 samples++;
-                var txF = uatLngToTileXF(sLng, z), tyF = uatLatToTileYF(sLat, z);
+                var txF = (sLng + 180) / 360 * scale;
+                var tyF = y0 + (sLat - lat) * dY;
                 var tx = Math.floor(txF), ty = Math.floor(tyF);
-                var tile = uatTileDataSync(z, tx, ty);
+                if (tx !== lastTx || ty !== lastTy) {
+                    lastTx = tx; lastTy = ty;
+                    var key = z + '/' + tx + '/' + ty;
+                    tile = runTiles ? runTiles.get(key) : uatTileDataSync(z, tx, ty);
+                    if (!tile || tile.state !== 'ok' || !tile.mask) tile = null;
+                }
                 if (!tile) continue;
                 var size = tile.size || CONFIG.UAT_TILE_SIZE || 256;
                 var px = Math.floor((txF - tx) * size);
@@ -1380,17 +1443,50 @@
         ctx.sites.forEach(function (site) { ctx.siteIndex.insert(site.x, site.y, site); });
         var mask = new Uint8Array(grid.w * grid.h);
         var stats = { heritage: 0, uat: 0, unknown: 0, outside: 0 };
-        // Prewarm and consume small blocks, rather than the whole 50 km TRAIN
-        // window at once: its tiles exceed the bounded UAT cache and would be
-        // evicted before the mask is sampled. Include the sampling footprint.
+        // A 50 km TRAIN window covers about 4,000 native z14 UAT tiles. Loading
+        // them block by block, then evicting them from the bounded cache before
+        // the mask is sampled, dominated the run time and left unknown cells.
+        // For large windows use a coarser pyramid level that fits in ONE pass:
+        // every decoded tile is kept in a run-local map, so no tile is evicted
+        // or fetched twice. If that level has no tiles, fall back to the native
+        // level and the existing small-block prewarm (correct, but slower).
         var z = uatTileZ();
-        var tileLon = 360 / Math.pow(2, z);
         var edgeLat = Math.min(85, Math.abs(centerLat) + radiusM / 111320);
+        var halfSampleLat = Math.max(dx, dy) / (2 * 111320);
+        var halfSampleLng = Math.max(dx, dy) / (2 * Math.max(1, 111320 * Math.cos(edgeLat * Math.PI / 180)));
+        var allBounds = {
+            minLat: grid.north - grid.h * grid.dLat - halfSampleLat,
+            maxLat: grid.north + halfSampleLat,
+            minLng: grid.west - halfSampleLng,
+            maxLng: grid.west + grid.w * grid.dLon + halfSampleLng
+        };
+        var U = uatCfg();
+        var maxTiles = (typeof U.MAX_TILES_PER_RUN === 'number') ? U.MAX_TILES_PER_RUN : 400;
+        var runTiles = null;
+        var largeWindow = radiusM >= 15000 && grid.w * grid.h >= 200000 &&
+            Array.isArray(opts.siteRecords) && !opts.cacheOnly;
+        if (largeWindow) {
+            var coarseZ = uatZoomForBounds(allBounds, z, maxTiles);
+            if (coarseZ < z) {
+                var loaded = await loadUatTilesForRun(
+                    uatTileRange(allBounds.minLat, allBounds.minLng, allBounds.maxLat, allBounds.maxLng, coarseZ),
+                    coarseZ, Math.max(6, (typeof U.LARGE_RUN_CONCURRENCY === 'number') ? U.LARGE_RUN_CONCURRENCY : 16),
+                    checkCancelled);
+                // A partial pyramid would leave unverified cells (fail closed),
+                // so accept the coarse level only when every tile is readable.
+                // An all-transparent pyramid (no free-land pixels) is also
+                // unusable: native tiles are the authoritative fallback.
+                if (loaded.total && loaded.ok === loaded.total && loaded.redFraction > 0.001) {
+                    z = coarseZ;
+                    runTiles = loaded.tiles;
+                }
+            }
+        }
+        checkCancelled();
+        var tileLon = 360 / Math.pow(2, z);
         var tileLat = tileLon * Math.cos(edgeLat * Math.PI / 180);
         var blockCols = Math.max(1, Math.floor(8 * tileLon / grid.dLon));
         var blockRows = Math.max(1, Math.floor(8 * tileLat / grid.dLat));
-        var halfSampleLat = Math.max(dx, dy) / (2 * 111320);
-        var halfSampleLng = Math.max(dx, dy) / (2 * Math.max(1, 111320 * Math.cos(edgeLat * Math.PI / 180)));
         for (var row0 = 0; row0 < grid.h; row0 += blockRows) {
             var rowEnd = Math.min(grid.h, row0 + blockRows);
             for (var col0 = 0; col0 < grid.w; col0 += blockCols) {
@@ -1400,22 +1496,29 @@
                 var nearLng = Math.max(grid.west + col0 * grid.dLon, Math.min(centerLng, grid.west + colEnd * grid.dLon));
                 var near = projectToLocalMeters(nearLat, nearLng, centerLat);
                 var intersects = Math.hypot(near.x - ctx.center.x, near.y - ctx.center.y) <= radiusM;
-                if (!opts.cacheOnly && intersects) {
+                if (!runTiles && !opts.cacheOnly && intersects) {
                     await prewarmUatTiles({ minLat: grid.north - rowEnd * grid.dLat - halfSampleLat,
                         maxLat: grid.north - row0 * grid.dLat + halfSampleLat,
                         minLng: grid.west + col0 * grid.dLon - halfSampleLng,
-                        maxLng: grid.west + colEnd * grid.dLon + halfSampleLng });
+                        maxLng: grid.west + colEnd * grid.dLon + halfSampleLng },
+                        null, z, largeWindow ? 12 : undefined);
                 }
                 checkCancelled();
                 for (var row = row0; row < rowEnd; row++) {
+                    var rowLat = grid.north - (row + 0.5) * grid.dLat;
+                    var merc = { z: z, lat: rowLat, y0: uatLatToTileYF(rowLat, z),
+                        dY: (uatLatToTileYF(rowLat + 1e-4, z) - uatLatToTileYF(rowLat - 1e-4, z)) / 2e-4,
+                        // Coarse-pyramid UAT pixels are tens of metres wide: four
+                        // probes per large prediction cell are enough and keep the
+                        // 50 km mask pass off the UI thread for minutes.
+                        stepM: runTiles ? Math.max(dx, dy) / 2 : undefined };
                     for (var col = col0; col < colEnd; col++) {
                         var i = row * grid.w + col;
-                        var lat = grid.north - (row + 0.5) * grid.dLat;
                         var lng = grid.west + (col + 0.5) * grid.dLon;
-                        var cell = projectToLocalMeters(lat, lng, centerLat);
+                        var cell = projectToLocalMeters(rowLat, lng, centerLat);
                         var reason = exclusionReason(cell, ctx);
                         if (!reason) {
-                            var sample = uatCellRedFraction(lat, lng, Math.max(dx, dy));
+                            var sample = uatCellRedFraction(rowLat, lng, Math.max(dx, dy), z, runTiles, merc);
                             // Unknown data and built-up land must remain excluded.
                             if (sample.known < sample.samples) reason = 'unknown';
                             else if (sample.red < 1) reason = 'uat';

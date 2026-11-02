@@ -254,11 +254,29 @@
         return {
             dem: {
                 id: dem.id, label: dem.label, source: dem.source, version: dem.version || null, tier: dem.tier,
-                nominalResM: dem.nominalResM, cellM: Math.round(resM * 10) / 10, endpoint: dem.endpoint || null
+                nominalResM: dem.nominalResM, cellM: Math.round(resM * 10) / 10, endpoint: dem.endpoint || null,
+                resampledForPrediction: resM > dem.nominalResM * 1.05,
+                predictionCells: grid.w * grid.h
             },
             demDecision: decision || null,
             water: waterProvider ? { id: waterProvider.id, label: waterProvider.label, source: waterProvider.source, endpoint: waterProvider.endpoint || null } : null
         };
+    }
+
+    /** Prediction grid at the DEM resolution, coarsened only when the window is
+     * too large to score safely. TRAIN's fixed 50 km window otherwise needs
+     * ~18 million 25 m cells and crashes the worker at the heatmap step. */
+    function predictionGridFor(bbox, dem, warnings) {
+        var nominal = raster.gridForBBox(bbox, dem.nominalResM);
+        var grid = raster.boundedGridForBBox(bbox, dem.nominalResM, raster.MAX_PREDICTION_CELLS);
+        // A few percent of coarsening at MANUAL's largest radius is not a
+        // meaningful resolution change; only report a real trade-off.
+        if (grid.w * grid.h < nominal.w * nominal.h && prov.gridResM(grid) > dem.nominalResM * 1.25) {
+            warnings.push(M('info.coarsePrediction', { res: Math.round(prov.gridResM(grid)), native: dem.nominalResM },
+                'Large prediction window: scored at about ' + Math.round(prov.gridResM(grid)) +
+                ' m cells instead of the ' + dem.nominalResM + ' m DEM resolution to keep the heatmap responsive.'));
+        }
+        return grid;
     }
 
     /* ── MANUAL ────────────────────────────────────────────────────────────── */
@@ -282,7 +300,7 @@
                     var dem = pick.provider;
                     checkToken(params.token);
                     var bbox = core.circleBBox(params.centre.lat, params.centre.lon, radiusM + BUFFER_M);
-                    var grid = raster.gridForBBox(bbox, dem.nominalResM);
+                    var grid = predictionGridFor(bbox, dem, warnings);
                     progress('prog.downloadDem', 15, { label: dem.label });
                     return prov.loadDemGrid(dem, grid, dem.tilePx || 1000).then(function (elev) {
                         checkToken(params.token);
@@ -503,7 +521,10 @@
         return pickDemProvider(centre, params.token, warnings).then(function (pick) {
             dem = pick.provider;
             demDecision = pick.decision;
-            grid = raster.gridForBBox(bbox, dem.nominalResM);
+            // Site/background sampling stays close to the DEM resolution, but the
+            // 50 km tile grid is bounded so it does not fan out into dozens of
+            // full-size WCS tiles (one per 1000x1000 block).
+            grid = raster.boundedGridForBBox(bbox, dem.nominalResM, raster.MAX_SAMPLING_CELLS);
             progress('prog.waterTrain', 8);
             return fetchWaterChain(centre, bbox, params.token, warnings, waterOptions(params));
         }).then(function (wr) {
@@ -590,7 +611,7 @@
             // Prediction window (search circle + buffer) with the same DEM provider.
             progress('prog.window', 80);
             var wb = core.circleBBox(centre.lat, centre.lon, radiusM + BUFFER_M);
-            var wgrid = raster.gridForBBox(wb, dem.nominalResM);
+            var wgrid = predictionGridFor(wb, dem, warnings);
             return prov.loadDemGrid(dem, wgrid, dem.tilePx || 1000).then(function (elev) {
                 var masks = rasteriseWater(water.water, wgrid);
                 return setPredictionAnalysis(session, {
@@ -631,7 +652,7 @@
                     areaKm2: res.areaKm2,
                     scoreStats: res.scoreStats,
                     provenance: session.provenance,
-                    warnings: t.warnings.concat(warnings),
+                    warnings: warnings.slice(),   // t.warnings is the same array; do not duplicate every note
                     diagnostics: {
                         siteData: siteMeta || null,
                         sitesUsed: t.built.counts.sites,
