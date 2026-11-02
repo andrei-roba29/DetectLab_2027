@@ -955,7 +955,14 @@
 // lock idle document scrolling so no empty bottom tail survives text entry.
 // v384: 3D is available only with active Premium; hide its controls otherwise
 // and recheck entitlement before/after async entry and on auth changes.
-const CACHE_NAME = 'detectlab-v384-premium-3d';
+// v385: the shared window resize grip no longer drags windows down to
+//   `bottom:0` — in the installed Android PWA that is --pwa-bleed BELOW the
+//   visible viewport, under the "© Leafleet" tag (APM Next Gen was the visible
+//   case, but every window with a grip was affected). Each resized window now
+//   keeps its own bottom clearance, the height is clamped to the space above
+//   it, and PWA windows get a floor above the attribution line. Re-tags
+//   css/window-resize.css + js/window-resize.js and CACHE_NAME.
+const CACHE_NAME = 'detectlab-v385-pwa-window-resize-bottom-clearance';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1000,6 +1007,10 @@ const PRECACHE_URLS = [
   // v301: Next-Gen APM (MANUAL) — see the header note above.
   'css/next-gen-apm.css?v=20261101-dock-lower-1mm',
   'css/map-window-layers.css?v=20261101-window-stacking',
+  'css/window-resize.css?v=20261102-pwa-window-resize-bottom-clearance',
+  'js/window-resize.js?v=20261102-pwa-window-resize-bottom-clearance',
+  // Older tags stay listed on purpose: an installed PWA still running an older
+  // index.html keeps working offline through its own versioned URL.
   'css/window-resize.css?v=20261101-account-social-no-grip',
   'js/window-resize.js?v=20261101-account-social-no-grip',
   'js/apm-next/apm-core.js?v=20261101-robust-train',

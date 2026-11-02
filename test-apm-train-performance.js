@@ -288,7 +288,7 @@ function redTileData(size, alpha = 255) {
         assert.ok(sw.includes('js/archeo-potential.js?v=' + TAG));
         assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + TAG));
         assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + TAG));
-        assert.match(sw, /const CACHE_NAME = 'detectlab-v380-apm-train-bounded-grid'/);
+        assert.match(sw, /const CACHE_NAME = 'detectlab-v385-pwa-window-resize-bottom-clearance'/);
         assert.match(read('js/apm-next/apm-worker.js'), /MAX_SCORE_CELLS/);
         assert.match(read('js/apm-next/apm-pipeline.js'), /boundedGridForBBox/);
     });
