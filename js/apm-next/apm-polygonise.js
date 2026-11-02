@@ -7,6 +7,16 @@
  *   high      = R(t_high)   − R(t_veryhigh)
  *   veryhigh  = R(t_veryhigh)
  *
+ * Excluded (forbidden) mask cells never become results: a one-cell band of
+ * NaN values around every masked cell is written into the contour values
+ * before marching squares runs, so no output geometry can enter forbidden
+ * land (see applyExclusionBand). NaN is below every finite threshold —
+ * including the zero thresholds some callers use — where a zero band would
+ * still count as "score ≥ 0". This is done in raster space on purpose —
+ * clipping the region against one rectangle per mask run needed tens of
+ * thousands of polygon-clipping rings for a TRAIN window and exhausted a
+ * phone tab exactly when the heatmap was about to be displayed.
+ *
  * d3 contour output coordinates are cell EDGES: u ∈ [0,w], v ∈ [0,h].
  * Geographic mapping: lon = west + u·dLon, lat = north − v·dLat.
  */
@@ -88,29 +98,43 @@
         return out;
     }
 
-    /** Exact cell-edge rectangles, merged vertically where runs match.
-     * Subtracting them (rather than smoothing a nodata contour) preserves even
-     * tiny protection holes in displayed and exported hotspot polygons. */
-    function exclusionRectangles(mask, w, h) {
-        var rectangles = [], previous = Object.create(null);
-        for (var y = 0; y < h; y++) {
-            var current = Object.create(null);
-            for (var x = 0; x < w;) {
-                if (!mask[y * w + x]) { x++; continue; }
-                var start = x;
-                while (x < w && mask[y * w + x]) x++;
-                var key = start + ':' + x;
-                var ring = previous[key];
-                if (ring) { ring[2][1] = y + 1; ring[3][1] = y + 1; }
-                else {
-                    ring = [[start, y], [x, y], [x, y + 1], [start, y + 1], [start, y]];
-                    rectangles.push([ring]);
+    /** Mark every cell within one cell of a forbidden mask cell (value ≠ 0) as
+     * NaN in the contour values, before marching squares runs. NaN is below
+     * every threshold d3-contour compares against (its `value >= t` test is
+     * false for NaN), so masked cells stay out of the result even when a caller
+     * asks for threshold 0 — a band of zeroes would still be "≥ 0" and would be
+     * contoured right back in.
+     *
+     * Why one cell of band is enough: d3-contour's smooth mode moves each
+     * vertex at most half a cell along the edge normal (it re-interpolates the
+     * crossing between the two cells sharing the edge), and every emitted
+     * segment stays inside its own 2×2 cell block. A 2×2 block that contains a
+     * forbidden cell lies entirely inside the 3×3 band, is therefore all-NaN
+     * and is never contoured — so no vertex and no segment can reach forbidden
+     * land, while the band itself (valid land) may be shaved by up to a cell.
+     * Tiny protection holes survive area filtering because the band makes every
+     * hole at least 3×3 cells.
+     *
+     * This replaces subtracting one polygon-clipping rectangle per mask run:
+     * a TRAIN window has tens of thousands of such runs (outside-circle cells,
+     * UAT blobs, one disc per known site) at roughly 18 kB and 75 µs each, and
+     * the resulting boolean op allocated a few hundred MB — enough to kill a
+     * phone renderer at the final heatmap step. */
+    function applyExclusionBand(values, w, h, mask) {
+        for (var j = 0; j < h; j++) {
+            for (var i = 0; i < w; i++) {
+                if (!mask[j * w + i]) continue;
+                for (var dy = -1; dy <= 1; dy++) {
+                    var y = j + dy;
+                    if (y < 0 || y >= h) continue;
+                    for (var dx = -1; dx <= 1; dx++) {
+                        var x = i + dx;
+                        if (x < 0 || x >= w) continue;
+                        values[y * w + x] = NaN;
+                    }
                 }
-                current[key] = ring;
             }
-            previous = current;
         }
-        return rectangles;
     }
 
     /**
@@ -118,7 +142,10 @@
      * @param score   Float32Array(w·h); cells outside the analysis mask must be NaN or < 0.
      * @param grid    grid object (see apm-raster.js)
      * @param thr     { medium, high, veryhigh }
-     * @param opts    { minAreaM2 = 2500, smoothIters = 1, highestOnly = false }
+     * @param opts    { minAreaM2 = 2500, smoothIters = 1, highestOnly = false,
+     *                  exclusionMask } — with an exclusionMask the run is forced
+     *                  to smoothIters 0 / preserveHoles and masked cells get a
+     *                  one-cell band of NaN values before contouring.
      * @returns GeoJSON FeatureCollection; features carry class, label, colour, areaM2.
      */
     function polygonise(score, grid, thr, opts) {
@@ -129,13 +156,18 @@
             var s = score[i];
             values[i] = (s === s && s > 0) ? s : 0;    // NaN/outside → 0
         }
+        // Forbidden cells (and a one-cell band around them) become NaN in the
+        // contour values — below every threshold — see applyExclusionBand for
+        // why this is exact enough and why the previous polygon-clipping
+        // subtraction is gone.
+        if (opts.exclusionMask) applyExclusionBand(values, w, h, opts.exclusionMask);
         var regions = opts.highestOnly
             ? { veryhigh: regionAtThreshold(values, w, h, thr.veryhigh) }
             : classRegions(values, w, h, thr);
         if (opts.exclusionMask) {
-            var forbidden = exclusionRectangles(opts.exclusionMask, w, h);
-            Object.keys(regions).forEach(function (key) { regions[key] = diff(regions[key], forbidden); });
-            // Corner cutting can shrink a protected hole back into forbidden land.
+            // Corner cutting (Chaikin) at a reflex vertex grows a polygon back
+            // toward the hole it just avoided, so masked runs keep the raw
+            // cell-edge rings and every hole, however small the class filter.
             opts = Object.assign({}, opts, { smoothIters: 0, preserveHoles: true });
         }
         var features = [];
