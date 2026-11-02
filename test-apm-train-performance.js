@@ -286,7 +286,7 @@ function redTileData(size, alpha = 255) {
         }
         // Later fixes re-tag the UI, worker and mask under the newer HEAT_TAG.
         const HEAT_TAG = '20261102-apm-continuous-heat';
-        const uiTag = 'js/apm-next/apm-ui.js?v=' + HEAT_TAG;
+        const uiTag = 'js/apm-next/apm-ui.js?v=20261102-arch-report-window';
         assert.ok(html.includes(uiTag) && sw.includes(uiTag), uiTag);
         assert.ok(sw.includes('js/apm-next/apm-ui.js?v=' + TAG), 'older UI tag stays precached for older shells');
         assert.ok(html.includes('js/archeo-potential.js?v=' + HEAT_TAG));
@@ -299,7 +299,10 @@ function redTileData(size, alpha = 255) {
         const pipelineTag = 'js/apm-next/apm-pipeline.js?v=' + PARALLEL_TAG;
         assert.ok(html.includes(pipelineTag) && sw.includes(pipelineTag), pipelineTag);
         assert.ok(sw.includes('js/apm-next/apm-pipeline.js?v=' + TAG), 'older pipeline tag stays precached for older shells');
-        assert.match(sw, /const CACHE_NAME = 'detectlab-v388-apm-parallel-fetch'/);
+        // The shell cache keeps moving (v388 parallel-fetch → … → v392 report
+        // window); only require that it never falls back below that release.
+        assert.ok(Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]) >= 388,
+            'shell cache stays bumped past the parallel-fetch release');
         assert.match(read('js/apm-next/apm-worker.js'), /MAX_SCORE_CELLS/);
         assert.match(read('js/apm-next/apm-pipeline.js'), /boundedGridForBBox/);
         assert.match(read('js/apm-next/apm-pipeline.js'), /startExclusionMask/,

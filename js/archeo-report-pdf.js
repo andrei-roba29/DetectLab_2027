@@ -487,10 +487,23 @@
         pt.space(6);
         pt.h2(tr('arch_report_cover_intro_title'));
         pt.para(tr('arch_report_cover_intro'), { color: C.muted, spaceAfter: 8 });
+        if (meta.baseline) {
+            var coverNotes = [tr('arch_report_method_baseline', { mode: baselineModeLabel(tr, meta) })];
+            if (meta.bonuses) {
+                var coverBonuses = [];
+                if (meta.bonuses.roads) coverBonuses.push(tr('arch_report_bonus_roads'));
+                if (meta.bonuses.potential) coverBonuses.push(tr('arch_report_bonus_potential'));
+                if (meta.bonuses.lidar) coverBonuses.push(tr('arch_report_bonus_lidar'));
+                coverNotes.push(tr('arch_report_method_bonuses', {
+                    list: coverBonuses.length ? coverBonuses.join(' · ') : tr('arch_report_bonus_none')
+                }));
+            }
+            pt.para(coverNotes.join('  ·  '), { color: C.muted, spaceAfter: 8 });
+        }
 
         pt.h2(tr('arch_report_sources_used'));
         pt.para([
-            tr('arch_report_src_apm_title') + ' — ' + (meta.apmAvailable
+            apmBaselineTitle(tr, meta) + ' — ' + (meta.apmAvailable
                 ? tr('arch_report_src_available')
                 : (meta.apmUnreadable ? tr('arch_report_src_unreadable') : tr('arch_report_src_unavailable'))),
             tr('arch_report_src_pot_title') + ' — ' + tr('arch_report_src_pot_state', {
@@ -517,7 +530,7 @@
         pt.beginPage(tr('arch_report_method_title'));
 
         pt.h2(tr('arch_report_sources_title'));
-        [[tr('arch_report_src_apm_title'), tr('arch_report_src_apm_desc')],
+        [[apmBaselineTitle(tr, meta), tr('arch_report_src_apm_desc')],
          [tr('arch_report_src_pot_title'), tr('arch_report_src_pot_desc')],
          [tr('arch_report_src_lidar_title'), tr('arch_report_src_lidar_desc')],
          [tr('arch_report_src_roads_title'), tr('arch_report_src_roads_desc')]].forEach(function (row) {
@@ -540,12 +553,20 @@
             wlidar: Math.round(model.weights.lidar * 100),
             wroads: Math.round((model.weights.romanRoads || 0) * 100)
         }), { color: C.muted, spaceAfter: 6 });
+        // The chosen baseline and the enabled bonuses are documented on the
+        // cover (and the weight table below marks every switched-off bonus);
+        // no extra lines here, or the rejected-reason table would be pushed
+        // off this page.
         pt.table([
             [tr('arch_report_tbl_component'), tr('arch_report_tbl_weight'), tr('arch_report_tbl_how')],
-            ['APM 2.0', Math.round(model.weights.apm * 100) + '%', tr('arch_report_weight_apm')],
-            [tr('arch_report_src_pot_title'), Math.round(model.weights.potential * 100) + '%', tr('arch_report_weight_potential')],
-            ['LIDAR Scanner', Math.round(model.weights.lidar * 100) + '%', meta.ignoreLidar ? tr('arch_report_lidar_ignored_desc') : tr('arch_report_weight_lidar')],
-            [tr('arch_report_src_roads_title'), '+' + Math.round((model.weights.romanRoads || 0) * 100) + '%', tr('arch_report_weight_roads')]
+            [apmBaselineTitle(tr, meta), Math.round(model.weights.apm * 100) + '%', tr('arch_report_weight_apm')],
+            [tr('arch_report_src_pot_title'), Math.round(model.weights.potential * 100) + '%',
+                meta.bonuses && !meta.bonuses.potential ? tr('arch_report_bonus_off') : tr('arch_report_weight_potential')],
+            ['LIDAR Scanner', Math.round(model.weights.lidar * 100) + '%',
+                meta.ignoreLidar ? tr('arch_report_lidar_ignored_desc')
+                    : (meta.bonuses && !meta.bonuses.lidar ? tr('arch_report_bonus_off') : tr('arch_report_weight_lidar'))],
+            [tr('arch_report_src_roads_title'), '+' + Math.round((model.weights.romanRoads || 0) * 100) + '%',
+                meta.bonuses && !meta.bonuses.roads ? tr('arch_report_bonus_off') : tr('arch_report_weight_roads')]
         ], [120, 58, CONTENT_W - 178], { boldFirstCol: true });
 
         pt.h2(tr('arch_report_classify_title'));
@@ -586,6 +607,28 @@
         return tr(key);
     }
 
+    /* The APM component can come from the published 2.0 raster or from the
+     * Next-Gen engine (custom curves, or a model trained on a period) — the
+     * cover, method, score and sources pages must all say which. */
+    function apmBaselineTitle(tr, meta) {
+        return (meta && meta.baseline && meta.baseline !== 'apm20')
+            ? tr('arch_report_src_apm_nextgen_title')
+            : tr('arch_report_src_apm_title');
+    }
+
+    var BASELINE_MODE_KEYS = {
+        apm20: 'arch_report_baseline_apm20',
+        nextgen_custom: 'arch_report_baseline_custom',
+        nextgen_train: 'arch_report_baseline_train'
+    };
+
+    function baselineModeLabel(tr, meta) {
+        var b = (meta && meta.baseline) || 'apm20';
+        var label = tr(BASELINE_MODE_KEYS[b] || BASELINE_MODE_KEYS.apm20);
+        if (b === 'nextgen_train' && meta.baselinePeriod) label += ' · ' + meta.baselinePeriod;
+        return label;
+    }
+
     function pageResult(pt, model, res) {
         var tr = pt.tr;
         pt.beginPage(res.label);
@@ -608,7 +651,7 @@
         var w = res.weights;
         pt.table([
             [tr('arch_report_tbl_component'), tr('arch_report_tbl_weight'), tr('arch_report_tbl_value'), tr('arch_report_tbl_contribution')],
-            ['APM 2.0 · ' + tr('arch_report_apm_class_' + (res.parts.apmCls || 0)),
+            [apmBaselineTitle(tr, model.meta) + ' · ' + tr('arch_report_apm_class_' + (res.parts.apmCls || 0)),
              Math.round(w.apm * 100) + '%', pct(res.parts.apmComp), pct(res.parts.apmComp * w.apm)],
             [tr('arch_report_src_pot_title'),
              Math.round(w.potential * 100) + '%', pct(res.parts.potentialComp), pct(res.parts.potentialComp * w.potential)],
@@ -623,7 +666,7 @@
             [tr('arch_report_tbl_total'), '100%', '', res.scorePct + '%']
         ], [CONTENT_W - 190, 58, 62, 70], { boldFirstCol: true });
 
-        pt.h2('APM 2.0');
+        pt.h2(apmBaselineTitle(tr, model.meta));
         pt.para(tr('arch_report_apm_line', {
             cls: tr('arch_report_apm_class_' + (res.parts.apmCls || 0)),
             value: pct(res.parts.apmComp)
@@ -631,7 +674,9 @@
         pt.para(apmExplanation(tr, res.parts), { color: C.muted, size: 8.2, spaceAfter: 4 });
 
         pt.h2(tr('arch_report_src_pot_title'));
-        if (res.parts.potentialInside) {
+        if (res.parts.potentialApplied === false) {
+            pt.para(tr('arch_report_bonus_off'), { color: C.muted, size: 8.4, spaceAfter: 4 });
+        } else if (res.parts.potentialInside) {
             pt.para(tr('arch_report_pot_inside_long', { score: pct(res.parts.potentialScore) }), { size: 8.4, spaceAfter: 2 });
         } else if (res.parts.potentialDistM !== null && res.parts.potentialDistM <= root.ARCH_REPORT_CONFIG.POTENTIAL.PROXIMITY_M) {
             pt.para(tr('arch_report_pot_near_long', {
@@ -653,7 +698,11 @@
         }
 
         pt.h2(tr('arch_report_lidar_section_title'));
-        if (res.annotated && res.parts.lidarPoint) {
+        if (res.parts.lidarIgnored) {
+            pt.para(tr('arch_report_lidar_ignored_desc'), { color: C.muted, size: 8.4, spaceAfter: 4 });
+        } else if (res.parts.lidarBonus === false) {
+            pt.para(tr('arch_report_bonus_off'), { color: C.muted, size: 8.4, spaceAfter: 4 });
+        } else if (res.annotated && res.parts.lidarPoint) {
             pt.para(tr('arch_report_lidar_hit_long', {
                 title: res.parts.lidarPoint.category || res.parts.lidarPoint.name || '—'
             }), { size: 8.4, spaceAfter: 4 });
@@ -663,11 +712,13 @@
                 title: res.parts.lidarPoint ? (res.parts.lidarPoint.category || res.parts.lidarPoint.name || '—') : '—'
             }), { size: 8.4, spaceAfter: 4 });
         } else {
-            pt.para(tr(res.parts.lidarIgnored ? 'arch_report_lidar_ignored_desc' : 'arch_report_lidar_none_long'), { color: C.muted, size: 8.4, spaceAfter: 4 });
+            pt.para(tr('arch_report_lidar_none_long'), { color: C.muted, size: 8.4, spaceAfter: 4 });
         }
 
         pt.h2(tr('arch_report_roads_section_title'));
-        if (res.parts.romanRoadApplied) {
+        if (res.parts.romanRoadBonus === false) {
+            pt.para(tr('arch_report_bonus_off'), { color: C.muted, spaceAfter: 8 });
+        } else if (res.parts.romanRoadApplied) {
             pt.para(tr('arch_report_roads_near_long', { dist: pt.fmtM(res.parts.romanRoadDistM) }), { spaceAfter: 8 });
         } else {
             pt.para(tr('arch_report_roads_none_long'), { color: C.muted, spaceAfter: 8 });
@@ -823,7 +874,10 @@
 
         pt.h2(tr('arch_report_provenance_title'));
         var detectLabOrigin = (window.DetectLabSite && window.DetectLabSite.canonicalOrigin) || 'https://detectlab.ro';
-        [[tr('arch_report_src_apm_title'), detectLabOrigin + ' — APM 2.0 (Cloudflare R2 tiles)'],
+        var apmProvenance = (model.meta && model.meta.baseline && model.meta.baseline !== 'apm20')
+            ? tr('arch_report_src_apm_nextgen_title') + ' — ' + baselineModeLabel(tr, model.meta) + ' (DetectLab APM Next-Gen engine)'
+            : detectLabOrigin + ' — APM 2.0 (Cloudflare R2 tiles)';
+        [[apmBaselineTitle(tr, model.meta), apmProvenance],
          ['UAT', detectLabOrigin + ' — UAT raster (Cloudflare R2 tiles) · © geo-spatial.org'],
          [tr('arch_report_src_pot_title'), 'RAN / CIMEC — https://ran.cimec.ro'],
          [tr('arch_report_src_lidar_title'), 'DetectLab LIDAR Scanner (CSV) + LIDAR RO hillshade tiles']].forEach(function (row) {

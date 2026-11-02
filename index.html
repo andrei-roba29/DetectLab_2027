@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="css/leaflet.photon.css">
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20261029-romania-5m">
+    <link rel="stylesheet" href="css/styles.css?v=20261102-arch-report-window">
     <!-- 3D TERRAIN VIEW (2D ⇄ 3D) — MapLibre GL JS, vendored like Leaflet.
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
@@ -4200,10 +4200,12 @@
                     </div>
 
                     <!-- Archeological Report (premium) — "Raport arheologic".
-                         Analizează o rază de 1–10 km în jurul unui punct ales de utilizator
-                         combinând APM 2.0 + zonele cu potențial arheologic + LIDAR Scanner
-                         (medie ponderată) și returnează până la 3 rezultate (inele albastre)
-                         plus un raport PDF descărcabil. -->
+                         Analizează o rază de 1–10 km în jurul unui punct ales de utilizator,
+                         cu un baseline APM ales de utilizator (APM 2.0 sau APM Next-Gen
+                         custom/train), bonusuri opționale (drumuri romane, potențial,
+                         LiDAR) și întoarce până la 3 rezultate (inele albastre) plus un
+                         raport PDF. Toate controalele trăiesc în fereastra de mai jos
+                         (#archReportPanel) — același shell ca APM Next-Gen. -->
                     <div class="transp-layer-row arch-report-row" data-category="premium" id="archReportRow">
                         <div class="transp-layer-label" style="margin-bottom:6px">
                             <span style="display:flex;align-items:center;gap:7px;min-width:0">
@@ -4215,21 +4217,76 @@
                             </span>
                             <span style="display:flex;align-items:center;gap:5px;margin-left:auto;flex-shrink:0">
                                 <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showArcheoReportInfo()" title="Layer info"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
-                                <label class="apm-toggle-switch" style="flex-shrink:0" title="Enable point selection"><input type="checkbox" id="archReportToggle"><span class="apm-toggle-track"></span></label>
+                                <button type="button" class="layer-info-btn" id="archReportSettingsBtn" aria-controls="archReportPanel" aria-expanded="false" title="Report settings / Setări raport"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M4 12h4M12 12h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2" stroke="currentColor" stroke-width="2"/><circle cx="8" cy="17" r="2" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="12" r="2" stroke="currentColor" stroke-width="2"/></svg></button>
+                                <label class="apm-toggle-switch" style="flex-shrink:0" title="Enable point selection"><input type="checkbox" id="archReportToggle" aria-controls="archReportPanel"><span class="apm-toggle-track"></span></label>
                             </span>
                         </div>
                         <div class="transp-layer-label" style="margin-bottom:6px;margin-top:4px;align-items:center">
                             <span style="display:flex;align-items:center;gap:6px;min-width:0">
                                 <span style="font-size:0.55rem;background:rgba(255,200,50,0.15);color:#ffc832;border:1px solid rgba(255,200,50,0.4);border-radius:3px;padding:1px 4px;flex-shrink:0">PREMIUM</span>
-                                <span style="font-size:0.68rem;opacity:0.55" class="t" data-key="arch_report_desc">1–10 km radius · APM 2.0 + potential zones + LIDAR · PDF</span>
+                                <span style="font-size:0.68rem;opacity:0.55" class="t" data-key="arch_report_desc">1–10 km radius · APM baseline + potential zones + LIDAR · PDF</span>
                             </span>
                         </div>
+                    </div>
+
+                    <div class="transp-divider" data-category="premium"></div>
+
+                </div><!-- /transpPanel -->
+
+                <!-- Archeological Report window. Same shell as APM Next-Gen:
+                     .apm-panel (width, max-height, Outfit type, gold-on-navy
+                     colours) + the shared vertical drag handle injected by
+                     js/window-resize.js. The user is asked here for the
+                     baseline (APM 2.0 / Next-Gen custom / Next-Gen train + the
+                     training period), the bonus scoring ticks and the
+                     ignore-LIDAR switch; run, PDF and status live here too. -->
+                <section id="archReportPanel" class="apm-panel arch-report-panel" hidden aria-hidden="true" aria-label="Archeological Report">
+                    <header class="apm-head">
+                        <h3 class="t" data-key="arch_report_panel_title">Archeological Report</h3>
+                        <div class="apm-head-right">
+                            <span class="apm-premium-badge">PREMIUM</span>
+                            <button type="button" class="apm-close" id="archReportPanelClose" title="Minimize / Minimizează">−</button>
+                        </div>
+                    </header>
+
+                    <div class="apm-group">
+                        <div class="apm-group-title t" data-key="arch_report_opt_baseline">Baseline</div>
+                        <input type="hidden" id="archReportBaseline" value="apm20">
+                        <div class="apm-tabs" role="group" aria-label="Baseline">
+                            <button type="button" class="apm-tab is-active" id="archReportBaselineApm20" aria-pressed="true">APM 2.0</button>
+                            <button type="button" class="apm-tab" id="archReportBaselineCustom" aria-pressed="false"><span class="t" data-key="arch_report_baseline_custom">APM Next-Gen — custom mode</span></button>
+                            <button type="button" class="apm-tab" id="archReportBaselineTrain" aria-pressed="false"><span class="t" data-key="arch_report_baseline_train">APM Next-Gen — train mode</span></button>
+                        </div>
+                        <label class="apm-field" id="archReportPeriodRow" hidden>
+                            <span class="t" data-key="arch_report_opt_period">Training period</span>
+                            <select id="archReportPeriod" class="apm-select">
+                                <option value="" disabled selected class="t" data-key="arch_report_period_choose">Select a period…</option>
+                            </select>
+                        </label>
+                        <div class="apm-note" id="archReportPeriodNote" role="status"></div>
+                    </div>
+
+                    <div class="apm-group">
+                        <div class="apm-group-title t" data-key="arch_report_opt_bonus">Bonus scoring</div>
+                        <div class="apm-checks">
+                            <label class="apm-check"><input type="checkbox" id="archReportBonusRoads" checked><span class="t" data-key="arch_report_bonus_roads">Roman road proximity</span></label>
+                            <label class="apm-check"><input type="checkbox" id="archReportBonusPotential" checked><span class="t" data-key="arch_report_bonus_potential">Archaeological potential site score</span></label>
+                            <label class="apm-check"><input type="checkbox" id="archReportBonusLidar" checked><span class="t" data-key="arch_report_bonus_lidar">LiDAR Scanner proximity (fortification, burgus, tumulus)</span></label>
+                        </div>
+                        <label class="apm-check"><input type="checkbox" id="archReportIgnoreLidar"><span class="t" data-key="arch_report_ignore_lidar">Ignore LIDAR Scanner results</span></label>
+                        <div class="apm-note t" data-key="arch_report_ignore_lidar_hint">Tick to exclude the scanner entirely (its 100 m result rings reject candidates). Unchecked, the points only raise the score of an area that is already optimal from the APM baseline and lies near a fortification, burgus or tumulus — never an automatic 100 %.</div>
+                    </div>
+
+                    <div class="apm-group">
                         <div class="arch-report-control"><span>Search radius / Rază</span><strong id="archReportDistanceValue">3 km</strong></div>
                         <input type="range" class="transp-slider" id="archReportDistance" min="1" max="10" value="3" step="1" aria-label="Search radius from 1 to 10 kilometres">
-                        <label class="arch-report-show">
-                            <input type="checkbox" id="archReportIgnoreLidar">
-                            <span class="t" data-key="arch_report_ignore_lidar">Ignore LIDAR Scanner results</span>
+                        <label class="arch-report-show" id="archReportResultsToggleWrap" style="display:none">
+                            <input type="checkbox" id="archReportResultsToggle" checked>
+                            <span class="t" data-key="arch_report_show_results">Show results on the map</span>
                         </label>
+                    </div>
+
+                    <div class="apm-actions">
                         <button id="archReportRunBtn" type="button" class="arch-report-button" style="display:none" disabled>
                             <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style="flex-shrink:0">
                                 <circle cx="6.5" cy="6.5" r="4.4" fill="none" stroke="#66c8ff" stroke-width="1.2"/>
@@ -4243,22 +4300,15 @@
                             </svg>
                             <span class="t" data-key="arch_report_pdf_btn">Download PDF</span>
                         </button>
-                        <div class="arch-report-lang" id="archReportPdfLang" style="display:none" role="group" aria-label="PDF language">
-                            <span class="t" data-key="arch_report_pdf_lang">PDF language:</span>
-                            <button type="button" id="archReportPdfLangRo" class="arch-report-lang-btn" data-arch-report-lang="ro" title="Română">RO</button>
-                            <button type="button" id="archReportPdfLangEn" class="arch-report-lang-btn" data-arch-report-lang="en" title="English">EN</button>
-                        </div>
-                        <label class="arch-report-show" id="archReportResultsToggleWrap" style="display:none">
-                            <input type="checkbox" id="archReportResultsToggle" checked>
-                            <span class="t" data-key="arch_report_show_results">Show results on the map</span>
-                        </label>
-                        <div id="archReportStatus" class="arch-report-status t" data-key="arch_report_hint">Switch the layer on and pick a point on the map.</div>
-                        <div id="archReportSummary" style="display:none;font-size:0.72rem;margin-top:4px;line-height:1.5"></div>
                     </div>
-
-                    <div class="transp-divider" data-category="premium"></div>
-
-                </div><!-- /transpPanel -->
+                    <div class="arch-report-lang" id="archReportPdfLang" style="display:none" role="group" aria-label="PDF language">
+                        <span class="t" data-key="arch_report_pdf_lang">PDF language:</span>
+                        <button type="button" id="archReportPdfLangRo" class="arch-report-lang-btn" data-arch-report-lang="ro" title="Română">RO</button>
+                        <button type="button" id="archReportPdfLangEn" class="arch-report-lang-btn" data-arch-report-lang="en" title="English">EN</button>
+                    </div>
+                    <div id="archReportStatus" class="arch-report-status t" data-key="arch_report_hint">Switch the layer on and pick a point on the map.</div>
+                    <div id="archReportSummary" style="display:none;font-size:0.72rem;margin-top:4px;line-height:1.5"></div>
+                </section>
             </div><!-- /map-frame -->
             <div class="map-legend-bar" id="mapLegendBar">
                 <span style="font-size:0.78rem;color:rgba(245,240,235,0.4);margin-right:6px" class="t" data-key="apm_score">APM Score:</span>
@@ -5131,7 +5181,7 @@
     </footer>
 
     <script src="js/ios-input-focus.js?v=20261102-ios-viewport-settle"></script>
-    <script src="js/translations.js?v=20261030-report-exclusions"></script>
+    <script src="js/translations.js?v=20261102-arch-report-window"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
     <script src="js/leaflet.js"></script>
@@ -5337,7 +5387,7 @@
     <script src="js/apm-next/apm-romania-sites.js?v=20261101-train-source"></script>
     <script src="js/apm-next/apm-i18n.js?v=20261102-apm-train-bounded-grid"></script>
     <script src="js/apm-next/apm-pipeline.js?v=20261102-apm-parallel-fetch"></script>
-    <script src="js/apm-next/apm-ui.js?v=20261102-apm-continuous-heat"></script>
+    <script src="js/apm-next/apm-ui.js?v=20261102-arch-report-window"></script>
     <script src="js/archeo-potential.js?v=20261102-apm-continuous-heat"></script>
     <script src="js/lidar-geo.js?v=20260811-latlon"></script>
     <script src="js/lidar-scanner.js?v=20261020-3d-analysis-points"></script>
@@ -5345,8 +5395,8 @@
     <!-- Premium "Archeological Report" / "Raport arheologic": PDF writer →
          PDF layout → the analysis layer itself (this order matters). -->
     <script src="js/pdf-writer.js?v=20260827-arch-report"></script>
-    <script src="js/archeo-report-pdf.js?v=20260928-eu-domain"></script>
-    <script src="js/archeo-report.js?v=20261030-report-exclusions"></script>
+    <script src="js/archeo-report-pdf.js?v=20261102-arch-report-window"></script>
+    <script src="js/archeo-report.js?v=20261102-arch-report-window"></script>
     <script src="js/tutorial.js?v=20261102-tutorial-video"></script>
 
     <!-- AUTH MODAL -->
@@ -6639,6 +6689,6 @@
     }
 </script>
 <script src="js/hybrid-tile-switch.js"></script>
-<script src="js/window-resize.js?v=20261102-conversation-no-grip" defer></script>
+<script src="js/window-resize.js?v=20261102-arch-report-window" defer></script>
 </body>
 </html>

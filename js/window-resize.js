@@ -10,7 +10,7 @@
     var selector = [
         '#iosBldSettingsPanel', '#iosfreeModalInner',
         '.hist-shift-panel', '.om-panel',
-        '.offline-map-panel', '.offline-library', '.apm-panel', '#rvt-body',
+        '.offline-map-panel', '.offline-library', '.apm-panel', '.arch-report-panel', '#rvt-body',
         '#map3d-focus .m3d-focus-card', '.om-modal-card', '.layer-info-box',
         '.ios-modal-card', '.babel-dialog', '.premium-box',
         '.terms-box', '.nearby-dialog',
@@ -125,7 +125,7 @@
         // On desktop the normal (non-fullscreen) map is only 560px tall, but
         // its overflow is visible. Let APM grow above it while keeping the
         // bottom anchored to the map and the grip inside the visible viewport.
-        if (frame && panel.id === 'apmNextPanel' && !isPwa() &&
+        if (frame && (panel.id === 'apmNextPanel' || panel.id === 'archReportPanel') && !isPwa() &&
             !frame.classList.contains('is-fullscreen') &&
             window.matchMedia('(min-width: 721px)').matches) {
             var bottomEdge = panel.getBoundingClientRect().bottom;

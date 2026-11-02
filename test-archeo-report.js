@@ -96,7 +96,10 @@ function fakeEl(id) {
     if (!domNodes[id]) {
         domNodes[id] = {
             id, textContent: '', innerHTML: '', style: {}, dataset: {},
-            disabled: false, checked: false,
+            disabled: false,
+            // The report window's bonus ticks are ON by default (their HTML
+            // carries `checked`); the ignore switch stays OFF.
+            checked: /^archReportBonus/.test(id),
             value: id === 'archReportDistance' ? '3' : '',
             classList: { _c: {}, add(c) { this._c[c] = 1; }, remove(c) { delete this._c[c]; },
                          toggle(c, on) { if (on) this._c[c] = 1; else delete this._c[c]; }, contains(c) { return !!this._c[c]; } },
@@ -415,15 +418,29 @@ section('Mandatory exclusions (evaluateSeed)');
         check('APM ' + c[1] + ' (' + c[0] + ') is allowed', r.ok === true);
     });
 
-    // LIDAR waiver: olive APM is tolerated when the point is annotated
+    // The scanner is a bonus, never a baseline: an annotation does NOT waive
+    // an olive (3) APM pixel any more, but on an optimal pixel it does carry
+    // the 100% LiDAR component (fortification / burgus / tumulus only).
     const lidarLL = R.localMetersToLatLng(CENTER.x, CENTER.y, 46.8);
-    const waived = R.evaluateSeed({ x: CENTER.x, y: CENTER.y, origin: 'lidar' }, baseCtx({
+    const annotatedOnOlive = R.evaluateSeed({ x: CENTER.x, y: CENTER.y, origin: 'lidar' }, baseCtx({
         apmGrid: olive,
         lidarPoints: [{ lat: lidarLL.lat, lng: lidarLL.lng, category: 'fortifica\u021Bie', name: '', id: '1' }]
     }));
-    check('LIDAR-annotated point bypasses the APM rule', waived.ok === true && waived.annotated === true,
-        JSON.stringify(waived.reason));
-    check('LIDAR-annotated point gets the 100% LIDAR component', waived.parts.lidarComp === 1);
+    check('an annotated point does NOT bypass an olive (3) APM baseline',
+        annotatedOnOlive.ok === false && annotatedOnOlive.reason === 'apm_below_average',
+        JSON.stringify(annotatedOnOlive.reason));
+    const annotatedBlue = R.evaluateSeed({ x: CENTER.x, y: CENTER.y, origin: 'lidar' }, baseCtx({
+        lidarPoints: [{ lat: lidarLL.lat, lng: lidarLL.lng, category: 'fortifica\u021Bie', name: '', id: '1' }]
+    }));
+    check('annotated + optimal APM → the 100% LIDAR component (no waiver needed)',
+        annotatedBlue.ok === true && annotatedBlue.annotated === true &&
+        annotatedBlue.parts.lidarComp === 1, JSON.stringify(annotatedBlue.parts));
+    const castruOnly = R.evaluateSeed({ x: CENTER.x, y: CENTER.y, origin: 'grid' }, baseCtx({
+        lidarPoints: [{ lat: lidarLL.lat, lng: lidarLL.lng, category: 'castru', name: '', id: '2' }]
+    }));
+    check('only fortification / burgus / tumulus carry the LiDAR bonus',
+        castruOnly.ok === true && castruOnly.parts.lidarApplied === false &&
+        castruOnly.parts.lidarComp === null, JSON.stringify(castruOnly.parts));
 }
 
 /* ═══════════════ 5. weighted score ═══════════════ */
@@ -489,7 +506,8 @@ section('Weighted score');
                         lng: R.localMetersToLatLng(CENTER.x, CENTER.y, 46.8).lng,
                         category: 'burgus', name: '', id: '3' }]
     }));
-    check('blue + inside bubble + annotated = maximum score', best.score === 1, best.score);
+    check('blue + inside bubble + annotated = weighted sum only (no annotation bonus)',
+        Math.abs(best.score - (S.W_APM * 1 + S.W_POTENTIAL * 0.8 + S.W_LIDAR * 1)) < 1e-9, best.score);
     check('classification thresholds', R.classifyScore(0.9) === 'high' && R.classifyScore(0.6) === 'medium' && R.classifyScore(0.2) === 'low');
 }
 section('Evidence alignment regressions');
@@ -558,9 +576,9 @@ section('Result selection');
     check('highest score kept first', picked[0].score === 0.9);
 
     const withAnnotated = R.selectResults([mk(0, 0.95), mk(2000, 0.4, true), mk(4000, 0.88)], 3, 350);
-    check('LIDAR-annotated result is returned even with a lower score',
-        withAnnotated.some(c => c.annotated), JSON.stringify(withAnnotated.map(c => c.score)));
-    check('annotated goes first', withAnnotated[0].annotated === true);
+    check('selection is strictly by score — a low-score annotation no longer jumps the queue',
+        withAnnotated.map(c => c.score).join(',') === '0.95,0.88,0.4',
+        JSON.stringify(withAnnotated.map(c => [c.annotated, c.score])));
 
     const capped = R.selectResults([mk(0, 0.9), mk(1000, 0.8), mk(2000, 0.7), mk(3000, 0.6)], 3, 350);
     check('at most 3 results are returned', capped.length === 3, capped.length);
@@ -608,6 +626,137 @@ section('APM 2.0 figure polygonization');
     })());
     check('missing grid fails closed (no polygons, no throw)',
         R.apmGridPolygons(null).length === 0 && R.apmGridPolygons({}).length === 0);
+}
+
+/* ═══════════════ 6c. report window: baseline / period / bonuses ═══════════ */
+section('Report window: baseline, period, bonuses');
+{
+    const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+    const css = fs.readFileSync(path.join(__dirname, 'css/styles.css'), 'utf8');
+    const wr = fs.readFileSync(path.join(__dirname, 'js/window-resize.js'), 'utf8');
+
+    // Same shell as the APM Next-Gen panel: .apm-panel gives the window the
+    // exact size / font / colours of #apmNextPanel.
+    check('the window is the APM-Next-Gen shell (.apm-panel .arch-report-panel)',
+        /id="archReportPanel" class="apm-panel arch-report-panel"/.test(html));
+    check('the window is hidden until the layer opens it',
+        /id="archReportPanel" class="[^"]*" hidden/.test(html));
+    check('the window lives inside .map-frame (absolute anchor + drag bounds)',
+        html.indexOf('class="map-frame"') < html.indexOf('id="archReportPanel"') &&
+        html.indexOf('id="archReportPanel"') < html.indexOf('/map-frame -->'));
+    ['archReportPanel', 'archReportSettingsBtn', 'archReportPanelClose', 'archReportBaseline',
+     'archReportBaselineApm20', 'archReportBaselineCustom', 'archReportBaselineTrain',
+     'archReportPeriod', 'archReportPeriodRow', 'archReportPeriodNote',
+     'archReportBonusRoads', 'archReportBonusPotential', 'archReportBonusLidar']
+        .forEach(id => check('index.html has #' + id, html.indexOf('id="' + id + '"') !== -1));
+
+    // Drag handle: the shared resize grip targets the panel and the desktop
+    // growth rule covers it alongside #apmNextPanel.
+    check('the drag-handle system targets the report window',
+        wr.indexOf("'.arch-report-panel'") !== -1);
+    check('the report window shares the desktop growth rule with the APM panel',
+        wr.indexOf("panel.id === 'archReportPanel'") !== -1);
+    check('the window keeps the APM panel look (anchored bottom-right, no restyle)',
+        css.indexOf('.map-frame .arch-report-panel') !== -1 &&
+        css.indexOf('.map-frame .arch-report-panel { left: auto;') !== -1);
+
+    // Layer toggle opens the window (mirrors APM Next-Gen).
+    check('the layer switch controls the window', /id="archReportToggle"[^>]*aria-controls="archReportPanel"/.test(html));
+    check('the settings button re-opens the window', /id="archReportSettingsBtn"[^>]*aria-controls="archReportPanel"/.test(html));
+
+    // Baseline choice + period + bonuses in the markup.
+    ['archReportBaselineApm20', 'archReportBaselineCustom', 'archReportBaselineTrain']
+        .forEach(id => check('baseline option #' + id + ' is offered', html.indexOf('id="' + id + '"') !== -1));
+    check('train mode asks for the period of time', html.indexOf('id="archReportPeriod"') !== -1);
+    ['archReportBonusRoads', 'archReportBonusPotential', 'archReportBonusLidar']
+        .forEach(id => check('bonus tick #' + id + ' is on by default',
+            new RegExp('id="' + id + '" checked').test(html)));
+    check('the ignore-LIDAR switch is off by default',
+        /<input type="checkbox" id="archReportIgnoreLidar">/.test(html));
+
+    // readSettings / setBaseline plumbing.
+    const s0 = R.readSettings();
+    check('defaults: APM 2.0 baseline, all bonuses on, LIDAR kept, no period',
+        s0.baseline === 'apm20' && s0.bonuses.roads === true && s0.bonuses.potential === true &&
+        s0.bonuses.lidar === true && s0.ignoreLidar === false && s0.periodKey === null,
+        JSON.stringify(s0));
+    R.setBaseline('nextgen_train', false);
+    check('setBaseline records the train mode',
+        fakeEl('archReportBaseline').value === 'nextgen_train' &&
+        R.readSettings().baseline === 'nextgen_train');
+    check('setBaseline highlights the train tab and drops the APM 2.0 one',
+        fakeEl('archReportBaselineTrain').classList.contains('is-active') &&
+        !fakeEl('archReportBaselineApm20').classList.contains('is-active'));
+    check('train mode shows the period row', fakeEl('archReportPeriodRow').hidden === false);
+    R.setBaseline('nextgen_custom', false);
+    check('custom mode hides the period row', fakeEl('archReportPeriodRow').hidden === true);
+    R.setBaseline('nonsense', false);
+    check('an unknown baseline falls back to APM 2.0', fakeEl('archReportBaseline').value === 'apm20');
+    R.setBaseline('apm20', false);
+
+    // Each bonus tick really changes the score (and renormalises the rest).
+    const seed = { x: CENTER.x, y: CENTER.y, origin: 'grid' };
+    const ll = R.localMetersToLatLng(CENTER.x, CENTER.y, 46.8);
+    const mk = bonus => { const c = baseCtx(); c.bonus = bonus; return c; };
+    const allOn = { roads: true, potential: true, lidar: true };
+    const plainAll = R.evaluateSeed(seed, mk(allOn));
+    const potOff = R.evaluateSeed(seed, mk({ roads: true, potential: false, lidar: true }));
+    check('disabling the potential bonus renormalises the remaining weight to 1',
+        potOff.score > plainAll.score && Math.abs(potOff.score - 1) < 1e-9,
+        plainAll.score.toFixed(3) + ' → ' + potOff.score.toFixed(3));
+    const withTumul = { ...baseCtx({ lidarPoints: [{ lat: ll.lat, lng: ll.lng, category: 'tumul' }] }) };
+    withTumul.bonus = allOn;
+    const lidarOn = R.evaluateSeed(seed, withTumul);
+    const lidarOff = R.evaluateSeed(seed, { ...withTumul, bonus: { roads: true, potential: true, lidar: false } });
+    check('disabling the LiDAR bonus removes its weight and renormalises the rest',
+        lidarOn.parts.lidarBonus === true && lidarOff.parts.lidarBonus === false &&
+        lidarOff.parts.lidarApplied === false && lidarOn.score > lidarOff.score &&
+        Math.abs(lidarOff.score - plainAll.score) < 1e-9,
+        lidarOn.score.toFixed(3) + ' → ' + lidarOff.score.toFixed(3) +
+        ' (no-LIDAR reference ' + plainAll.score.toFixed(3) + ')');
+    const roadSegs = [{ ax: CENTER.x + 300, ay: CENTER.y, bx: CENTER.x + 800, by: CENTER.y }];
+    const roadOn = R.evaluateSeed(seed, { ...baseCtx({ romanRoadSegs: roadSegs }), bonus: allOn });
+    const roadOff = R.evaluateSeed(seed, { ...baseCtx({ romanRoadSegs: roadSegs }),
+        bonus: { roads: false, potential: true, lidar: true } });
+    check('disabling the Roman-road bonus removes only its additive term',
+        roadOn.parts.romanRoadBonus === true && roadOff.parts.romanRoadBonus === false &&
+        roadOff.parts.romanRoadDistM === null && roadOff.score < roadOn.score,
+        roadOff.score.toFixed(3) + ' vs ' + roadOn.score.toFixed(3));
+
+    // Next-Gen baseline: class polygons rasterise onto the report's own grid.
+    const bbox = { minX: CENTER.x - 1500, minY: CENTER.y - 1500, maxX: CENTER.x + 1500,
+                   maxY: CENTER.y + 1500, lat0: 46.8 };
+    const toLngLat = (x, y) => [R.localMetersToLatLng(x, y, 46.8).lng, R.localMetersToLatLng(x, y, 46.8).lat];
+    const sq = (x0, y0, x1, y1) => [toLngLat(x0, y0), toLngLat(x1, y0), toLngLat(x1, y1), toLngLat(x0, y1), toLngLat(x0, y0)];
+    const fc = { type: 'FeatureCollection', features: [
+        { properties: { class: 'medium' }, geometry: { type: 'Polygon',
+            coordinates: [sq(CENTER.x - 1400, CENTER.y - 1400, CENTER.x + 1400, CENTER.y + 1400)] } },
+        { properties: { class: 'high' }, geometry: { type: 'Polygon',
+            coordinates: [sq(CENTER.x - 700, CENTER.y - 700, CENTER.x + 700, CENTER.y + 700)] } },
+        { properties: { class: 'veryhigh' }, geometry: { type: 'Polygon',
+            coordinates: [sq(CENTER.x - 200, CENTER.y - 200, CENTER.x + 200, CENTER.y + 200)] } },
+        { properties: { class: 'low' }, geometry: { type: 'Polygon',
+            coordinates: [sq(CENTER.x + 1450, CENTER.y + 1450, CENTER.x + 1490, CENTER.y + 1490)] } }
+    ] };
+    const grid = R.rasterizeNextGenGrid(fc, bbox, 12);
+    check('Next-Gen polygons rasterise onto the report grid',
+        grid.available === true && grid.cls.length === grid.cols * grid.rows);
+    check('very-high → 5, high → 4.5, medium → 4 (same legend as APM 2.0)',
+        R.apmClassAt(grid, CENTER.x, CENTER.y) === 5 &&
+        R.apmClassAt(grid, CENTER.x + 450, CENTER.y) === 4.5 &&
+        R.apmClassAt(grid, CENTER.x + 1000, CENTER.y) === 4 &&
+        R.apmClassAt(grid, CENTER.x + 1470, CENTER.y) === 0,
+        [R.apmClassAt(grid, CENTER.x, CENTER.y), R.apmClassAt(grid, CENTER.x + 450, CENTER.y),
+         R.apmClassAt(grid, CENTER.x + 1000, CENTER.y), R.apmClassAt(grid, CENTER.x + 1470, CENTER.y)].join(','));
+    check('classes outside medium/high/very-high never enter the grid',
+        grid.histogram['low'] === undefined);
+    const olive3 = { type: 'FeatureCollection', features: [
+        { properties: { class: 'olive' }, geometry: { type: 'Polygon',
+            coordinates: [sq(CENTER.x - 500, CENTER.y - 500, CENTER.x + 500, CENTER.y + 500)] } }
+    ] };
+    const emptyGrid = R.rasterizeNextGenGrid(olive3, bbox, 12);
+    check('an unknown class rasterises to "no data" (fails closed)',
+        emptyGrid.available === false && R.apmClassAt(emptyGrid, CENTER.x, CENTER.y) === 0);
 }
 
 /* ═══════════════ 7. period estimation ═══════════════ */
@@ -870,15 +1019,17 @@ section('End-to-end analysis (runReport)');
         check('result ' + r.index + ' is \u2265 700 m from every known site', dMin >= 700, dMin);
         check('result ' + r.index + ' UAT clearance \u2265 500 m', r.parts.uatClearanceM === null || r.parts.uatClearanceM >= 500,
             r.parts.uatClearanceM);
-        check('result ' + r.index + ' APM class is allowed or waived',
-            CFG.APM.ALLOWED.indexOf(r.parts.apmCls) !== -1 || r.annotated, r.parts.apmCls);
+        check('result ' + r.index + ' APM class is allowed (no scanner waiver)',
+            CFG.APM.ALLOWED.indexOf(r.parts.apmCls) !== -1, r.parts.apmCls);
         const wantSites = Math.min(model.meta.sitesCount, 5);
         check('result ' + r.index + ' lists up to 5 nearest sites (' + wantSites + ' exist)',
             r.nearestSites.length === wantSites, r.nearestSites.length);
         check('result ' + r.index + ' nearestSites sorted by distance',
             r.nearestSites.every((s, i) => i === 0 || s.distanceM >= r.nearestSites[i - 1].distanceM),
             r.nearestSites.map(s => Math.round(s.distanceM)).join(','));
-        const bonus = r.annotated ? CFG.SCORING.LIDAR_ANNOTATION_BONUS : 0;
+        // No annotation bonus any more: the scanner is a bonus inside the
+        // weighted sum, never an extra additive term.
+        const bonus = 0;
         const roadB = r.parts.romanRoadApplied ? CFG.SCORING.W_ROMAN_ROADS * r.parts.romanRoadComp : 0;
         let expected;
         if (r.parts.lidarApplied) {
@@ -888,7 +1039,7 @@ section('End-to-end analysis (runReport)');
             const nw = CFG.SCORING.W_APM + CFG.SCORING.W_POTENTIAL;
             expected = Math.min(1, (CFG.SCORING.W_APM * r.parts.apmComp + CFG.SCORING.W_POTENTIAL * r.parts.potentialComp) / nw + bonus + roadB);
         }
-        check('result ' + r.index + ' score = weighted sum' + (bonus ? ' + annotation bonus' : '') + ' (' +
+        check('result ' + r.index + ' score = weighted sum (no annotation bonus) (' +
             expected.toFixed(3) + ')', Math.abs(expected - r.score) < 1e-9, r.score);
         check('result ' + r.index + ' popup html has the score + closest site',
             /arch-report-popup/.test(r.popupHtml || '') || true);
@@ -904,8 +1055,9 @@ section('End-to-end analysis (runReport)');
         model.results.some(r => r.period.key === 'roman' &&
             r.period.evidence.some(e => e.period === 'sec. II-III p.Chr.')),
         model.results.map(r => r.period.key + ':' + r.period.evidence.map(e => e.period).join('|')).join(' ; '));
-    check('results are ordered annotated-first then by score',
-        model.results[0].annotated === true, JSON.stringify(model.results.map(r => [r.annotated, r.score])));
+    check('results are ordered by score (an annotation never jumps the queue)',
+        model.results.every((r, i) => i === 0 || r.score <= model.results[i - 1].score),
+        JSON.stringify(model.results.map(r => [r.annotated, r.score])));
     check('separation between results respected', (function () {
         for (let i = 0; i < model.results.length; i++) {
             for (let j = i + 1; j < model.results.length; j++) {
@@ -1154,6 +1306,107 @@ section('End-to-end analysis (runReport)');
 
     fakeEl('archReportIgnoreLidar').checked = false;
 
+    /* ═══════════ 11c. APM Next-Gen baseline (custom + train) ═══════════ */
+    section('APM Next-Gen baseline (window choice)');
+    {
+        const nextgenFC = { type: 'FeatureCollection', features: [
+            { properties: { class: 'veryhigh' }, geometry: { type: 'Polygon', coordinates: [[
+                [C.lng - 0.03, C.lat - 0.03], [C.lng + 0.03, C.lat - 0.03],
+                [C.lng + 0.03, C.lat + 0.03], [C.lng - 0.03, C.lat + 0.03],
+                [C.lng - 0.03, C.lat - 0.03]]] } }
+        ] };
+        let seenRuns = [];
+        let seenPeriods = [];
+        sandbox.DetectLabApmUi = {
+            report: {
+                run(opts) { seenRuns.push(opts); return Promise.resolve({ geojson: nextgenFC }); },
+                periods(centre) {
+                    seenPeriods.push(centre);
+                    // sitePool().periods has no "all" entry — that option is
+                    // added by the report window itself.
+                    return Promise.resolve([
+                        { key: 'roman', label: 'Roman', count: 42, selectable: true },
+                        { key: 'neolithic', label: 'Neolithic', count: 4, selectable: false }
+                    ]);
+                }
+            }
+        };
+
+        // custom mode: the engine runs on the report's own centre/radius and
+        // its class polygons become the APM component
+        fakeEl('archReportBaseline').value = 'nextgen_custom';
+        sandbox._archeoReportSetPoint(C.lat, C.lng);
+        const custom = await sandbox.runArcheoReport();
+        check('the Next-Gen engine is asked to run in custom mode',
+            seenRuns.length === 1 && seenRuns[0].mode === 'custom' &&
+            Math.abs(seenRuns[0].centre.lat - C.lat) < 1e-9 &&
+            Math.abs(seenRuns[0].centre.lon - C.lng) < 1e-9 &&
+            seenRuns[0].radiusKm === 3, JSON.stringify(seenRuns[0] && seenRuns[0].centre));
+        check('a Next-Gen run yields results from the rasterised classes',
+            !!custom && custom.results.length === 3 && custom.meta.baseline === 'nextgen_custom',
+            custom && JSON.stringify(custom.meta.baseline));
+        check('every result passes the Next-Gen baseline (class 5 here)',
+            !!custom && custom.results.every(r => r.parts.apmCls === 5 && r.parts.apmKnown),
+            custom && custom.results.map(r => r.parts.apmCls).join(','));
+        check('the model records the baseline for the PDF',
+            !!custom && custom.meta.baselinePeriod === null &&
+            custom.meta.bonuses.road === undefined &&
+            custom.meta.bonuses.roads === true && custom.meta.bonuses.potential === true &&
+            custom.meta.bonuses.lidar === true, JSON.stringify(custom && custom.meta.bonuses));
+
+        // train mode: the period list comes from the known-site pool and the
+        // chosen period is handed to the engine
+        fakeEl('archReportBaseline').value = 'nextgen_train';
+        // count what refreshPeriodOptions() feeds the <select>
+        const periodSel = fakeEl('archReportPeriod');
+        const options = [];
+        periodSel.appendChild = n => options.push(n);
+        const realCreateElement = sandbox.document.createElement;
+        sandbox.document.createElement = function (tag) {
+            return tag === 'option' ? { value: '', textContent: '', disabled: false }
+                                    : realCreateElement.call(sandbox.document, tag);
+        };
+        R.setBaseline('nextgen_train', false);
+        await new Promise(r => setTimeout(r, 20));
+        sandbox.document.createElement = realCreateElement;
+        check('the period list is fetched for the report point',
+            seenPeriods.length === 1 && Math.abs(seenPeriods[0].lat - C.lat) < 1e-9,
+            JSON.stringify(seenPeriods));
+        check('periods fill the select: All + Roman, Neolithic blocked (<10 sites)',
+            options.length === 3 && options[0].value === 'all' && options[1].value === 'roman' &&
+            options[1].textContent.indexOf('Roman') !== -1 && options[2].disabled === true &&
+            periodSel.value === 'all',
+            JSON.stringify(options.map(o => [o.value, o.disabled])));
+        periodSel.value = 'roman';
+        const train = await sandbox.runArcheoReport();
+        check('train mode passes the chosen period to the engine',
+            seenRuns.length === 2 && seenRuns[1].mode === 'train' && seenRuns[1].periodKey === 'roman',
+            JSON.stringify(seenRuns[1]));
+        check('the model records the training period',
+            !!train && train.meta.baseline === 'nextgen_train' && train.meta.baselinePeriod === 'roman',
+            train && train.meta.baselinePeriod);
+
+        // a broken engine fails closed with a keyed status
+        sandbox.DetectLabApmUi = { report: { run() { return Promise.reject(new Error('worker crashed')); } } };
+        const failed = await sandbox.runArcheoReport();
+        check('a failed Next-Gen baseline fails closed (no results)',
+            failed === null && /baseline_failed|Next-Gen/i.test(String(domNodes['archReportStatus'].textContent)),
+            domNodes['archReportStatus'].textContent);
+        check('a failed baseline clears stale results',
+            sandbox._archeoReportState().results.length === 0);
+
+        delete sandbox.DetectLabApmUi;
+        fakeEl('archReportBaseline').value = 'apm20';
+        R.setBaseline('apm20', false);
+        fakeEl('archReportPeriod').value = '';
+        // bring a normal APM 2.0 model back for the sections that follow
+        sandbox._archeoReportSetPoint(C.lat, C.lng);
+        await sandbox.runArcheoReport();
+        check('switching back to APM 2.0 restores the classic baseline',
+            (function () { const m = sandbox._archeoReportState().model;
+                return !!m && m.meta.baseline === 'apm20'; })());
+    }
+
     pixelsFor = origPixelsFor;
     /* ═══════════ 11b. degraded sources (offline / CORS blocked) ═══════════ */
     section('Degraded sources');
@@ -1326,7 +1579,8 @@ section('End-to-end analysis (runReport)');
             arch_report_row_lidar: 'LIDAR', arch_report_badge_premium: 'PREMIUM',
             arch_report_src_lidar_title: 'LIDAR Scanner', arch_report_lidar_section_title: 'LIDAR Scanner',
             arch_report_tbl_indicator: 'Indicator', arch_report_tbl_link: 'RAN / CIMEC',
-            arch_report_row_apm: 'APM 2.0', arch_report_src_apm_title: 'APM 2.0', arch_report_row_uat: 'UAT'
+            arch_report_row_apm: 'APM 2.0', arch_report_src_apm_title: 'APM 2.0', arch_report_row_uat: 'UAT',
+            arch_report_src_apm_nextgen_title: 'APM Next-Gen'
         };
         const same = Object.keys(dict.en).filter(function (k) {
             return /^arch_report_/.test(k) && dict.en[k] === dict.ro[k] &&

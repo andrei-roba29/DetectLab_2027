@@ -44,6 +44,7 @@
         curveText: null,            // editable curve text per curve name
         result: null,
         busy: false,
+        reportBusy: false,          // the Archeological Report owns the sessions
         token: null,
         manualSession: { worker: null, analysisKey: null, provenance: null, stats: null, waterClasses: [] },
         trainSession: { worker: null, analysisKey: null, provenance: null, stats: null, waterClasses: [] }
@@ -319,10 +320,15 @@
         return checked.curves;
     }
 
-    function readManualParams() {
+    /** override: { centre, radiusKm, token, onProgress } — the Archeological
+     *  Report runs THIS panel's configuration on ITS OWN circle, so the panel
+     *  centre/radius/token are optional when an override supplies them. */
+    function readManualParams(override) {
+        override = override || {};
         if (!getMap()) throw new Error(T('status.noMap'));
-        if (!state.centre) throw new Error(T('status.noPoint'));
-        var radiusKm = readRadius();
+        var centre = override.centre || state.centre;
+        if (!centre) throw new Error(T('status.noPoint'));
+        var radiusKm = override.radiusKm != null ? override.radiusKm : readRadius();
         var wRelief = parseFloat(els.wRelief.value), wWater = parseFloat(els.wWater.value), wSoil = parseFloat(els.wSoil.value);
         [wRelief, wWater, wSoil].forEach(function (w) { if (!(isFinite(w) && w >= 0)) throw new Error(T('status.noWeights')); });
         if (wRelief + wWater + wSoil <= 0) throw new Error(T('status.noWeights'));
@@ -333,7 +339,7 @@
         var minArea = parseFloat(els.minArea.value);
         if (!(minArea >= 0)) throw core().keyedError('err.minArea', {}, 'Minimum polygon area must be zero or positive.');
         return {
-            centre: state.centre,
+            centre: centre,
             radiusKm: radiusKm,
             smoothDem: !!els.smooth.checked,
             includeDrainage: !!els.drainage.checked,
@@ -345,7 +351,8 @@
             thresholds: thresholds,
             minAreaM2: minArea,
             workerUrl: WORKER_URL,
-            token: state.token
+            token: override.token !== undefined ? override.token : state.token,
+            onProgress: override.onProgress
         };
     }
 
@@ -523,6 +530,8 @@
 
     function run() {
         if (!isRunnable()) { updateGate(); return; }
+        // The report window may be running this engine as its APM baseline.
+        if (state.reportBusy) { setStatus('APM Next-Gen is busy with the Archeological Report.', 'busy'); return; }
         var mode = state.mode;
         var params;
         try {
@@ -1194,6 +1203,101 @@
         if (state.enabled && rowToggle) minimizePanel();
     }
 
+    /* ── Archeological Report integration ──────────────────────────────────
+     * The report window can use this panel's configuration as its APM
+     * baseline: the same curves / weights / thresholds set up here ("custom"),
+     * or a model trained on the known-site pool for the period the report
+     * window asks for ("train"). The report supplies its own centre, radius,
+     * period and cancellation token — everything else is read from this panel,
+     * so the two features can never drift apart. */
+
+    var reportSites = { centre: null, records: null };
+
+    function reportCentreKey(centre) {
+        return Number(centre.lat).toFixed(5) + ',' + Number(centre.lon).toFixed(5);
+    }
+
+    /** Known-site pool for a report centre (50 km, cached per centre). */
+    function loadReportSites(centre, token) {
+        if (reportSites.centre === reportCentreKey(centre) && reportSites.records) {
+            return Promise.resolve(reportSites.records);
+        }
+        var provider = root.DetectLabRomaniaApmSites;
+        if (!provider || typeof provider.createProvider !== 'function') {
+            return Promise.reject(new Error('The known-sites dataset is unavailable.'));
+        }
+        var t = token || { cancelled: false };
+        return provider.createProvider().getSites(centre, TRAIN_AREA_KM, { token: t }).then(function (records) {
+            if (t.cancelled) throw new Error('Cancelled');
+            if (records._meta && records._meta.outsideRomania) {
+                throw new Error('The report point is outside the Romanian training dataset.');
+            }
+            reportSites = { centre: reportCentreKey(centre), records: records };
+            return records;
+        });
+    }
+
+    /** Period groups the report's TRAIN baseline can offer for this centre. */
+    function reportPeriods(centre, token) {
+        return loadReportSites(centre, token).then(function (records) {
+            return pipe().sitePool(records, centre).periods;
+        });
+    }
+
+    /** Run this panel's configuration as someone else's APM baseline.
+     * opts: { mode: 'custom'|'train', centre:{lat,lon}, radiusKm, periodKey,
+     *         token, onProgress } → Promise<result> (geojson + thresholds). */
+    function reportRun(opts) {
+        opts = opts || {};
+        if (!pipe() || !core()) return Promise.reject(new Error('APM Next-Gen is not loaded.'));
+        if (state.busy || state.reportBusy) return Promise.reject(new Error('APM Next-Gen is already running — wait for it to finish.'));
+        if (!els.wRelief) return Promise.reject(new Error('The APM Next-Gen panel is not ready yet.'));
+        var centre = opts.centre;
+        if (!centre) return Promise.reject(new Error(T('status.noPoint')));
+        // Claim the shared worker sessions so the panel cannot start a second
+        // analysis on top of the report's run (and vice versa).
+        state.reportBusy = true;
+        function release(value) { state.reportBusy = false; return value; }
+        function releaseReject(err) { state.reportBusy = false; throw err; }
+        if (opts.mode === 'train') {
+            return loadReportSites(centre, opts.token).then(function (records) {
+                var pool = pipe().sitePool(records, centre);
+                var period = null;
+                if (opts.periodKey && opts.periodKey !== 'all') {
+                    period = pool.periods.filter(function (p) { return p.key === opts.periodKey; })[0] || null;
+                    if (!period) throw new Error('Unknown training period.');
+                }
+                var params = {
+                    centre: centre,
+                    records: records,
+                    period: period,
+                    radiusKm: opts.radiusKm,
+                    minSlopeDeg: parseFloat(els.minSlope.value),
+                    smoothDem: !!els.smooth.checked,
+                    includeDrainage: !!els.drainage.checked,
+                    strahlerMap: readStrahlerMap(),
+                    waterClasses: core().WATER_CLASSES.filter(function (c) { return els.water[c].checked; }),
+                    workerUrl: WORKER_URL,
+                    token: opts.token,
+                    onProgress: opts.onProgress
+                };
+                return pipe().runTrain(state.trainSession, params).then(function (res) {
+                    res.mode = 'train';
+                    res.period = period;
+                    return res;
+                });
+            }).then(release, releaseReject);
+        }
+        var params = readManualParams({
+            centre: centre, radiusKm: opts.radiusKm,
+            token: opts.token, onProgress: opts.onProgress
+        });
+        return pipe().runManual(state.manualSession, params).then(function (res) {
+            res.mode = 'custom';
+            return res;
+        }).then(release, releaseReject);
+    }
+
     root.DetectLabApmUi = {
         tm: tm,
         diagnosticsBundle: diagnosticsBundle,
@@ -1202,6 +1306,7 @@
         close: function () { togglePanel(false); },
         setEnabled: function (on) { setEnabled(on); },
         isEnabled: function () { return state.enabled; },
+        report: { run: reportRun, periods: reportPeriods },
         state: function () { return { mode: state.mode, enabled: state.enabled, centre: state.centre, radiusKm: state.radiusKm, period: state.period, picking: state.picking }; }
     };
 
