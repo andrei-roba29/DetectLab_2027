@@ -2551,6 +2551,65 @@
         return false;
     }
 
+    /* A solid backing belongs to the individual LiDAR raster, not to the
+     * basemap: it follows deck order, the focus and the raster's opacity. */
+    var grayBackingControls = {
+        'lidar.ro2m': 'lidarRo2mDisableTransparency',
+        'lidar.ro5m': 'lidarRo5mDisableTransparency',
+        'lidar.ro1m': 'lidarRo1mDisableTransparency'
+    };
+    var grayBackingWorld = {
+        type: 'FeatureCollection', features: [{ type: 'Feature', properties: {},
+            geometry: { type: 'MultiPolygon', coordinates: [
+                [[[-180, -85.0511], [0, -85.0511], [0, 85.0511], [-180, 85.0511], [-180, -85.0511]]],
+                [[[0, -85.0511], [180, -85.0511], [180, 85.0511], [0, 85.0511], [0, -85.0511]]]
+            ] } }]
+    };
+    var grayBackingDiscKey = '';
+    var grayBackingDisc = null;
+
+    function renderGrayBacking(entry, focused, discFocus) {
+        var item = entry.item;
+        var controlId = grayBackingControls[item.lidarKey];
+        var checkbox = controlId && document.getElementById(controlId);
+        var sourceId = entry.id + '-gray-src';
+        var layerId = entry.id + '-gray';
+        var data = grayBackingWorld;
+        var wanted = focused && checkbox && checkbox.checked;
+        if (wanted && discFocus) {
+            var mask = state.focus && state.focus.mask;
+            var key = mask && [mask.lat, mask.lng, mask.radiusKm].join(',');
+            if (key !== grayBackingDiscKey) {
+                grayBackingDiscKey = key;
+                grayBackingDisc = mask && MIRROR.disc && MIRROR.disc.geojson
+                    ? MIRROR.disc.geojson(mask, 96) : null;
+            }
+            data = grayBackingDisc;
+            wanted = !!data;
+        }
+        if (!wanted) {
+            if (map.getLayer(layerId)) map.removeLayer(layerId);
+            if (map.getSource(sourceId)) map.removeSource(sourceId);
+            delete state.sourceData[sourceId];
+            return null;
+        }
+        if (!map.getSource(sourceId)) {
+            map.addSource(sourceId, { type: 'geojson', data: data });
+            state.sourceData[sourceId] = data;
+        } else {
+            setSourceData(sourceId, data);
+        }
+        var opacity = item.opacity == null ? 1 : Math.max(0, Math.min(1, Number(item.opacity)));
+        if (!isFinite(opacity)) opacity = 1;
+        if (!map.getLayer(layerId)) {
+            map.addLayer({ id: layerId, type: 'fill', source: sourceId,
+                paint: { 'fill-color': '#808080', 'fill-opacity': opacity } });
+        } else {
+            map.setPaintProperty(layerId, 'fill-opacity', opacity);
+        }
+        return { sourceId: sourceId, layerId: layerId };
+    }
+
     function renderRaster(entry) {
         var item = entry.item;
         var sourceId = entry.id + '-src';
@@ -2640,7 +2699,11 @@
             lidarKey: item.lidarKey || null,
             focused: focused
         };
-        return { sourceIds: [sourceId], layerIds: [layerId] };
+        var backing = renderGrayBacking(entry, focused, discFocus);
+        return {
+            sourceIds: backing ? [sourceId, backing.sourceId] : [sourceId],
+            layerIds: backing ? [backing.layerId, layerId] : [layerId]
+        };
     }
 
     /**

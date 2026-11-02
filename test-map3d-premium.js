@@ -142,8 +142,8 @@ const premium = () => ({ plan: 'premium', premiumExpiresAt: new Date(Date.now() 
         'entitlement hiding overrides flex styles on web and PWA');
     for (const file of ['index.html', 'sw.js']) {
         const text = read(file);
-        assert(text.includes('js/map3d-terrain.js?v=20261102-premium-3d'));
-        assert(text.includes('css/map3d-terrain.css?v=20261102-premium-3d'));
+        assert(text.includes('js/map3d-terrain.js?v=20261102-lidar-gray-backing'));
+        assert(text.includes('css/map3d-terrain.css?v=20261102-lidar-gray-backing'));
     }
     console.log('PASS: 3D Premium-only UI/API, active/expired/free/guest access, async gates, SDK race, logout, expiry and resume.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
