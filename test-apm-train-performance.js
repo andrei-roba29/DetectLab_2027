@@ -280,15 +280,20 @@ function redTileData(size, alpha = 255) {
 
     test('changed assets are re-tagged for the browser and the PWA shell cache', () => {
         const html = read('index.html'), sw = read('sw.js');
-        for (const f of ['apm-raster.js', 'apm-i18n.js', 'apm-pipeline.js', 'apm-ui.js']) {
+        for (const f of ['apm-raster.js', 'apm-i18n.js', 'apm-pipeline.js']) {
             const tag = 'js/apm-next/' + f + '?v=' + TAG;
             assert.ok(html.includes(tag) && sw.includes(tag), tag);
         }
-        assert.ok(html.includes('js/archeo-potential.js?v=' + TAG));
-        assert.ok(sw.includes('js/archeo-potential.js?v=' + TAG));
-        assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + TAG));
-        assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + TAG));
-        assert.match(sw, /const CACHE_NAME = 'detectlab-v385-pwa-window-resize-bottom-clearance'/);
+        // Later fixes re-tag the UI, worker and mask under the newer HEAT_TAG.
+        const HEAT_TAG = '20261102-apm-continuous-heat';
+        const uiTag = 'js/apm-next/apm-ui.js?v=' + HEAT_TAG;
+        assert.ok(html.includes(uiTag) && sw.includes(uiTag), uiTag);
+        assert.ok(sw.includes('js/apm-next/apm-ui.js?v=' + TAG), 'older UI tag stays precached for older shells');
+        assert.ok(html.includes('js/archeo-potential.js?v=' + HEAT_TAG));
+        assert.ok(sw.includes('js/archeo-potential.js?v=' + HEAT_TAG));
+        assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + HEAT_TAG));
+        assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + HEAT_TAG));
+        assert.match(sw, /const CACHE_NAME = 'detectlab-v386-apm-continuous-heat'/);
         assert.match(read('js/apm-next/apm-worker.js'), /MAX_SCORE_CELLS/);
         assert.match(read('js/apm-next/apm-pipeline.js'), /boundedGridForBBox/);
     });

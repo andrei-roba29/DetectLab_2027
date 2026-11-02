@@ -14,7 +14,7 @@
 importScripts(
     'apm-core.js',
     'apm-raster.js',
-    'apm-heatmap.js?v=20261101-train-source',
+    'apm-heatmap.js?v=20261102-apm-continuous-heat',
     '../d3.min.js',
     '../vendor/polygon-clipping.umd.min.js',
     'apm-polygonise.js?v=20261101-train-source',
@@ -114,10 +114,19 @@ importScripts(
         var altRef = m.altRef ? Float64Array.from(m.altRef) : Float64Array.from(elevInCircle).sort();
         var soilRef = m.soilRef ? Float64Array.from(m.soilRef) : Float64Array.from(curvInCircle).sort();
         var altPct = new Float32Array(n), soilPct = new Float32Array(n);
-        var valid = new Uint8Array(n);
+        // valid   = cell may produce results (hotspots, class areas, export).
+        // display = cell is coloured in the heatmap. Exclusion value 2 marks a
+        //           known-site protection zone on verified free land: it is
+        //           never a result, but the heat stays continuous there so the
+        //           protection radii do not appear as circular holes.
+        var valid = new Uint8Array(n), display = new Uint8Array(n), displayOnly = 0;
+        var ex = m.exclusionMask || null;
         for (i = 0; i < n; i++) {
-            if (!inCircle[i] || !t.valid[i] || (m.exclusionMask && m.exclusionMask[i])) continue;
-            valid[i] = 1;
+            if (!inCircle[i] || !t.valid[i]) continue;
+            var e = ex ? ex[i] : 0;
+            if (e && e !== 2) continue;
+            display[i] = 1;
+            if (e) displayOnly++; else valid[i] = 1;
             altPct[i] = R.percentileOf(altRef, m.elev[i]);
             soilPct[i] = R.percentileOf(soilRef, t.curv[i]);
         }
@@ -134,6 +143,7 @@ importScripts(
         });
         state.analysis = {
             grid: g, spacing: sp, slope: t.slope, aspect: t.aspect, curv: t.curv, valid: valid,
+            display: display, displayOnly: displayOnly,
             exclusionMask: m.exclusionMask || null,
             inCircle: inCircle, altPct: altPct, soilPct: soilPct, waterDist: waterDist
         };
@@ -145,12 +155,17 @@ importScripts(
         var A = state.analysis;
         if (!A) throw new Error('No analysis loaded.');
         var n = A.grid.w * A.grid.h;
+        // `score` holds result cells only (NaN elsewhere): hotspots, class areas
+        // and statistics never see a protected cell. `displayScore` additionally
+        // carries the protection-zone cells for the continuous heatmap.
         var score = new Float32Array(n).fill(NaN);
+        var displayScore = A.displayOnly ? new Float32Array(n).fill(NaN) : score;
+        var cellsToScore = A.display || A.valid;
         var classes = cfg.waterClasses || [];
         var cell = { slope: 0, aspect: 0, altPct: 0, soilPct: 0, waterDist: {} };
         var sum = 0, cnt = 0, mn = Infinity, mx = -Infinity;
         for (var i = 0; i < n; i++) {
-            if (!A.valid[i]) continue;
+            if (!cellsToScore[i]) continue;
             cell.slope = A.slope[i];
             cell.aspect = A.aspect[i];
             cell.altPct = A.altPct[i];
@@ -161,12 +176,15 @@ importScripts(
             }
             var s = mode === 'manual' ? core.manualCellScore(cell, cfg) : core.trainCellScore(cell, cfg.model);
             if (!(s === s)) continue;
+            if (displayScore !== score) displayScore[i] = s;
+            if (!A.valid[i]) continue;
             score[i] = s;
             sum += s; cnt++;
             if (s < mn) mn = s;
             if (s > mx) mx = s;
         }
-        return { score: score, stats: { cells: cnt, min: cnt ? mn : null, max: cnt ? mx : null, mean: cnt ? sum / cnt : null } };
+        return { score: score, displayScore: displayScore,
+            stats: { cells: cnt, min: cnt ? mn : null, max: cnt ? mx : null, mean: cnt ? sum / cnt : null } };
     }
 
     /* Defensive ceiling: the pipeline now builds bounded prediction grids, but
@@ -192,9 +210,19 @@ importScripts(
             smoothIters: m.smoothIters == null ? 1 : m.smoothIters,
             highestOnly: true, exclusionMask: state.analysis.exclusionMask
         });
-        var heatmap = DetectLabApmHeatmap.buildRaster(res.score, state.analysis.grid, m.thresholds, 512, state.analysis.exclusionMask);
-        reply(m.id, { geojson: fc, heatmap: heatmap, thresholds: m.thresholds,
-            areaKm2: P.areaByScores(res.score, state.analysis.grid, m.thresholds), scoreStats: res.stats }, [heatmap.rgba.buffer]);
+        var H = DetectLabApmHeatmap;
+        var heatmap = H.buildRaster(res.displayScore, state.analysis.grid, m.thresholds, 512, state.analysis.exclusionMask);
+        // Pre-project the display raster to Web Mercator once, here in the
+        // worker. The main thread then paints each map tile with a single
+        // drawImage instead of sampling 65,536 pixels per tile in JavaScript —
+        // the per-tile sampling is what made zooming over a result stutter on
+        // phones. The source-resolution exclusion mask is applied while building
+        // the texture and is not shipped to the main thread.
+        var texture = H.buildMercatorTexture(heatmap);
+        var display = H.displayPayload(heatmap, texture);
+        reply(m.id, { geojson: fc, heatmap: display, thresholds: m.thresholds,
+            areaKm2: P.areaByScores(res.score, state.analysis.grid, m.thresholds), scoreStats: res.stats },
+            [display.rgba.buffer, texture.rgba.buffer]);
     }
 
     function handleTrain(m) {

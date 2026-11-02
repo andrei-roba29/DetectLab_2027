@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261102-apm-train-bounded-grid';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261102-apm-continuous-heat';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
@@ -625,6 +625,9 @@
             pane: 'apmHotspots',
             filter: function (f) { return f.properties.class === 'veryhigh'; },
             interactive: true,
+            // Simplify the contour per zoom level: fewer path vertices to
+            // re-project after every zoom on phones, visually identical.
+            smoothFactor: 1.5,
             style: function () { return { color: '#d9f5ff', weight: 2, fill: false, opacity: 0.95, className: 'apm-hotspot-outline' }; },
             onEachFeature: function (f, l) {
                 var p = f.properties;

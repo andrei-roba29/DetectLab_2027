@@ -962,7 +962,15 @@
 //   keeps its own bottom clearance, the height is clamped to the space above
 //   it, and PWA windows get a floor above the attribution line. Re-tags
 //   css/window-resize.css + js/window-resize.js and CACHE_NAME.
-const CACHE_NAME = 'detectlab-v385-pwa-window-resize-bottom-clearance';
+// v386: Next-Gen APM on Android PWAs — the result heatmap no longer shows the
+//   known-site protection radii as circular holes (they read as Heritage radii
+//   even with the Heritage layer off); protected cells stay excluded from
+//   hotspots, class areas and export. Heat tiles are drawn from a Mercator
+//   texture pre-projected in the worker (one drawImage per tile instead of
+//   65,536 JS samples), and the exclusion mask rasterises site footprints once
+//   and time-slices its loop. Re-tags apm-heatmap/apm-ui/apm-worker and
+//   archeo-potential.js.
+const CACHE_NAME = 'detectlab-v386-apm-continuous-heat';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1041,6 +1049,11 @@ const PRECACHE_URLS = [
   'js/apm-next/apm-ui.js?v=20261102-apm-train-bounded-grid',
   'js/apm-next/apm-worker.js?v=20261102-apm-train-bounded-grid',
   'js/archeo-potential.js?v=20261102-apm-train-bounded-grid',
+  // v386: continuous APM heat over protection zones + Mercator heat texture.
+  'js/apm-next/apm-heatmap.js?v=20261102-apm-continuous-heat',
+  'js/apm-next/apm-ui.js?v=20261102-apm-continuous-heat',
+  'js/apm-next/apm-worker.js?v=20261102-apm-continuous-heat',
+  'js/archeo-potential.js?v=20261102-apm-continuous-heat',
   'js/d3.min.js',
   'js/rbush.min.js',
   'js/vendor/polygon-clipping.umd.min.js',

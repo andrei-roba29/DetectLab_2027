@@ -16,7 +16,9 @@ for (const asset of [`css/window-resize.css?v=${tag}`, `js/window-resize.js?v=${
     assert(html.includes(asset), `${asset} is loaded by index.html`);
     assert(sw.includes(asset), `${asset} is precached for offline PWA`);
 }
-assert(/detectlab-v385-pwa-window-resize-bottom-clearance/.test(sw), 'shell cache is bumped so installed PWAs receive the fix');
+// v385 introduced this fix; any later shell cache still carries it.
+const cacheVersion = Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
+assert(cacheVersion >= 385, 'shell cache is bumped so installed PWAs receive the fix');
 // The blanket bottom:0 override is gone for good. Match the old rule exactly.
 assert(!/\.dl-window-resized\s*\{[^}]*bottom:\s*0\s*!important/.test(css), 'no resized window is snapped to bottom:0');
 assert(/\.dl-window-resized\.dl-window-release-top\s*\{[^}]*top:\s*auto\s*!important/.test(css), 'only stretched overlays release their top edge');

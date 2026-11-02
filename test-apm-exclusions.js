@@ -77,6 +77,21 @@ function workerHarness() {
     };
 }
 
+// Every Mercator texel whose centre lies on a hidden source cell is transparent.
+function assertTextureMasked(heatmap, sourceMask, label) {
+    const tex = heatmap.texture;
+    assert.ok(tex && tex.rgba.length === tex.w * tex.h * 4, label + ' ships a Mercator display texture');
+    let checked = 0;
+    for (let v = 0; v < tex.h; v++) for (let u = 0; u < tex.w; u++) {
+        const c = heat.texelCentre(tex, u, v);
+        const col = Math.floor((c.lon - grid.west) / grid.dLon), row = Math.floor((grid.north - c.lat) / grid.dLat);
+        if (col < 0 || row < 0 || col >= grid.w || row >= grid.h) continue;
+        const e = sourceMask[row * grid.w + col];
+        if (e && e !== 2) { assert.equal(tex.rgba[4 * (v * tex.w + u) + 3], 0, label + ' heat is transparent in excluded cells'); checked++; }
+    }
+    assert.ok(checked > 0);
+}
+
 (async () => {
     reset();
     const open = await mask();
@@ -91,11 +106,13 @@ function workerHarness() {
     for (let i = 0; i < grid.w * grid.h; i++) {
         const p = center(i);
         if (core.haversineM(lat, lon, p.lat, p.lon) < 690) {
-            assert.equal(protectedResult.mask[i], 1, '600 m radius plus 100 m buffer');
+            // Forbidden (non-zero) — and, on verified free land, the value 2 that
+            // keeps the heatmap continuous while still blocking every result.
+            assert.equal(protectedResult.mask[i], 2, '600 m radius plus 100 m buffer');
             protectedCells++;
         }
         if (!open.mask[i] && core.haversineM(lat, exteriorLon, p.lat, p.lon) < 690) {
-            assert.equal(protectedResult.mask[i], 1, 'neighboring protection radius crosses search boundary');
+            assert.equal(protectedResult.mask[i], 2, 'neighboring protection radius crosses search boundary');
             edgeProtectedCells++;
         }
     }
@@ -109,9 +126,30 @@ function workerHarness() {
     assert.ok(boundary.stats.heritage > 0);
     for (let i = 0; i < boundary.mask.length; i++) {
         const p = center(i);
-        if (contains([ring], p.lon, p.lat)) assert.equal(boundary.mask[i], 1, 'site polygon is forbidden');
+        if (contains([ring], p.lon, p.lat)) assert.equal(boundary.mask[i], 2, 'site polygon is forbidden');
     }
     console.log('  ok  heritage polygons are excluded independently of their visibility');
+
+    // A protection radius over built-up or unverified land stays hidden (1):
+    // only verified free land inside a radius may be coloured (2).
+    reset('split');
+    window._localLayerData[0] = { ...empty(), features: [point(lon + .005)] };
+    const mixed = await mask();
+    let hiddenProtected = 0, shownProtected = 0;
+    for (let i = 0; i < mixed.mask.length; i++) {
+        const p = center(i);
+        if (core.haversineM(lat, lon + .005, p.lat, p.lon) >= 690) continue;
+        if (p.lon > lon + .005) { assert.equal(mixed.mask[i], 1, 'built-up land inside a radius stays hidden'); hiddenProtected++; }
+        else if (p.lon < lon + .0035) { assert.equal(mixed.mask[i], 2, 'free land inside a radius keeps continuous heat'); shownProtected++; }
+    }
+    assert.ok(hiddenProtected && shownProtected);
+    assert.equal(mixed.stats.protectedDisplay, mixed.mask.filter(v => v === 2).length);
+    for (const mode of ['missing', 'unreadable']) {
+        reset(mode);
+        window._localLayerData[0] = { ...empty(), features: [point(lon)] };
+        assert.ok((await mask()).mask.every(v => v === 1), mode + ' UAT hides protection zones as well');
+    }
+    console.log('  ok  protection zones are forbidden everywhere but only coloured on verified free land');
 
     reset('split');
     const split = await mask();
@@ -212,13 +250,38 @@ function workerHarness() {
             minSlopeDeg: 0, preferredAspectDeg: 180, waterClasses: [], thresholds, minAreaM2: 0, smoothIters: 1 });
         for (let i = 0; i < split.mask.length; i++) {
             if (!split.mask[i]) continue;
-            const p = center(i), pixel = new Uint8Array(4);
-            heat.sampleRGBA(result.heatmap, p.lon, p.lat, pixel, 0);
-            assert.equal(pixel[3], 0, mode + ' heat is transparent in excluded cells');
+            const p = center(i);
             assert.ok(!result.geojson.features.some(f => contains(f.geometry.coordinates, p.lon, p.lat)), mode + ' export excludes forbidden cells');
         }
+        assertTextureMasked(result.heatmap, split.mask, mode);
+        assert.equal(result.heatmap.exclusionMask, undefined, 'the full-resolution mask is not shipped to the main thread');
         assert.equal(result.scoreStats.cells, set.stats.valid);
     }
+    // Protection zones (value 2): heat stays continuous, results stay excluded.
+    const protectedMask = new Uint8Array(elev.length);
+    for (let i = 0; i < protectedMask.length; i++) if (core.haversineM(lat, lon, center(i).lat, center(i).lon) < 690) protectedMask[i] = 2;
+    const protSet = send('setAnalysis', { grid, elev, smooth: false, circle: { lat, lon, radiusM: 1800 }, exclusionMask: protectedMask });
+    const openSet = send('setAnalysis', { grid, elev, smooth: false, circle: { lat, lon, radiusM: 1800 } });
+    const openScore = send('score', { mode: 'manual', curves: core.DEFAULT_CURVES, weights: model.weights,
+        minSlopeDeg: 0, preferredAspectDeg: 180, waterClasses: [], thresholds: { medium: 0, high: 0, veryhigh: 0 }, minAreaM2: 0, smoothIters: 1 });
+    send('setAnalysis', { grid, elev, smooth: false, circle: { lat, lon, radiusM: 1800 }, exclusionMask: protectedMask });
+    const protScore = send('score', { mode: 'manual', curves: core.DEFAULT_CURVES, weights: model.weights,
+        minSlopeDeg: 0, preferredAspectDeg: 180, waterClasses: [], thresholds: { medium: 0, high: 0, veryhigh: 0 }, minAreaM2: 0, smoothIters: 1 });
+    const protectedCount = protectedMask.filter(Boolean).length;
+    assert.ok(protectedCount > 0 && protSet.stats.valid === openSet.stats.valid - protectedCount, 'protected cells are not result cells');
+    assert.equal(protScore.scoreStats.cells, protSet.stats.valid);
+    assert.ok(protScore.areaKm2.veryhigh < openScore.areaKm2.veryhigh, 'class areas exclude protection zones');
+    let colouredProtected = 0;
+    for (let i = 0; i < protectedMask.length; i++) {
+        if (!protectedMask[i]) continue;
+        const p = center(i), pixel = new Uint8Array(4);
+        assert.ok(!protScore.geojson.features.some(f => contains(f.geometry.coordinates, p.lon, p.lat)), 'hotspots never cover a protection zone');
+        heat.sampleTexture(protScore.heatmap.texture, p.lon, p.lat, pixel, 0);
+        if (pixel[3] > 0) colouredProtected++;
+    }
+    assert.ok(colouredProtected > protectedCount * .9, 'no circular hole: heat continues across protection zones');
+    console.log('  ok  protection zones keep continuous heat but never produce hotspots, areas or exported polygons');
+
     send('setAnalysis', { grid, elev, smooth: false, circle: { lat, lon, radiusM: 1800 }, exclusionMask: new Uint8Array(elev.length).fill(1) });
     const noResults = send('score', { mode: 'manual', curves: core.DEFAULT_CURVES, weights: model.weights,
         minSlopeDeg: 0, preferredAspectDeg: 180, waterClasses: [], thresholds, minAreaM2: 0 });
@@ -245,9 +308,9 @@ function workerHarness() {
     assert.equal(pixel[3], 0, 'downsampling/interpolation cannot fill protected holes');
     console.log('  ok  tiny holes survive area filtering, smoothing, heat downsampling and interpolation');
     const html = read('index.html'), sw = read('sw.js');
-    const TAG = '20261102-apm-train-bounded-grid';
-    for (const [file, version] of [['apm-heatmap', '20261101-train-source'],
-        ['apm-raster', TAG], ['apm-i18n', TAG], ['apm-pipeline', TAG], ['apm-ui', TAG]]) {
+    const TAG = '20261102-apm-continuous-heat', BOUNDED = '20261102-apm-train-bounded-grid';
+    for (const [file, version] of [['apm-heatmap', TAG],
+        ['apm-raster', BOUNDED], ['apm-i18n', BOUNDED], ['apm-pipeline', BOUNDED], ['apm-ui', TAG]]) {
         const tag = 'js/apm-next/' + file + '.js?v=' + version;
         assert.ok(html.includes(tag) && sw.includes(tag), file + ' is versioned and precached');
     }
@@ -256,7 +319,8 @@ function workerHarness() {
     assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + TAG));
     assert.ok(html.includes('js/archeo-potential.js?v=' + TAG));
     assert.ok(sw.includes('js/archeo-potential.js?v=' + TAG));
-    assert.match(sw, /const CACHE_NAME = 'detectlab-v385-pwa-window-resize-bottom-clearance'/);
+    assert.ok(read('js/apm-next/apm-worker.js').includes("'apm-heatmap.js?v=" + TAG + "'"), 'worker imports the new heat module');
+    assert.match(sw, /const CACHE_NAME = 'detectlab-v386-apm-continuous-heat'/);
     console.log('  ok  updated prediction, mask, worker and display assets are wired into the PWA cache');
     console.log('\nAll APM spatial-exclusion checks passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

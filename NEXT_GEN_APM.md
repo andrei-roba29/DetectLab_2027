@@ -239,3 +239,23 @@ switches, repeated initialization, blocked storage, optional drawer/launcher
 and matching versioned assets). The UI asset is
 `20261101-apm-start-minimized`; the shell cache is
 `detectlab-v366-apm-start-minimized`.
+
+## Android PWA: heritage-like circles, slow zoom over a result (2026-11-02)
+
+**Reported problem (Android PWA):** APM Next Gen loaded slowly, zooming over a finished result was very jerky, and circles that look like the Heritage layer's site radii appeared even with the Heritage layer switched off.
+
+**Causes.**
+
+- The circles were not the Heritage layer. Both modes exclude a 600 m + 100 m protection zone around every known site (`computeArcheoExclusionMask`). The heatmap made those cells **transparent**, so every site showed up as a circular hole that sharpened on zoom-in.
+- Each 256 px heat tile was built in JavaScript on the main thread: 65,536 projected, bilinear, mask-checked samples per tile, repeated for every tile at every zoom.
+- The mask loop queried a string-keyed spatial index for every cell (about 1 M cells for TRAIN). It yielded only every 16 rows, so on a phone it blocked the UI for long stretches.
+
+**What changed.**
+
+- Exclusion mask values are now: `0` scoreable; `1` forbidden and hidden (built-up, unverified UAT, outside the circle); `2` known-site protection zone on **verified free land**. A `2` cell is still never a result: no very-high polygons, no class areas, no score statistics, nothing exported. The worker scores it only for the display heatmap, so the heat stays continuous and no circles appear. A protection zone over built-up or unverified land stays hidden. Turning the Heritage layer on still draws its own red radii on top.
+- The worker resamples the display raster **once** into a Web Mercator texture (at most 1024 px per side). Each texel comes from `sampleRGBA`, so the source-resolution mask applies exactly. The texture is transferred, and the full-resolution mask is no longer sent to the main thread. Each heat tile is now one `drawImage` from a shared `ImageBitmap`. In a real Chromium test, 48 tiles took **2 ms** of main-thread time instead of **~300 ms**, with the same colours and coverage at z8–z15.
+- `computeArcheoExclusionMask` rasterises each site disc and polygon once, using the same predicates as `exclusionReason`. A randomised comparison against the previous code gave 0 differing cells. The loop now yields every ~10 ms with `scheduler.yield` / `MessageChannel`, which avoids the 4 ms `setTimeout` clamp. UAT row sampling reuses the last tile and the row's Mercator values. A 50 km / 1024 × 1024 TRAIN mask with 2,500 sites dropped from ~850 ms to ~250 ms in Node.
+- Very-high outlines use `smoothFactor: 1.5`, so fewer path vertices are re-projected after each zoom.
+- Asset tag `20261102-apm-continuous-heat` (apm-heatmap, apm-ui, apm-worker, archeo-potential), shell cache `detectlab-v386-apm-continuous-heat`.
+
+**Verification.** `node test-apm-exclusions.js`, `test-apm-heatmap.js`, `test-apm-train-performance.js`, `test-apm-next.js`, `test-apm-train-network.js` and `test-archeo-potential.js` pass. With `PUPPETEER_MODULE_DIR` pointing at `puppeteer-core` + `@sparticuz/chromium`, `test-apm-next-browser.js` and the new `test-apm-heat-texture-browser.js` pass as well. **Not verified:** frame rate on a real Android device; the timings above come from desktop Node and headless Chromium.
