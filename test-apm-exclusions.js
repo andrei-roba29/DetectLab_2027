@@ -312,7 +312,7 @@ function assertTextureMasked(heatmap, sourceMask, label) {
     const PARALLEL = '20261102-apm-parallel-fetch';
     for (const [file, version] of [['apm-heatmap', TAG],
         ['apm-raster', BOUNDED], ['apm-i18n', BOUNDED], ['apm-pipeline', PARALLEL],
-        ['apm-ui', '20261102-arch-report-window']]) {
+        ['apm-ui', '20261102-arch-report-focus']]) {
         const tag = 'js/apm-next/' + file + '.js?v=' + version;
         assert.ok(html.includes(tag) && sw.includes(tag), file + ' is versioned and precached');
     }

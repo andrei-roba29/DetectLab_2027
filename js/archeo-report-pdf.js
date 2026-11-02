@@ -469,17 +469,18 @@
         } else {
             pt.table(
                 [[tr('arch_report_tbl_result'), tr('arch_report_tbl_class'), tr('arch_report_score'),
-                  tr('arch_report_tbl_coords'), tr('arch_report_tbl_period')]]
+                  tr('arch_report_tbl_focus'), tr('arch_report_tbl_coords'), tr('arch_report_tbl_period')]]
                     .concat(model.results.map(function (r) {
                         return [
                             r.label,
                             r.classificationLabel,
                             r.scorePct + '%',
+                            areaText(r.focus, pt.lang),
                             r.lat.toFixed(5) + ', ' + r.lng.toFixed(5),
                             r.period.key ? tr('arch_period_' + r.period.key) : tr('arch_report_period_unknown')
                         ];
                     })),
-                [92, 92, 52, 152, CONTENT_W - 388],
+                [74, 78, 40, 96, 104, CONTENT_W - 392],
                 { boldFirstCol: true, colorFor: function (ci, ri) { return ci === 2 ? scoreColor(model.results[ri - 1].score) : null; } }
             );
         }
@@ -774,6 +775,47 @@
         return pt.finishPage();
     }
 
+    // Exact areas of the drawn outlines. Figures come from the same smoothed
+    // rings the map and the figures use, so they always agree with them.
+    function fmtNumber(n, digits, langCode) {
+        return Number(n || 0).toLocaleString(langCode === 'ro' ? 'ro-RO' : 'en-GB', {
+            minimumFractionDigits: digits, maximumFractionDigits: digits
+        });
+    }
+
+    function areaText(focus, langCode) {
+        var m2 = focus && focus.areaM2 ? focus.areaM2 : 0;
+        return fmtNumber(m2, 0, langCode) + ' m² (' + fmtNumber(m2 / 10000, 2, langCode) + ' ha)';
+    }
+
+    // Third page of a result: the sizes of the focus and survey outlines.
+    function pageResultFocus(pt, model, res) {
+        var tr = pt.tr, f = res.focus || {};
+        var langCode = pt.lang;
+        pt.beginPage(res.label + ' — ' + tr('arch_report_focus_section_title'));
+
+        pt.h2(tr('arch_report_focus_section_title'));
+        var diamM = f.areaM2 ? 2 * Math.sqrt(f.areaM2 / Math.PI) : 0;
+        pt.table([
+            [tr('arch_report_tbl_indicator'), tr('arch_report_tbl_value')],
+            [tr('arch_report_focus_area_label'), areaText(f, langCode)],
+            [tr('arch_report_focus_perim_label'), pt.fmtM(f.perimeterM || 0)],
+            [tr('arch_report_focus_diam_label'), pt.fmtM(Math.round(diamM))],
+            [tr('arch_report_survey_area_label'), areaText({ areaM2: f.secondaryAreaM2 }, langCode)],
+            [tr('arch_report_focus_centre_label'), res.lat.toFixed(5) + ', ' + res.lng.toFixed(5)]
+        ], [CONTENT_W - 210, 210], { boldFirstCol: true, size: 8.8, rowHeight: 18 });
+        pt.space(10);
+
+        pt.para(tr('arch_report_focus_line', {
+            area: areaText(f, langCode),
+            diam: pt.fmtM(Math.round(diamM)),
+            perim: pt.fmtM(f.perimeterM || 0),
+            survey: areaText({ areaM2: f.secondaryAreaM2 }, langCode)
+        }), { spaceAfter: 8 });
+        pt.para(tr('arch_report_focus_caveat'), { size: 8.2, color: C.muted, spaceAfter: 8 });
+        return pt.finishPage();
+    }
+
     function pct(v) { return (v === null || v === undefined) ? '—' : Math.round(v * 100) + '%'; }
 
     // Second page of a result: estimated period + the nearest known sites.
@@ -936,6 +978,7 @@
             model.results.forEach(function (res) {
                 pages.push(pageResult(pt, model, res));
                 pages.push(pageResultSites(pt, model, res));
+                pages.push(pageResultFocus(pt, model, res));
             });
             figurePages(pt, model, figures, images).forEach(function (p) { pages.push(p); });
             pages.push(pageSources(pt, model));

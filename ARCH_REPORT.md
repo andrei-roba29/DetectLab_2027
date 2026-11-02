@@ -183,8 +183,8 @@ ordered strictly by score (an annotation never jumps the queue) and must be
 
 ## The PDF
 
-A4 pages, cover → method → per result (score page + sites & period page) →
-figures → sources. It explains, per result:
+A4 pages, cover → method → per result (score page, sites & period page, and a
+focus-area page with the exact areas) → figures → sources. It explains, per result:
 
 * the **APM score derived from the colour**, justified in plain language
   ("relatively flat, close to water, supported by the geology") — the exact
@@ -307,6 +307,27 @@ window. The main focus is always included in the secondary focus. For a LIDAR
 annotation, thresholds use the best valid adjacent score rather than extending
 its point-only annotation bonus across the surrounding area. If the data do not
 support a wider area, the two areas can coincide.
+
+### Rounded outlines and exact areas
+
+The cell selection is no longer drawn as its raw 50 m staircase. `buildFocusAreas()`
+refines it on a 5 m sample grid (`CONFIG.FOCUS` / `CONFIG.ROUND`): a morphological
+**opening** (60 m radius) rounds the convex corners, and a **closing** (25 m) fills
+one-cell notches, but only with cells that already passed the screening. Every sample
+of the rounded outline therefore lies inside a screened-in cell, so the smoothing can
+never enter an excluded cell. (An earlier Chaikin corner-cutting attempt was dropped:
+on a staircase it bulges outward at the inner corners and could cover excluded cells.)
+
+Areas are measured on that drawn outline, not on the cell count:
+
+* `focus.areaM2` — the blue main focus (m²); `focus.perimeterM` — its outline length;
+* `focus.secondaryAreaM2` — the dotted survey zone (m²).
+
+They are shown as `m² (ha)` in the map popup (**Focus area** row), in the cover's results
+table, and on a dedicated per-result **Focus area and survey zone** PDF page (area,
+outline length, equivalent circle diameter, survey zone, and the same indicative caveat).
+Rounding keeps the area within a few per cent of the cell count while raising the
+outline's circularity (4πA/P²), e.g. 0.53 → 0.65 on the harness fixture.
 
 The blue polygon, dotted white secondary boundary and translucent white
 north–south transects (100 m apart, clipped to the secondary area) appear in

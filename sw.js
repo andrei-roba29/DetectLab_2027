@@ -977,7 +977,7 @@
 //   the prediction DEM download to finish first; it now starts at the same
 //   time, which is what made the run step feel like it loaded forever.
 //   Re-tags apm-pipeline.js.
-const CACHE_NAME = 'detectlab-v392-arch-report-window';
+const CACHE_NAME = 'detectlab-v393-arch-report-focus';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1814,12 +1814,12 @@ const PRECACHE_URLS = [
   'js/lidar-scanner.js?v=20260922-distance-mirror-close',
   'js/archeo-report.js?v=20260922-distance-mirror-close',
   'js/archeo-report.js?v=20261030-report-exclusions',
-  'js/archeo-report.js?v=20261102-arch-report-window',
-  'js/archeo-report-pdf.js?v=20261102-arch-report-window',
-  'js/translations.js?v=20261102-arch-report-window',
-  'css/styles.css?v=20261102-arch-report-window',
-  'js/window-resize.js?v=20261102-arch-report-window',
-  'js/apm-next/apm-ui.js?v=20261102-arch-report-window',
+  'js/archeo-report.js?v=20261102-arch-report-focus',
+  'js/archeo-report-pdf.js?v=20261102-arch-report-focus',
+  'js/translations.js?v=20261102-arch-report-focus',
+  'css/styles.css?v=20261102-arch-report-focus',
+  'js/window-resize.js?v=20261102-arch-report-focus',
+  'js/apm-next/apm-ui.js?v=20261102-arch-report-focus',
   // v130: caption chip (DISTANȚĂ / RAZĂ / ISTORIC) anchored to the card
   // itself, so it floats above the slider in the PWA as well.
   'css/styles.css?v=20260922-caption-above-card',

@@ -286,7 +286,7 @@ function redTileData(size, alpha = 255) {
         }
         // Later fixes re-tag the UI, worker and mask under the newer HEAT_TAG.
         const HEAT_TAG = '20261102-apm-continuous-heat';
-        const uiTag = 'js/apm-next/apm-ui.js?v=20261102-arch-report-window';
+        const uiTag = 'js/apm-next/apm-ui.js?v=20261102-arch-report-focus';
         assert.ok(html.includes(uiTag) && sw.includes(uiTag), uiTag);
         assert.ok(sw.includes('js/apm-next/apm-ui.js?v=' + TAG), 'older UI tag stays precached for older shells');
         assert.ok(html.includes('js/archeo-potential.js?v=' + HEAT_TAG));

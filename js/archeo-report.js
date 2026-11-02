@@ -91,6 +91,9 @@
         MAX_RESULTS: 3,               // "Cele 3 rezultate"
         RESULT_RADIUS_M: 180,         // legacy circle helper
         FOCUS: { CELL_M: 50, HALF_WIDTH_M: 400, MAIN_MAX_M: 200, GRID_M: 100, MAIN_DROP: 0.10, SECONDARY_DROP: 0.25 },
+        // Outline rounding (see buildFocusAreas.outline): sample size, the
+        // opening radius that rounds convex corners, and the notch-filling radius.
+        ROUND: { SAMPLE_M: 5, OPEN_M: 60, CLOSE_M: 25 },
         RESULT_MIN_SEPARATION_M: 350, // two results may not be closer than this
         SEED_GRID_M: 100,             // baseline seed spacing (grows with radius)
         RESULT_CIRCLE_VERTS: 32,      // circular footprint for PDF / geometry
@@ -1676,7 +1679,7 @@
             if (sample.ok) values[row * size + col] = sample.score;
         }
         var centre = half * size + half;
-        if (values[centre] < 0) return { main: [], secondary: [], lines: [], cellM: step, gridM: F.GRID_M };
+        if (values[centre] < 0) return { main: [], secondary: [], lines: [], cellM: step, gridM: F.GRID_M, areaM2: 0, perimeterM: 0, secondaryAreaM2: 0 };
         // A LIDAR annotation is an exact point, not evidence for an entire
         // surrounding cell. Anchor the thresholds to its valid neighbours.
         var anchor = values[centre];
@@ -1708,53 +1711,37 @@
         var secondary = component(Math.max(0, anchor - F.SECONDARY_DROP), main);
         var x0 = cand.x - (half + 0.5) * step, y0 = cand.y - (half + 0.5) * step;
         function ll(x, y) { var p = localMetersToLatLng(x, y, ctx.lat0); return [p.lat, p.lng]; }
-        // Boundary edges of the union of cells, including holes. Edges are
-        // oriented so the outer ring and holes have opposite winding.
-        function rings(mask) {
-            var edges = {}, all = [];
-            function edge(ax, ay, bx, by) {
-                var e = { a: [ax, ay], b: [bx, by], used: false };
-                var key = ax + ',' + ay; (edges[key] || (edges[key] = [])).push(e); all.push(e);
+        // Smooth, measurable outline of a cell selection. The selection is
+        // refined on a 5 m sample grid: a morphological opening rounds the
+        // convex corners of the 50 m staircase, and a closing that may fill
+        // only screened-in cells removes one-cell notches. Every sample of the
+        // result lies inside a screened-in cell, so the rounded outline cannot
+        // enter an excluded cell (nothing is added that was not allowed).
+        function outline(mask) {
+            var R = CONFIG.ROUND, sub = Math.max(1, Math.round(step / R.SAMPLE_M));
+            var sampleM = step / sub;
+            var W = size * sub, H = size * sub;
+            var inside = new Uint8Array(W * H), allowed = new Uint8Array(W * H);
+            for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
+                var cell = Math.floor(y / sub) * size + Math.floor(x / sub);
+                inside[y * W + x] = mask[cell] ? 1 : 0;
+                allowed[y * W + x] = values[cell] >= 0 ? 1 : 0;
             }
-            function has(x, y) { return x >= 0 && y >= 0 && x < size && y < size && mask[y * size + x]; }
-            for (var y = 0; y < size; y++) for (var x = 0; x < size; x++) if (has(x, y)) {
-                if (!has(x, y - 1)) edge(x, y, x + 1, y);
-                if (!has(x + 1, y)) edge(x + 1, y, x + 1, y + 1);
-                if (!has(x, y + 1)) edge(x + 1, y + 1, x, y + 1);
-                if (!has(x - 1, y)) edge(x, y + 1, x, y);
-            }
-            var loops = [];
-            all.forEach(function (start) {
-                if (start.used) return;
-                var e = start, loop = [], guard = 0;
-                while (e && !e.used && guard++ <= all.length) {
-                    e.used = true; loop.push(e.a);
-                    if (e.b[0] === start.a[0] && e.b[1] === start.a[1]) break;
-                    var next = (edges[e.b[0] + ',' + e.b[1]] || []).filter(function (v) { return !v.used; });
-                    // At a corner-touch choose the leftmost turn, keeping
-                    // touching boundaries as separate rings rather than a bow tie.
-                    var dx = e.b[0] - e.a[0], dy = e.b[1] - e.a[1];
-                    next.sort(function (a, b) {
-                        function turn(v) {
-                            var vx = v.b[0] - v.a[0], vy = v.b[1] - v.a[1];
-                            return Math.atan2(dx * vy - dy * vx, dx * vx + dy * vy);
-                        }
-                        return turn(b) - turn(a);
-                    });
-                    e = next[0];
-                }
-                if (loop.length >= 4) {
-                    var area = 0;
-                    for (var i = 0; i < loop.length; i++) {
-                        var a = loop[i], b = loop[(i + 1) % loop.length];
-                        area += a[0] * b[1] - b[0] * a[1];
-                    }
-                    loops.push({ area: area, points: loop.map(function (p) { return ll(x0 + p[0] * step, y0 + p[1] * step); }) });
-                }
+            var shape = morphOpen(inside, W, H, R.OPEN_M / sampleM);
+            shape = morphClose(shape, allowed, W, H, R.CLOSE_M / sampleM);
+            var loops = traceLoops(shape, W, H).map(function (loop) {
+                return loop.map(function (p) { return [x0 + p[0] * sampleM, y0 + p[1] * sampleM]; });
             });
-            loops.sort(function (a, b) { return Math.abs(b.area) - Math.abs(a.area); });
-            return loops.map(function (r) { return r.points; });
+            // Outer rings and holes have opposite winding, so the signed sum is
+            // outer − holes: the exact area of the drawn outline.
+            var signed = loops.map(signedArea);
+            return {
+                areaM2: Math.abs(signed.reduce(function (a, b) { return a + b; }, 0)),
+                perimeterM: loops.reduce(function (sum, l) { return sum + perimeterOf(l); }, 0),
+                rings: loops.map(function (l) { return l.map(function (p) { return ll(p[0], p[1]); }); })
+            };
         }
+
         // Meridians at 100 m spacing, clipped to contiguous selected cells.
         var lines = [], spacing = F.GRID_M;
         for (var gx = Math.ceil(x0 / spacing) * spacing; gx < x0 + size * step; gx += spacing) {
@@ -1767,8 +1754,140 @@
                 }
             }
         }
-        return { main: rings(main), secondary: rings(secondary), lines: lines,
-            cellM: step, gridM: spacing, mainDrop: F.MAIN_DROP, secondaryDrop: F.SECONDARY_DROP };
+        var mainOutline = outline(main), survey = outline(secondary);
+        return { main: mainOutline.rings, secondary: survey.rings, lines: lines,
+            cellM: step, gridM: spacing, mainDrop: F.MAIN_DROP, secondaryDrop: F.SECONDARY_DROP,
+            // Exact figures of the drawn outlines (m², m), not of the cell grid.
+            areaM2: Math.round(mainOutline.areaM2),
+            perimeterM: Math.round(mainOutline.perimeterM),
+            secondaryAreaM2: Math.round(survey.areaM2) };
+    }
+
+    // Exact squared-distance transform (Felzenszwalb & Huttenlocher, 2012).
+    // Returns the Euclidean distance, in samples, from every sample to the
+    // nearest sample whose flag is 1 (Infinity when there is none).
+    function distanceTo(on, W, H) {
+        var BIG = 4 * (W * W + H * H) + 16;
+        var g = new Float64Array(W * H);
+        for (var i = 0; i < W * H; i++) g[i] = on[i] ? 0 : BIG;
+        var m = Math.max(W, H), f = new Float64Array(m), d = new Float64Array(m);
+        var v = new Int32Array(m), z = new Float64Array(m + 1);
+        function transform1d(n) {
+            var k = 0;
+            v[0] = 0; z[0] = -Infinity; z[1] = Infinity;
+            for (var q = 1; q < n; q++) {
+                var s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+                while (s <= z[k]) {
+                    k--;
+                    s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+                }
+                k++; v[k] = q; z[k] = s; z[k + 1] = Infinity;
+            }
+            k = 0;
+            for (var j = 0; j < n; j++) {
+                while (z[k + 1] < j) k++;
+                d[j] = (j - v[k]) * (j - v[k]) + f[v[k]];
+            }
+        }
+        var x, y;
+        for (x = 0; x < W; x++) {
+            for (y = 0; y < H; y++) f[y] = g[y * W + x];
+            transform1d(H);
+            for (y = 0; y < H; y++) g[y * W + x] = d[y];
+        }
+        for (y = 0; y < H; y++) {
+            for (x = 0; x < W; x++) f[x] = g[y * W + x];
+            transform1d(W);
+            for (x = 0; x < W; x++) g[y * W + x] = d[x];
+        }
+        for (var j2 = 0; j2 < W * H; j2++) g[j2] = g[j2] >= BIG ? Infinity : Math.sqrt(g[j2]);
+        return g;
+    }
+
+    function invert(a) {
+        var out = new Uint8Array(a.length);
+        for (var i = 0; i < a.length; i++) out[i] = a[i] ? 0 : 1;
+        return out;
+    }
+
+    // Opening (erode, then dilate by r samples). Result ⊆ mask.
+    function morphOpen(mask, W, H, r) {
+        var dOut = distanceTo(invert(mask), W, H);
+        var core = new Uint8Array(W * H);
+        for (var i = 0; i < W * H; i++) core[i] = (mask[i] && dOut[i] > r) ? 1 : 0;
+        var dCore = distanceTo(core, W, H), out = new Uint8Array(W * H);
+        for (var j = 0; j < W * H; j++) out[j] = (mask[j] && dCore[j] <= r) ? 1 : 0;
+        return out;
+    }
+
+    // Closing (dilate, then erode by r samples), but only cells flagged
+    // `allowed` may be added — the closing never fills an excluded cell.
+    function morphClose(mask, allowed, W, H, r) {
+        var dIn = distanceTo(mask, W, H);
+        var grown = new Uint8Array(W * H);
+        for (var i = 0; i < W * H; i++) grown[i] = dIn[i] <= r ? 1 : 0;
+        var dGap = distanceTo(invert(grown), W, H), out = new Uint8Array(mask);
+        for (var j = 0; j < W * H; j++) {
+            if (!mask[j] && allowed[j] && grown[j] && dGap[j] > r) out[j] = 1;
+        }
+        return out;
+    }
+
+    // Boundary loops of a sample mask, in integer corner coordinates. Outer
+    // rings and holes come out with opposite winding; corner-touching cells
+    // are split by the leftmost-turn rule so no bow-tie is produced.
+    function traceLoops(mask, W, H) {
+        var edges = {}, all = [];
+        function edge(ax, ay, bx, by) {
+            var e = { a: [ax, ay], b: [bx, by], used: false };
+            var key = ax + ',' + ay; (edges[key] || (edges[key] = [])).push(e); all.push(e);
+        }
+        function has(x, y) { return x >= 0 && y >= 0 && x < W && y < H && mask[y * W + x]; }
+        for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) if (has(x, y)) {
+            if (!has(x, y - 1)) edge(x, y, x + 1, y);
+            if (!has(x + 1, y)) edge(x + 1, y, x + 1, y + 1);
+            if (!has(x, y + 1)) edge(x + 1, y + 1, x, y + 1);
+            if (!has(x - 1, y)) edge(x, y + 1, x, y);
+        }
+        var loops = [];
+        all.forEach(function (start) {
+            if (start.used) return;
+            var e = start, loop = [], guard = 0;
+            while (e && !e.used && guard++ <= all.length) {
+                e.used = true; loop.push(e.a);
+                if (e.b[0] === start.a[0] && e.b[1] === start.a[1]) break;
+                var next = (edges[e.b[0] + ',' + e.b[1]] || []).filter(function (v) { return !v.used; });
+                var dx = e.b[0] - e.a[0], dy = e.b[1] - e.a[1];
+                next.sort(function (a, b) {
+                    function turn(v) {
+                        var vx = v.b[0] - v.a[0], vy = v.b[1] - v.a[1];
+                        return Math.atan2(dx * vy - dy * vx, dx * vx + dy * vy);
+                    }
+                    return turn(b) - turn(a);
+                });
+                e = next[0];
+            }
+            if (loop.length >= 4) loops.push(loop);
+        });
+        return loops;
+    }
+
+    function signedArea(pts) {
+        var area = 0;
+        for (var i = 0; i < pts.length; i++) {
+            var a = pts[i], b = pts[(i + 1) % pts.length];
+            area += a[0] * b[1] - b[0] * a[1];
+        }
+        return area / 2;
+    }
+
+    function perimeterOf(pts) {
+        var length = 0;
+        for (var i = 0; i < pts.length; i++) {
+            var a = pts[i], b = pts[(i + 1) % pts.length];
+            length += Math.hypot(b[0] - a[0], b[1] - a[1]);
+        }
+        return length;
     }
 
     // Blue result footprint: a circle (32 vertices for PDF / geometry).
@@ -2208,6 +2327,14 @@
         return options;
     }
 
+    // Exact focus-area figures: "1 234 m² (0.12 ha)" for the popup and PDF.
+    function focusAreaText(focus, langCode) {
+        var m2 = focus && focus.areaM2 ? focus.areaM2 : 0;
+        var loc = langCode === 'ro' ? 'ro-RO' : 'en-GB';
+        return Number(m2).toLocaleString(loc, { maximumFractionDigits: 0 }) + ' m² (' +
+            (m2 / 10000).toLocaleString(loc, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ha)';
+    }
+
     function resultPopupHtml(res) {
         var pct = res.scorePct;
         var p = res.parts;
@@ -2245,6 +2372,8 @@
             ['<b>' + esc(tr('arch_report_row_roads')) + '</b>', roadRow],
             ['<b>' + esc(tr('arch_report_row_uat')) + '</b>',
              esc(tr('arch_report_uat_ok', { dist: fmtM(p.uatClearanceM) }))],
+            ['<b>' + esc(tr('arch_report_row_focus')) + '</b>',
+             esc(focusAreaText(res.focus, lang()))],
             ['<b>' + esc(tr('arch_report_row_period')) + '</b>',
              esc(res.period.key ? tr('arch_period_' + res.period.key) : tr('arch_report_period_unknown'))]
         ];
@@ -3580,6 +3709,7 @@
         pdfLanguage: pdfLanguage,
         setPdfLanguage: setPdfLanguage,
         areaSquare: areaSquare,
+        focusAreaText: focusAreaText,
         analysisArea: analysisArea,
         inCircle: inCircle,
         inSquare: inSquare,
