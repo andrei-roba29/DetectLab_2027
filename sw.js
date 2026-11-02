@@ -994,7 +994,9 @@
 // v399: Romanian Heritage is a switch-only group with archaeology + protected
 // nature sublayers. The range reader/worker are lazy; the 75 MB GPKG is NEVER
 // precached. Shell assets are updated for installed PWAs.
-const CACHE_NAME = 'detectlab-v399-ro-heritage-sublayers';
+// v400: the PWA minimized-window drawer (arrow + panel) sits 1 mm lower than
+// on the web. Web placement is unchanged.
+const CACHE_NAME = 'detectlab-v400-pwa-dock-1mm';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1051,6 +1053,7 @@ const PRECACHE_URLS = [
 
   // v301: Next-Gen APM (MANUAL) — see the header note above.
   'css/next-gen-apm.css?v=20261102-apm-lidar-desktop',
+  'css/next-gen-apm.css?v=20261102-pwa-dock-1mm',
   'css/next-gen-apm.css?v=20261101-dock-lower-1mm',
   'css/map-window-layers.css?v=20261101-window-stacking',
   'css/window-resize.css?v=20261102-pwa-window-resize-bottom-clearance',

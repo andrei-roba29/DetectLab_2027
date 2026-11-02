@@ -37,10 +37,16 @@ assert.match(css, /body\.is-pwa \.apm-dock\s*\{\s*bottom: calc\(4px \+ var\(--pw
 const indexHtml = fs.readFileSync('index.html', 'utf8');
 assert.match(indexHtml, /body\.is-pwa \.leaflet-container::after\s*\{\s*bottom: calc\(4px \+ var\(--pwa-bleed, 0px\)\) !important;/);
 assert.match(css, /\.apm-dock\s*\{[^}]*bottom: 0;/);
-const cssUrl = 'css/next-gen-apm.css?v=20261102-apm-lidar-desktop';
+const cssUrl = 'css/next-gen-apm.css?v=20261102-pwa-dock-1mm';
 for (const file of ['index.html', 'sw.js']) {
     assert(fs.readFileSync(file, 'utf8').includes(cssUrl), `${file} uses the updated drawer stylesheet`);
 }
 console.log('Mobile drawer clears safe area and PWA bleed; cache tags match.');
 
 assert.match(css, /transform: translate\(-50%, 1mm\);/, "drawer and arrow move down together by 1 mm");
+
+// PWA only: the arrow and its panel sit 1 mm lower than on the web. The web
+// drawer keeps its own 1 mm base offset.
+assert.match(css, /body\.is-pwa \.apm-dock\s*\{[^}]*transform: translate\(-50%, 2mm\);/, 'PWA drawer is 1 mm lower');
+assert.doesNotMatch(css, /@media[^{]*\{\s*\.apm-dock\s*\{[^}]*translate\(-50%, 2mm\)/, 'web drawer is not moved');
+console.log('PWA-only 1 mm drop for the minimized-window drawer; web placement unchanged.');
