@@ -1,16 +1,67 @@
 # Archeological Report — "Raport arheologic"
 
-Premium layer. Pick a point on the map, press **Run / Rulează**: the layer
-analyses the selected **1–10 km circular radius** around that point, returns
-**up to 3 ranked locations** as blue focus polygons and produces a **downloadable PDF** that explains each one.
+Premium layer. Switch it on — its **configuration window opens** (same size,
+font and colours as the APM Next-Gen panel, drag handle included) — pick a
+point on the map, press **Run / Rulează**: the layer analyses the selected
+**1–10 km circular radius** around that point, returns **up to 3 ranked
+locations** as blue focus polygons and produces a **downloadable PDF** that
+explains each one.
+
+### The configuration window (`#archReportPanel`)
+
+The window is built statically in `index.html` as
+`<section id="archReportPanel" class="apm-panel arch-report-panel">` inside
+`.map-frame`, so it inherits the APM Next-Gen shell (`css/next-gen-apm.css`:
+`min(400px, …)` width, Outfit 0.78rem, gold-on-navy) and the shared vertical
+**drag handle** that `js/window-resize.js` attaches to `.apm-panel` /
+`.arch-report-panel`. It is anchored bottom-right so it sits beside
+`#apmNextPanel`. The layer switch opens it, the × closes it (the layer keeps
+running), and the ⚙ button in the layer row re-opens it.
+
+What the window asks for, before every run:
+
+1. **Baseline** — how the APM component is read:
+   * **APM 2.0** (default) — the published raster, classified per pixel;
+   * **APM Next-Gen — custom mode** — `DetectLabApmUi.report.run({mode:'custom'})`
+     runs the Next-Gen engine's own curves/weights/thresholds on the report's
+     circle; its class polygons (`veryhigh/high/medium`) are **rasterised onto
+     the report's own grid** (5 / 4.5 / 4), so the allowed-class filter, focus
+     polygons, score popup and PDF figure behave exactly like the APM 2.0 path;
+   * **APM Next-Gen — train mode** — the same engine in `runTrain` mode,
+     trained on the known-site pool (50 km, `DetectLabRomaniaApmSites`) for a
+     **period of time** the window asks for. The period `<select>` is filled
+     from `sitePool().periods` for the current report point (plus "All
+     periods"); groups with < 10 selectable sites are disabled, exactly like
+     the APM panel's own gate. A failed or unavailable engine fails **closed**
+     (status `arch_report_baseline_failed`, 0 results).
+2. **Bonus scoring** — three ticks, each optional:
+   * **Roman road proximity** (`+0.12 × (1 − d/1500 m)`);
+   * **Archaeological potential site score** (bubble score / attenuated);
+   * **LiDAR Scanner proximity (fortification, burgus, tumulus)** —
+     `1 − d/600 m` within 600 m, **only for those three categories** (the CSV
+     spelling is normalised: `fortificație`/`fortificatie`/`fortification`,
+     `tumul`/`tumulus`, `burgus`; `castru`, `val`, `anomalie necunoscută`…
+     carry no bonus and become no seeds).
+   Disabling a component removes its weight and **renormalises** the rest, so
+   the PDF weights always mirror the live score.
+3. **Ignore LIDAR Scanner points** — the semantics changed:
+   * **checked** → exclusion mode: every scanner point drops a 100 m result
+     ring, candidates inside are rejected, no seeds/bonuses from the scanner;
+   * **unchecked (default)** → the scanner is a **bonus only**: a candidate is
+     scored up to 100 % on the LiDAR component only when the area is already
+     optimal from the chosen APM baseline **and** it lies within proximity of a
+     fortification, burgus or tumulus — but there is **no automatic return and
+     no APM waiver any more**; it competes on the weighted score like anything
+     else.
 
 Three sources feed a single weighted score:
 
 | Source | What it contributes |
 | --- | --- |
-| **APM 2.0** | The raster score under the point (colour → legend score) |
-| **Zone cu potențial arheologic** | Proximity to a triangulation bubble |
-| **LIDAR Scanner** | Proximity to an annotated object; an annotated point is returned automatically |\n| **Roman roads** | Optional bonus: proximity to a mapped Roman road can raise the score; absence never lowers it |
+| **APM baseline** | APM 2.0 raster colour, or the Next-Gen class polygons on the same legend scale (window choice) |
+| **Zone cu potențial arheologic** | Proximity to a triangulation bubble (bonus, tick 2) |
+| **LIDAR Scanner** | Proximity to a fortification / burgus / tumulus (bonus, tick 3); ignored entirely when the switch is ticked |
+| **Roman roads** | Optional bonus: proximity to a mapped Roman road can raise the score; absence never lowers it (bonus, tick 1) |
 
 
 ## Evidence alignment and LIDAR exclusion (2026-09-18)
@@ -23,14 +74,17 @@ Three sources feed a single weighted score:
   still applies its own stricter UAT clearance and APM filters.
 * The report reads `getEligiblePoints()`: the scanner's own heritage-filtered
   annotations, even when the scanner layer is off. Being nearby is not being
-  annotated: nearby grid points no longer receive the annotation bonus or APM
-  exception. The scanner and report share the scanner result-ring radius.
-* **Ignore LIDAR Scanner results / Ignoră rezultate LIDAR Scanner** defaults off.
-  Changing it with a selected report point regenerates the report. When on,
-  candidates inside scanner result rings (100 m) are rejected **before** top-three
-  selection; no LIDAR seeds, weights, bonuses or APM waivers are used. The next
-  eligible candidates replace them. If annotations cannot be loaded, exclusion
-  mode aborts rather than falsely claiming to exclude them.
+  annotated: a 50 m grid point receives no LiDAR component, and an exact hit
+  (≤ 1 m) is still just a bonus — it never waives the APM baseline and never
+  jumps the selection queue. The scanner and report share the scanner
+  result-ring radius.
+* **Ignore LIDAR Scanner results / Ignoră rezultate LIDAR Scanner** (in the
+  window) defaults off. Changing it with a selected report point regenerates the
+  report. When on, candidates inside scanner result rings (100 m) are rejected
+  **before** top-three selection; no LIDAR seeds, weights or bonuses are used.
+  The next eligible candidates replace them. If annotations cannot be loaded,
+  exclusion mode aborts rather than falsely claiming to exclude them. When off,
+  only fortification / burgus / tumulus points feed the proximity bonus.
 * PDF source notes and rejection statistics record exclusion mode. Its LIDAR
   figure is omitted. The panel's exclusions hint now lives in the localized
   **Info** popup below `© DetectLab 2026 · APM 2.0 + RAN CIMEC + LIDAR`.
@@ -57,9 +111,11 @@ document *metadata* (`/Title`, `/Author`) with `winAnsiSafe()`.
 
 ## Workflow
 
-1. Switch the layer on → map clicks pick the analysis centre (orange pin).
+1. Switch the layer on → the **configuration window** opens and map clicks
+   pick the analysis centre (orange pin). Pick the baseline / period / bonus
+   ticks in the window (⚙ in the row re-opens it).
 2. **Run** (disabled until a point exists) → status steps: sites → potential →
-   LIDAR → UAT → APM → scoring.
+   LIDAR → UAT → APM (or "Running the APM Next-Gen baseline…") → scoring.
 3. **Up to 3 focus polygons** with permanent `Rezultat n/3 · %` labels
    appear and **stay until the layer is switched off** (or "show results" is
    unticked). The polygon *and* its label are clickable → score popup.
@@ -75,7 +131,8 @@ results unless the user turns the layer off.
 ## Mandatory filters (a seed must pass all of them)
 
 Seeds = adaptive systematic grid inside the search circle **+ every eligible
-LIDAR annotation + every visible potential bubble centre inside it**.
+qualifying LIDAR point (fortification / burgus / tumulus, unless ignored or the
+LiDAR tick is off) + every visible potential bubble centre inside it**.
 
 1. **UAT** — the candidate must sit on the **red** part of the UAT raster
    (opaque and dark = open land) **and** be **≥ 500 m** from any non-red
@@ -85,33 +142,44 @@ LIDAR annotation + every visible potential bubble centre inside it**.
    `POLYGON_GUARD_STEP_M` (400 m) plus the centroid, exactly like
    `archeo-potential.js` does, so an elongated site cannot be "passed through"
    by measuring its centroid alone.
-3. **APM 2.0** — the nearest legend colour under the point must be
-   **5 (blue), 4.5 (green) or 4 (yellow)**. Khaki/olive (3), magenta (2) and
-   red (1) are below average → rejected. The classifier is an independent
-   nearest-neighbour match against the 6 legend colours (map-app's private
-   `_classifyPixel` was *not* reused: its yellow rule accepts pure olive
-   `#808000`, the colour the spec forbids, while rejecting the real reference
-   yellow `[240,240,140]`).
-4. **Exception** — a point **annotated in LIDAR Scanner** (at the annotation
-   coordinates, with a 1 m numerical tolerance) bypasses filter 3 and is returned automatically; its APM component
-   becomes `APM_UNKNOWN` (0.30) and it receives `LIDAR_ANNOTATION_BONUS`.
+3. **APM baseline** — the class under the point must be at least neutral on
+   the **chosen baseline**: APM 2.0 **5 (blue), 4.5 (green) or 4 (yellow)**
+   (khaki/olive 3, magenta 2, red 1 and no-data are below average → rejected),
+   or — for the Next-Gen baselines — inside a `veryhigh/high/medium` class
+   polygon rasterised onto the same legend scale. The APM 2.0 classifier is an
+   independent nearest-neighbour match against the 6 legend colours (map-app's
+   private `_classifyPixel` was *not* reused: its yellow rule accepts pure
+   olive `#808000`, the colour the spec forbids, while rejecting the real
+   reference yellow `[240,240,140]`).
+4. **No scanner exception** — an annotation never bypasses filter 3 any more
+   (removed with the window): being exactly on a fortification / burgus /
+   tumulus only earns the LiDAR bonus *if the baseline already accepts the
+   point*.
 
 ## Scoring
 
 ```
-score = 0.40 · APM  +  0.30 · Potential  +  0.30 · LIDAR   (+ 0.45 if annotated)
+score = ( 0.40 · APM  +  [0.30 · Potential]  +  [0.30 · LIDAR] ) / active weight
       + up to 0.12 if a Roman road is within 1.5 km   (bonus only; omitted otherwise)
 ```
 
 * **APM** — class → 1.00 / 0.85 / 0.62 (5 / 4.5 / 4).
-* **Potential** — inside a bubble: the bubble's own score; within
-  `PROXIMITY_M` (1500 m): its score attenuated by centre distance; otherwise 0.
-  No bubbles means no potential evidence (0), not an invented 25% baseline.
-* **LIDAR** — `1 − d/600` for the nearest scanner object; `LIDAR_NO_DATA` 0.20
-  when there is no coverage in the area, `LIDAR_FAR` 0.10 when nothing is near.
+* **Potential** *(window tick, on by default)* — inside a bubble: the bubble's
+  own score; within `PROXIMITY_M` (1500 m): its score attenuated by centre
+  distance; otherwise 0. No bubbles means no potential evidence (0), not an
+  invented 25% baseline. Tick off → its weight leaves the mix.
+* **LIDAR** *(window tick, on by default)* — `1 − d/600` for the nearest
+  **fortification / burgus / tumulus** within 600 m (an exact hit ≤ 1 m scores
+  1.00). No qualifying point in the neighbourhood — or the tick off, or the
+  ignore switch on → the LIDAR weight is removed and the remaining evidence is
+  renormalised: missing scanner coverage is unknown, not negative.
+* The active weights are renormalised to 1 on every candidate, so the PDF's
+  weight table (`arch_report_tbl_weight`) always matches the live score.
+  `LIDAR_ANNOTATION_BONUS` (+0.45, "returned automatically") no longer exists.
 
 Classification: **high ≥ 0.75**, **medium ≥ 0.50**, else low. Results are
-ordered annotated-first, then by score, and must be ≥ 350 m apart.
+ordered strictly by score (an annotation never jumps the queue) and must be
+≥ 350 m apart.
 
 ## The PDF
 
@@ -181,6 +249,11 @@ _archeoReportDebug.parseCenturyRange('sec. II-III p.Chr.')
 _archeoReportDebug.periodKey('sec. II-III p.Chr.')   // → 'roman'
 _archeoReportSetPdfLang('ro')      // or 'en' — PDF language override
 _archeoReportPdfLang()             // → the effective PDF language
+_archeoReportDebug.readSettings()  // → { baseline, periodKey, ignoreLidar, bonuses }
+_archeoReportDebug.setBaseline('nextgen_train', false)   // window tab, no re-run
+_archeoReportDebug.rasterizeNextGenGrid(geojson, bbox, cellM)  // class polygons → grid
+_archeoReportDebug.isBonusLidarPoint({ category: 'fortificație' })  // → true
+window._archeoReportOpenPanel(false)   // close / open the configuration window
 window._lidarScannerApi.getPoints()
 ```
 
@@ -192,7 +265,7 @@ matcher, the APM figure polygonization, the PDF byte structure (xref offsets,
 DCTDecode streams), the PDF language selection, the Leaflet layers that end
 up on the map, and the RO/EN translation completeness.
 
-283 checks. **Not covered by the harness** (needs a browser): real tile
+399 checks. **Not covered by the harness** (needs a browser): real tile
 fetching — the R2 APM bucket and the Esri satellite basemap must answer
 `Access-Control-Allow-Origin` for `getImageData()` to work.
 
@@ -205,7 +278,8 @@ Everything fails **closed** — the layer never guesses:
 | APM tile unreadable (CORS/404) | `apmUnreadable: true`, `apmAvailable: false` → every seed is rejected, 0 results, the PDF button stays hidden and the status line says why. The PDF's APM figure then has no polygons and the caption says the APM source was not drawn |
 | UAT tile unreadable | the pixel counts as **not red** → rejected (`uat_not_red`) |
 | Heritage API down | after one 20 s cap: `sitesCount: 0`, `potentialStatus: 'no_sites'` |
-| LIDAR CSV down | `ensureLoaded()` rejects and is swallowed → `lidarCount: 0`, no annotation bonus |
+| LIDAR CSV down | `ensureLoaded()` rejects and is swallowed → `lidarCount: 0`, no LiDAR bonus (ignore mode still fails closed) |
+| APM Next-Gen engine missing/broken (custom or train baseline) | status `arch_report_baseline_failed` / `arch_report_baseline_unavailable`, 0 results — never a silently downgraded baseline |
 
 The APM figure itself needs no APM tiles: it draws the classified grid the
 analysis produced, so it can never disagree with the score.
@@ -239,8 +313,9 @@ north–south transects (100 m apart, clipped to the secondary area) appear in
 2D, 3D and report figures. Whole cells are screened against the sampled UAT raster, heritage circles and
 site polygons; scoring still samples their centres. Raster resolution and cell edges are approximate: the footprints are **not** measured site boundaries, calibrated
 probabilities, permission to enter land, or a substitute for heritage checks.
-The underlying report still uses APM 2.0; Next-Gen APM integration has not yet
-been implemented.
+The APM component follows the baseline chosen in the window: the APM 2.0
+raster, or the Next-Gen engine's class polygons rasterised onto the report's
+own grid (see the configuration-window section above).
 
 Focus cells that touch the UAT raster exclusion, a protection radius, or a
 site polygon are omitted altogether, including from the secondary survey area.

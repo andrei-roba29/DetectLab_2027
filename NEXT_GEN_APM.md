@@ -28,6 +28,30 @@ Both MANUAL and TRAIN show a **continuous, semi-transparent score heatmap**, wit
 3. Choose MANUAL or TRAIN. TRAIN loads only the Romania Supabase RPC and defaults to All periods. Outside Romania, upload CSV. Database errors offer an explicit CSV upload, never an automatic fallback. Period options show counts; fewer than 10 sites blocks TRAIN, fewer than 30 warns.
 4. Run. Results show area per class, the sources actually used (label, version, resolution), warnings in the chosen language, and (TRAIN) model diagnostics. **Export hotspot GeoJSON** writes only the highest-potential polygons with provenance, thresholds, rendering metadata and diagnostics.
 
+## Report integration (Archeological Report)
+
+The Archeological Report's configuration window (`#archReportPanel` in
+`index.html`, the same `.apm-panel` shell) can use this engine as its **APM
+baseline**, through the small API exported on the panel object:
+
+- `DetectLabApmUi.report.run({ mode: 'custom' | 'train', centre: {lat, lon}, radiusKm, periodKey, token, onProgress })`
+  → runs **this panel's** curves / weights / thresholds / Strahler map (custom)
+  or a model trained on the known-site pool for `periodKey` (`'all'` or null =
+  all periods) on the *report's* centre and radius, and resolves with the
+  usual pipeline result (`geojson` class polygons, thresholds, provenance).
+  The report rasterises those polygons onto its own classified grid.
+- `DetectLabApmUi.report.periods({ lat, lon }, token)`
+  → the period groups the report's TRAIN tab offers for that centre (same
+  50 km `DetectLabRomaniaApmSites` pool, cached per centre; the report applies
+  the same ≥10-sites disabled rule to each option).
+
+The report claims the shared worker sessions with `state.reportBusy` while its
+run is in flight, and `run()` refuses to start on top of it (and vice versa:
+`report.run` refuses while `state.busy`). A cancelled `token` aborts the run at
+the pipeline's checkpoints. Failures are keyed/plain `Error`s that the report
+turns into its `arch_report_baseline_failed` status — never a silently
+downgraded baseline.
+
 ## Premium gate: what `_dlIsPremium()` returns
 
 Defined in `js/subscriptions.js` as `window._dlIsPremium = isPremium`. `isPremium()`:

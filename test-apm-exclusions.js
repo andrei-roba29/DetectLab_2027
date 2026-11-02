@@ -311,7 +311,8 @@ function assertTextureMasked(heatmap, sourceMask, label) {
     const TAG = '20261102-apm-continuous-heat', BOUNDED = '20261102-apm-train-bounded-grid';
     const PARALLEL = '20261102-apm-parallel-fetch';
     for (const [file, version] of [['apm-heatmap', TAG],
-        ['apm-raster', BOUNDED], ['apm-i18n', BOUNDED], ['apm-pipeline', PARALLEL], ['apm-ui', TAG]]) {
+        ['apm-raster', BOUNDED], ['apm-i18n', BOUNDED], ['apm-pipeline', PARALLEL],
+        ['apm-ui', '20261102-arch-report-window']]) {
         const tag = 'js/apm-next/' + file + '.js?v=' + version;
         assert.ok(html.includes(tag) && sw.includes(tag), file + ' is versioned and precached');
     }
@@ -325,7 +326,10 @@ function assertTextureMasked(heatmap, sourceMask, label) {
     assert.ok(html.includes('js/archeo-potential.js?v=' + TAG));
     assert.ok(sw.includes('js/archeo-potential.js?v=' + TAG));
     assert.ok(read('js/apm-next/apm-worker.js').includes("'apm-heatmap.js?v=" + TAG + "'"), 'worker imports the new heat module');
-    assert.match(sw, /const CACHE_NAME = 'detectlab-v388-apm-parallel-fetch'/);
+    // The shell cache keeps moving (v388 parallel-fetch → … → v392 report
+    // window); only require that it never falls back below that release.
+    assert.ok(Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]) >= 388,
+        'shell cache stays bumped past the parallel-fetch release');
     console.log('  ok  updated prediction, mask, worker and display assets are wired into the PWA cache');
     console.log('\nAll APM spatial-exclusion checks passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

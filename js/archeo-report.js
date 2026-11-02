@@ -2,15 +2,32 @@
  * DetectLab — PREMIUM "Archeological Report" / "Raport arheologic"
  * ─────────────────────────────────────────────────────────────────────────────
  * WHAT IT DOES
- *   The user enables the layer, clicks one point on the map and presses
- *   "Generate report". The engine analyses a circular radius (1–10 km, same
- *   slider pattern as the LIDAR Scanner) around that point, cross-referencing
- *   THREE premium data sources:
+ *   The user enables the layer (which opens the report window — same size and
+ *   style as the APM Next-Gen panel, drag handle included), clicks one point
+ *   on the map and presses "Generate report". Before the run the window asks:
  *
- *     1. APM 2.0                 — the prediction raster (score colour)
+ *     • BASELINE  — APM 2.0 (the published raster), APM Next-Gen custom mode
+ *                   or APM Next-Gen train mode; train mode additionally asks
+ *                   for the PERIOD OF TIME the model is trained on.
+ *     • BONUSES   — Roman road proximity, archaeological potential site score
+ *                   and LiDAR Scanner proximity (fortification, burgus and
+ *                   tumulus only), each tickable.
+ *     • LIDAR     — "ignore LiDAR Scanner points". Checked: the scanner is
+ *                   excluded outright (100 m result rings reject candidates).
+ *                   Unchecked: the points are bonuses only — they raise the
+ *                   score of an area that is already optimal from the chosen
+ *                   APM baseline AND lies within proximity of a fortification,
+ *                   burgus or tumulus; no automatic 100 % return any more.
+ *
+ *   The engine analyses a circular radius (1–10 km, same slider pattern as
+ *   the LIDAR Scanner) around that point, cross-referencing THREE premium
+ *   data sources:
+ *
+ *     1. APM baseline            — APM 2.0 raster, or the Next-Gen engine's
+ *                                  class polygons rasterised onto the same grid
  *     2. Archeological Potential — the "zone cu potențial arheologic" bubbles
  *        Sites (triangulation)     produced by js/archeo-potential.js
- *     3. LIDAR Scanner           — annotated anomalies from the scanner CSV
+ *     3. LIDAR Scanner           — scanner annotations from the CSV (bonus)
  *
  *   …returns up to 3 ranked candidates (blue circular rings + labels on the map)
  *   and a downloadable, printable PDF explaining every score.
@@ -27,26 +44,31 @@
  *      never inside the polygon, and the same clearance measured from guard
  *      points placed along the perimeter every POLYGON_GUARD_STEP_M plus the
  *      polygon centroid — i.e. exactly how the app builds those radii.
- *   C. APM 2.0 — the pixel must be at least NEUTRAL: blue (5), green (4.5) or
- *      yellow (4). Khaki/olive (3), magenta (2) and red (1) are rejected —
- *      UNLESS the point is annotated on the LIDAR Scanner, which waives the
- *      APM condition (an annotated anomaly is returned automatically).
+ *   C. APM baseline — the point must be at least neutral on the CHOSEN
+ *      baseline: APM 2.0 blue (5), green (4.5) or yellow (4); or, for the
+ *      Next-Gen baselines, inside a very-high / high / medium class polygon.
+ *      Khaki/olive (3), magenta (2), red (1) and "no data" are rejected.
+ *      There is no LIDAR waiver any more: being annotated never bypasses this
+ *      filter (the scanner is a bonus, not a baseline).
  *
  * WEIGHTED SCORE (CONFIG.SCORING — every weight is live-tunable)
- *   score = W_APM · APM  +  W_POTENTIAL · PotentialZone  +  W_LIDAR · LIDAR
+ *   score = (W_APM · APM  +  [W_POTENTIAL · PotentialZone]  +  [W_LIDAR · LIDAR]) / active
+ *           + W_ROMAN_ROADS · RoadProximity            (bonus, only if enabled)
  *   • APM            colour class → 1.00 blue / 0.85 green / 0.62 yellow
- *   • PotentialZone  inside a bubble → that bubble's own score; near a bubble →
- *                    bubble score × (1 − d/PROXIMITY_M); no bubble → 0
- *   • LIDAR          is an optional modifier, not a penalty for missing data:
- *                    annotated → 1.0; near an anomaly → 1 − d/PROXIMITY_M;
- *                    when no scanner point is within PROXIMITY_M its weight is
- *                    removed and the APM + potential score is renormalised.
- *                    Thus candidates close to scanner points can receive a
- *                    bonus, while candidates farther away are scored lower
- *                    relative to those nearby candidates.
- *   • Roman roads    optional bonus only: if a mapped Roman road is within
- *                    ROMAN_ROADS.PROXIMITY_M, add W_ROMAN_ROADS × (1 − d/R).
- *                    If no road is nearby, the score is unchanged (no penalty).
+ *   • PotentialZone  OPTIONAL bonus (window checkbox): inside a bubble → that
+ *                    bubble's own score; near a bubble → attenuated by centre
+ *                    distance; disabled → its weight leaves the mix and the
+ *                    remaining evidence is renormalised.
+ *   • LIDAR          OPTIONAL bonus (window checkbox), and only for a
+ *                    fortification / burgus / tumulus within
+ *                    CONFIG.LIDAR.PROXIMITY_M: 1 − d/600. No scanner evidence
+ *                    in the neighbourhood → its weight is removed and the rest
+ *                    is renormalised (missing coverage is unknown, not
+ *                    negative). With "ignore LIDAR" ticked the scanner
+ *                    contributes nothing at all.
+ *   • Roman roads    OPTIONAL bonus only: if enabled and a mapped Roman road
+ *                    is within ROMAN_ROADS.PROXIMITY_M, add
+ *                    W_ROMAN_ROADS × (1 − d/R). Absence never lowers the score.
  *
  * WHY THE PDF IS IMAGE-BASED — see js/pdf-writer.js (short version: the PDF
  * standard fonts cannot render ă/ș/ț without embedding a TrueType subset).
@@ -103,10 +125,29 @@
 
         // LIDAR Scanner
         LIDAR: {
-            HIT_M: 1,                 // coordinate tolerance; proximity is NOT an annotation
+            HIT_M: 1,                 // coordinate tolerance (a candidate sitting exactly on a point)
             EXCLUSION_M: 100,         // scanner result-ring radius when ignoring annotations
-            PROXIMITY_M: 600          // "în proximitatea unui rezultat LIDAR"
+            PROXIMITY_M: 600,         // "în proximitatea unui rezultat LIDAR"
+            // Only these scanner categories carry the proximity bonus / become
+            // seeds — the three the report window promises (fortification,
+            // burgus, tumulus). Matched against the diacritic-free lowercase
+            // category, so fortificație / fortificatie / fortification and
+            // tumul / tumulus all qualify; castru, val, locuința or
+            // "anomalie necunoscută" never do.
+            BONUS_CATEGORY_RE: /fortificat|burgus|tumul/
         },
+
+        // What the window asks for before the run: the APM baseline the APM
+        // component is read from, and which optional bonuses may raise a score.
+        BASELINE: {
+            DEFAULT: 'apm20',
+            MODES: ['apm20', 'nextgen_custom', 'nextgen_train'],
+            // Next-Gen class → the report's APM legend scale (5 / 4.5 / 4), so
+            // the allowed-class filter, the focus polygons and the PDF figure
+            // behave exactly like the APM 2.0 path.
+            CLASS_MAP: { veryhigh: 5, high: 4.5, medium: 4 }
+        },
+        BONUSES: { roads: true, potential: true, lidar: true },
 
         // Roman roads (AWMC GeoJSON — same URL as the map layer). Bonus only:
         // proximity can raise the score; absence never lowers it.
@@ -125,9 +166,13 @@
             POTENTIAL_NONE: 0,        // no bubble = no supporting potential evidence
             // Kept as named configuration values for backwards-compatible
             // consumers; missing/far LIDAR is no longer inserted as a score.
+            // Legacy values, kept only so older documents/debug reads resolve:
+            // the scanner is a bonus now — no 0.20/0.10 fallbacks, and no
+            // +0.45 "returned automatically" bonus any more (removed with the
+            // report window; see the WEIGHTED SCORE note in the header).
             LIDAR_NO_DATA: 0.20,
             LIDAR_FAR: 0.10,
-            LIDAR_ANNOTATION_BONUS: 0.45  // "se returnează automat"
+            LIDAR_ANNOTATION_BONUS: 0.45
         },
 
         CLASSIFY: { HIGH_FROM: 0.75, MEDIUM_FROM: 0.50 },
@@ -808,6 +853,118 @@
         return grid.cls[cy * grid.cols + cx];
     }
 
+    /* ── APM Next-Gen baseline ───────────────────────────────────────────────
+     * When the window picks "APM Next-Gen custom" or "…train" as the baseline,
+     * the APM component comes from the Next-Gen engine instead of the
+     * published APM 2.0 raster. The engine returns class polygons; they are
+     * rasterised onto the report's own classified grid (same cells, same
+     * 5 / 4.5 / 4 scale) so every downstream rule — the allowed-class filter,
+     * the focus polygons, the PDF figure — keeps reading the exact same data
+     * structure as the APM 2.0 path and can never disagree with it. */
+
+    function nextGenReportApi() {
+        var api = window.DetectLabApmUi;
+        return (api && api.report && typeof api.report.run === 'function') ? api.report : null;
+    }
+
+    // GeoJSON rings are [lng, lat]; the grid works in local metres.
+    function ringToMeters(ring, lat0) {
+        var out = [];
+        for (var i = 0; i < ring.length; i++) {
+            out.push(projectToLocalMeters(ring[i][1], ring[i][0], lat0));
+        }
+        return out;
+    }
+
+    function rasterizeNextGenGrid(fc, bbox, cellM) {
+        var cols = Math.max(1, Math.ceil((bbox.maxX - bbox.minX) / cellM));
+        var rows = Math.max(1, Math.ceil((bbox.maxY - bbox.minY) / cellM));
+        var cls = new Float32Array(cols * rows);          // 0 = no data (same as APM 2.0)
+        var grid = {
+            x0: bbox.minX, y0: bbox.minY, cols: cols, rows: rows, cellM: cellM,
+            cls: cls, available: false, unreadable: false, source: 'nextgen', histogram: {}
+        };
+        var features = ((fc && fc.features) || []).slice();
+        // Ascending class priority: medium first, very-high last, so a higher
+        // class overwrites a lower one wherever the regions overlap.
+        function rank(f) {
+            var mapped = CONFIG.BASELINE.CLASS_MAP[(f.properties || {}).class];
+            return mapped || 0;
+        }
+        features.sort(function (a, b) { return rank(a) - rank(b); });
+        features.forEach(function (f) {
+            var mapped = rank(f);
+            if (!mapped) return;                            // classes outside medium/high/very-high
+            var geom = f.geometry;
+            if (!geom || !geom.coordinates) return;
+            var polys = geom.type === 'Polygon' ? [geom.coordinates]
+                : geom.type === 'MultiPolygon' ? geom.coordinates : [];
+            polys.forEach(function (rings) {
+                if (!rings || !rings.length) return;
+                var outer = ringToMeters(rings[0], bbox.lat0);
+                var holes = [];
+                for (var r = 1; r < rings.length; r++) holes.push(ringToMeters(rings[r], bbox.lat0));
+                var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+                outer.forEach(function (p) {
+                    if (p.x < minX) minX = p.x;
+                    if (p.x > maxX) maxX = p.x;
+                    if (p.y < minY) minY = p.y;
+                    if (p.y > maxY) maxY = p.y;
+                });
+                var c0 = Math.max(0, Math.floor((minX - bbox.minX) / cellM));
+                var c1 = Math.min(cols - 1, Math.ceil((maxX - bbox.minX) / cellM));
+                var r0 = Math.max(0, Math.floor((minY - bbox.minY) / cellM));
+                var r1 = Math.min(rows - 1, Math.ceil((maxY - bbox.minY) / cellM));
+                for (var cy = r0; cy <= r1; cy++) {
+                    var y = bbox.minY + (cy + 0.5) * cellM;
+                    for (var cx = c0; cx <= c1; cx++) {
+                        var x = bbox.minX + (cx + 0.5) * cellM;
+                        if (!pointInPolygon(x, y, outer)) continue;
+                        var inHole = false;
+                        for (var h = 0; h < holes.length && !inHole; h++) {
+                            if (pointInPolygon(x, y, holes[h])) inHole = true;
+                        }
+                        if (inHole) continue;
+                        var idx = cy * cols + cx;
+                        cls[idx] = mapped;
+                        grid.available = true;
+                        grid.histogram[mapped] = (grid.histogram[mapped] || 0) + 1;
+                    }
+                }
+            });
+        });
+        return grid;
+    }
+
+    /* Runs the Next-Gen engine on the report's own centre/radius with the
+     * panel's current configuration (custom curves/weights, or the training
+     * period picked in the report window) and rasterises the result. */
+    function buildNextGenBaselineGrid(ctx, settings, myVersion) {
+        var api = nextGenReportApi();
+        if (!api) {
+            return Promise.reject(new Error(tr('arch_report_baseline_unavailable')));
+        }
+        setStatus('arch_report_step_baseline');
+        var token = { cancelled: false };
+        _state.baselineToken = token;
+        return api.run({
+            mode: settings.baseline === 'nextgen_train' ? 'train' : 'custom',
+            centre: { lat: ctx.center.lat, lon: ctx.center.lng },
+            radiusKm: ctx.radiusKm,
+            periodKey: settings.periodKey,
+            token: token,
+            onProgress: function () { /* the report keeps its own status line */ }
+        }).then(function (res) {
+            if (token.cancelled || myVersion !== _state.version) return null;
+            // available === false (the engine produced no allowed-class cell
+            // here) fails closed exactly like an unreadable APM 2.0 raster:
+            // every seed is rejected as apm_below_average, nothing is guessed.
+            return rasterizeNextGenGrid(res && res.geojson, ctx.bbox, apmCellM(ctx.radiusM));
+        }).finally(function () {
+            if (_state.baselineToken === token) _state.baselineToken = null;
+        });
+    }
+
     /* ── APM figure polygons ("Search Help" style) ──────────────────────────
      * The PDF figure no longer re-fetches the APM tiles (CORS + a 30% wash
      * over dark satellite made the raster effectively invisible). Instead it
@@ -975,6 +1132,19 @@
         });
     }
 
+    /* Diacritic-free lowercase category ("fortificație" → "fortificatie"). */
+    function normalizeCategory(cat) {
+        var s = String(cat == null ? '' : cat).toLowerCase();
+        if (s.normalize) s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return s.trim();
+    }
+
+    /* Only fortification / burgus / tumulus scanner objects carry the report's
+     * LiDAR proximity bonus and become seeds of their own. */
+    function isBonusLidarPoint(p) {
+        return !!(p && CONFIG.LIDAR.BONUS_CATEGORY_RE.test(normalizeCategory(p.category)));
+    }
+
     /* ═══════════════════════════════════════════════════════════════════════
      * 8. CANDIDATE GENERATION, FILTERING, SCORING, SELECTION
      * ═══════════════════════════════════════════════════════════════════════ */
@@ -988,9 +1158,14 @@
                 if (inCircle(sq, x, y)) seeds.push({ x: x, y: y, origin: 'grid' });
             }
         }
-        // Every LIDAR annotation inside the area becomes a candidate of its own
-        // (the spec: an annotated zone is returned automatically).
-        (ctx.ignoreLidar ? [] : ctx.lidarPoints).forEach(function (p) {
+        // Every qualifying scanner point (fortification / burgus / tumulus)
+        // inside the area becomes a candidate of its own — evaluated like any
+        // other seed: it must pass the APM baseline, it gets no waiver.
+        var lidarSeeds = [];
+        if (!ctx.ignoreLidar && !(ctx.bonus && ctx.bonus.lidar === false)) {
+            lidarSeeds = (ctx.qualifyingLidarPoints || ctx.lidarPoints.filter(isBonusLidarPoint));
+        }
+        lidarSeeds.forEach(function (p) {
             var m = projectToLocalMeters(p.lat, p.lng, ctx.lat0);
             if (inCircle(sq, m.x, m.y)) {
                 seeds.push({ x: m.x, y: m.y, origin: 'lidar', lidarPoint: p });
@@ -1081,10 +1256,16 @@
         return best;
     }
 
-    function nearestLidar(x, y, ctx) {
+    /* Nearest scanner point. `qualifyingOnly` restricts the search to the
+     * fortification / burgus / tumulus categories that carry the bonus; the
+     * ignore-mode result rings, by contrast, are built from EVERY scanner
+     * point — ignoring means ignoring. */
+    function nearestLidar(x, y, ctx, qualifyingOnly) {
+        var points = ctx.lidarPoints || [];
+        if (qualifyingOnly) points = ctx.qualifyingLidarPoints || points.filter(isBonusLidarPoint);
         var best = null, bestD = Infinity;
-        for (var i = 0; i < ctx.lidarPoints.length; i++) {
-            var p = ctx.lidarPoints[i];
+        for (var i = 0; i < points.length; i++) {
+            var p = points[i];
             var m = projectToLocalMeters(p.lat, p.lng, ctx.lat0);
             var dx = x - m.x, dy = y - m.y;
             var d = Math.sqrt(dx * dx + dy * dy);
@@ -1097,6 +1278,7 @@
     // Full evaluation of one seed: exclusions first, then the weighted score.
     function evaluateSeed(seed, ctx) {
         var x = seed.x, y = seed.y;
+        var bonus = ctx.bonus || CONFIG.BONUSES;
 
         // ── exclusion A: UAT red + 500 m clearance ──
         var uat = uatVerdict(ctx.uatGrid, x, y, CONFIG.UAT.CLEARANCE_M);
@@ -1107,20 +1289,25 @@
         var site = passesSiteFilters(x, y, ctx);
         if (!site.ok) return { ok: false, reason: site.reason };
 
-        // ── LIDAR context (needed for the APM waiver) ──
-        var lidar = nearestLidar(x, y, ctx);
+        // ── LIDAR: ignore mode rejects everything inside a result ring; the
+        // bonus, when enabled, only ever looks at fortification / burgus /
+        // tumulus points (an "anomalie necunoscută" carries no bonus). ──
         var exclusionM = (window._lidarScannerApi && window._lidarScannerApi.resultRadiusM) || CONFIG.LIDAR.EXCLUSION_M;
-        if (ctx.ignoreLidar && lidar && lidar.distM <= exclusionM) {
-            return { ok: false, reason: 'lidar_ignored' };
+        if (ctx.ignoreLidar) {
+            var ringHit = nearestLidar(x, y, ctx, false);
+            if (ringHit && ringHit.distM <= exclusionM) {
+                return { ok: false, reason: 'lidar_ignored' };
+            }
         }
-        // Do not allow a seed label or a nearby grid point to invent an annotation.
+        var lidar = (bonus.lidar && !ctx.ignoreLidar) ? nearestLidar(x, y, ctx, true) : null;
         var annotated = !ctx.ignoreLidar && !!(lidar && lidar.annotated);
-        if (ctx.ignoreLidar) lidar = null;
 
-        // ── exclusion C: APM 2.0 must be at least neutral ──
+        // ── exclusion C: the chosen APM baseline must be at least neutral.
+        // Scanner proximity never waives this rule — the scanner is a bonus,
+        // not a baseline. ──
         var apmCls = apmClassAt(ctx.apmGrid, x, y);
         var apmAllowed = CONFIG.APM.ALLOWED.indexOf(apmCls) !== -1;
-        if (!apmAllowed && !annotated) return { ok: false, reason: 'apm_below_average' };
+        if (!apmAllowed) return { ok: false, reason: 'apm_below_average' };
 
         // ── weighted score ──
         var S = CONFIG.SCORING;
@@ -1136,44 +1323,44 @@
             potComp = clamp01(pot.bubble.score * (1 - pot.distM / CONFIG.POTENTIAL.PROXIMITY_M));
         else potComp = 0;
 
-        var lidarNearby = annotated || (lidar && lidar.distM <= CONFIG.LIDAR.PROXIMITY_M);
+        var lidarNearby = !!lidar && lidar.distM <= CONFIG.LIDAR.PROXIMITY_M;
         var lidarComp = null;
         if (lidarNearby) {
-            // LIDAR is deliberately applied only when it can actually inform
-            // this candidate. A point elsewhere must not reduce an otherwise
-            // strong APM + triangulated-potential result.
+            // Applied only when it can actually inform this candidate: an
+            // optimal APM area near a qualifying scanner point. A point
+            // elsewhere must not reduce an otherwise strong result.
             lidarComp = annotated ? 1 : clamp01(1 - lidar.distM / CONFIG.LIDAR.PROXIMITY_M);
         }
 
-        // If there is no scanner evidence in the configured neighbourhood,
-        // remove its weight and renormalise the remaining evidence. This is
-        // important: missing LIDAR coverage is unknown, not negative evidence.
-        var score;
-        if (lidarNearby) {
-            score = S.W_APM * apmComp + S.W_POTENTIAL * potComp + S.W_LIDAR * lidarComp;
-        } else {
-            var nonLidarWeight = S.W_APM + S.W_POTENTIAL;
-            score = nonLidarWeight ? (S.W_APM * apmComp + S.W_POTENTIAL * potComp) / nonLidarWeight : 0;
-        }
-        if (annotated) score += S.LIDAR_ANNOTATION_BONUS;
+        // Evidence outside the chosen bonus set leaves the mix entirely and
+        // the remaining weights are renormalised. Missing scanner coverage is
+        // unknown, not negative evidence; a disabled bonus is simply not part
+        // of this analysis.
+        var wPot = bonus.potential ? S.W_POTENTIAL : 0;
+        var wLidar = lidarNearby ? S.W_LIDAR : 0;
+        var activeWeight = S.W_APM + wPot + wLidar;
+        var score = activeWeight
+            ? (S.W_APM * apmComp + wPot * potComp + wLidar * lidarComp) / activeWeight
+            : 0;
 
-        // Roman-road proximity is a bonus only: applied when a road is near,
-        // otherwise the score is left unchanged (no penalty / no renormalise).
-        var roadDistM;
-        if (ctx.romanRoadLayer) {
-            /* The map's own roads layer is loaded: measure in it (the geometry
-             * is already in memory as typed arrays) instead of re-parsing the
-             * 25 MB reference GeoJSON for every analysis. */
-            var roadLl = localMetersToLatLng(x, y, ctx.lat0);
-            roadDistM = ctx.romanRoadLayer.nearestRoadMeters(roadLl.lat, roadLl.lng, CONFIG.ROMAN_ROADS.PROXIMITY_M);
-        } else {
-            roadDistM = nearestRomanRoadM(x, y, ctx.romanRoadSegs);
-        }
-        var roadNearby = roadDistM !== null && roadDistM <= CONFIG.ROMAN_ROADS.PROXIMITY_M;
-        var roadComp = null;
-        if (roadNearby) {
-            roadComp = clamp01(1 - roadDistM / CONFIG.ROMAN_ROADS.PROXIMITY_M);
-            score += S.W_ROMAN_ROADS * roadComp;
+        // Roman-road proximity is a bonus only: applied when enabled and a
+        // road is near, otherwise the score is left unchanged (no penalty).
+        var roadDistM = null, roadNearby = false, roadComp = null;
+        if (bonus.roads) {
+            if (ctx.romanRoadLayer) {
+                /* The map's own roads layer is loaded: measure in it (the
+                 * geometry is already in memory as typed arrays) instead of
+                 * re-parsing the 25 MB reference GeoJSON for every analysis. */
+                var roadLl = localMetersToLatLng(x, y, ctx.lat0);
+                roadDistM = ctx.romanRoadLayer.nearestRoadMeters(roadLl.lat, roadLl.lng, CONFIG.ROMAN_ROADS.PROXIMITY_M);
+            } else {
+                roadDistM = nearestRomanRoadM(x, y, ctx.romanRoadSegs);
+            }
+            roadNearby = roadDistM !== null && roadDistM <= CONFIG.ROMAN_ROADS.PROXIMITY_M;
+            if (roadNearby) {
+                roadComp = clamp01(1 - roadDistM / CONFIG.ROMAN_ROADS.PROXIMITY_M);
+                score += S.W_ROMAN_ROADS * roadComp;
+            }
         }
         score = clamp01(score);
 
@@ -1186,20 +1373,23 @@
             score: score,
             classification: classifyScore(score),
             parts: {
-                apmCls: apmCls, apmComp: apmComp, apmKnown: apmKnown, apmWaived: !apmKnown && annotated,
+                apmCls: apmCls, apmComp: apmComp, apmKnown: apmKnown, apmWaived: false,
                 potentialComp: potComp,
+                potentialApplied: !!bonus.potential,
                 potentialInside: !!(pot && pot.inside),
                 potentialDistM: pot ? Math.round(pot.distM) : null,
                 potentialScore: pot ? pot.bubble.score : null,
                 potentialFactors: pot ? pot.bubble.factors : null,
                 bubblesInArea: (ctx.bubblesInArea || []).length,
                 lidarComp: lidarComp,
-                lidarApplied: !!lidarNearby,
+                lidarApplied: lidarNearby,
+                lidarBonus: !!bonus.lidar,
                 lidarIgnored: !!ctx.ignoreLidar,
                 lidarDistM: lidar ? Math.round(lidar.distM) : null,
                 lidarPoint: lidar ? lidar.point : null,
                 uatClearanceM: isFinite(uat.clearanceM) ? Math.round(uat.clearanceM) : null,
                 romanRoadApplied: roadNearby,
+                romanRoadBonus: !!bonus.roads,
                 romanRoadComp: roadComp,
                 romanRoadDistM: roadDistM !== null ? Math.round(roadDistM) : null
             }
@@ -1212,12 +1402,11 @@
         return 'low';
     }
 
-    // LIDAR-annotated candidates are returned automatically, so they go first;
-    // the rest follow by score. A minimum separation keeps the three labels
+    // Strictly by score: a scanner annotation is a bonus like any other, so
+    // it never jumps the queue. A minimum separation keeps the three labels
     // readable instead of stacking three polygons on the same spot.
     function selectResults(candidates, maxResults, minSeparationM) {
         var sorted = candidates.slice().sort(function (a, b) {
-            if (a.annotated !== b.annotated) return a.annotated ? -1 : 1;
             return b.score - a.score;
         });
         var kept = [];
@@ -1432,14 +1621,20 @@
           });
     }
 
-    function scoringWeights(applyLidar) {
+    /* The weights the PDF prints must mirror the live score exactly: a bonus
+     * that is switched off (or has no evidence for this candidate) leaves the
+     * mix and the rest is renormalised to 1. */
+    function scoringWeights(applyLidar, bonus) {
         var S = CONFIG.SCORING;
-        var divisor = applyLidar ? 1 : (S.W_APM + S.W_POTENTIAL);
+        var b = bonus || CONFIG.BONUSES;
+        var wPot = b.potential ? S.W_POTENTIAL : 0;
+        var wLidar = (applyLidar && b.lidar) ? S.W_LIDAR : 0;
+        var divisor = S.W_APM + wPot + wLidar;
         return {
             apm: divisor ? S.W_APM / divisor : 0,
-            potential: divisor ? S.W_POTENTIAL / divisor : 0,
-            lidar: applyLidar ? S.W_LIDAR : 0,
-            romanRoads: S.W_ROMAN_ROADS
+            potential: divisor ? wPot / divisor : 0,
+            lidar: divisor ? wLidar / divisor : 0,
+            romanRoads: b.roads ? S.W_ROMAN_ROADS : 0
         };
     }
 
@@ -1460,7 +1655,7 @@
             annotated: cand.annotated,
             origin: cand.origin,
             parts: cand.parts,
-            weights: scoringWeights(cand.parts.lidarApplied),
+            weights: scoringWeights(cand.parts.lidarApplied, ctx.bonus),
             nearestSites: nearest,
             period: period,
             focus: buildFocusAreas(cand, ctx)
@@ -1607,6 +1802,9 @@
         visible: true,
         version: 0,
         layerGroup: null,
+        settings: null,         // last readSettings() — baseline/period/bonuses
+        baselineToken: null,    // cancels an in-flight Next-Gen baseline run
+        periodToken: null,      // cancels an in-flight training-period fetch
         pdfLang: null           // PDF language override ('ro'|'en'); null = site language
     };
 
@@ -1673,8 +1871,18 @@
         }
         var pdfBtn = el('archReportPdfBtn');
         if (pdfBtn) pdfBtn.disabled = running;
-        var ignore = el('archReportIgnoreLidar');
-        if (ignore) ignore.disabled = running;
+        // Every window control that feeds the next run is locked while one is
+        // running — the ignore switch, the three bonus ticks, the baseline
+        // tabs and the training-period select.
+        ['archReportIgnoreLidar', 'archReportBonusRoads', 'archReportBonusPotential',
+         'archReportBonusLidar', 'archReportPeriod'].forEach(function (id) {
+            var node = el(id);
+            if (node) node.disabled = running;
+        });
+        ['archReportBaselineApm20', 'archReportBaselineCustom', 'archReportBaselineTrain'].forEach(function (id) {
+            var node = el(id);
+            if (node) node.disabled = running;
+        });
         var ov = el('archReportLoading');
         if (ov) ov.classList.toggle('visible', !!running);
     }
@@ -1734,6 +1942,12 @@
         if (!_state.point) { setStatus('arch_report_need_point', true); return Promise.resolve(null); }
         syncSiteConfig();
 
+        // What the window asked for: baseline, training period, bonuses and
+        // the ignore-LIDAR switch — read fresh on every run.
+        var settings = readSettings();
+        _state.settings = settings;
+        if (_state.baselineToken) { _state.baselineToken.cancelled = true; _state.baselineToken = null; }
+
         _state.running = true;
         _state.version++;
         var myVersion = _state.version;
@@ -1762,7 +1976,10 @@
                     center: center,
                     lat0: center.lat,
                     radiusKm: radiusKm,
-                    ignoreLidar: !!(el('archReportIgnoreLidar') && el('archReportIgnoreLidar').checked),
+                    ignoreLidar: settings.ignoreLidar,
+                    bonus: settings.bonuses,
+                    baseline: settings.baseline,
+                    baselinePeriodKey: settings.periodKey,
                     radiusM: radiusM,
                     areaKm2: Math.PI * radiusM * radiusM / 1e6,
                     square: analysisArea(center.lat, center.lng, radiusM)
@@ -1811,6 +2028,8 @@
                     var m = projectToLocalMeters(p.lat, p.lng, ctx.lat0);
                     return inCircle(ctx.square, m.x, m.y);
                 });
+                // The bonus/seed subset: fortification, burgus, tumulus only.
+                ctx.qualifyingLidarPoints = ctx.lidarPoints.filter(isBonusLidarPoint);
 
                 setStatus('arch_report_step_roads');
                 ctx.romanRoadLayer = mapRomanRoadsLayer();
@@ -1829,17 +2048,36 @@
                     ctx.romanRoadsInArea = ctx.romanRoadSegs.length;
                 }
 
-                // ── rasters (UAT red zone + APM 2.0 colours) ──
+                // ── rasters (UAT red zone + the chosen APM baseline) ──
                 setStatus('arch_report_step_uat');
                 var bbox = buildBbox(ctx.square, CONFIG.UAT.CLEARANCE_M + CONFIG.UAT.CELL_M * 2, ctx.lat0);
                 ctx.bbox = bbox;
                 var uatPromise = buildUatGrid(bbox, uatCellM(ctx.radiusM));
-                setStatus('arch_report_step_apm');
-                var apmPromise = buildApmGrid(bbox, apmCellM(ctx.radiusM), CONFIG.APM.Z);
-                var grids = await Promise.all([uatPromise, apmPromise]);
-                if (myVersion !== _state.version) return null;
-                ctx.uatGrid = grids[0];
-                ctx.apmGrid = grids[1];
+                if (ctx.baseline === 'apm20') {
+                    setStatus('arch_report_step_apm');
+                    var grids = await Promise.all([
+                        uatPromise,
+                        buildApmGrid(bbox, apmCellM(ctx.radiusM), CONFIG.APM.Z)
+                    ]);
+                    if (myVersion !== _state.version) return null;
+                    ctx.uatGrid = grids[0];
+                    ctx.apmGrid = grids[1];
+                } else {
+                    // Next-Gen baselines fetch their own DEM/water/model; the
+                    // UAT raster runs while that engine is working.
+                    ctx.uatGrid = await uatPromise;
+                    if (myVersion !== _state.version) return null;
+                    try {
+                        ctx.apmGrid = await buildNextGenBaselineGrid(ctx, settings, myVersion);
+                    } catch (err) {
+                        console.error('[ArcheoReport] Next-Gen baseline failed:', err);
+                        setStatus('arch_report_baseline_failed', true, {
+                            msg: (err && err.message) ? err.message : String(err)
+                        });
+                        return null;
+                    }
+                    if (myVersion !== _state.version || !ctx.apmGrid) return null;
+                }
 
                 // ── seeds → exclusions → weighted score ──
                 setStatus('arch_report_step_scoring');
@@ -1886,8 +2124,16 @@
                         bubblesInArea: ctx.bubblesInArea.length,
                         potentialStatus: ctx.potentialStatus,
                         ignoreLidar: ctx.ignoreLidar,
+                        baseline: ctx.baseline,
+                        baselinePeriod: ctx.baseline === 'nextgen_train' ? (ctx.baselinePeriodKey || 'all') : null,
+                        bonuses: {
+                            roads: !!ctx.bonus.roads,
+                            potential: !!ctx.bonus.potential,
+                            lidar: !!ctx.bonus.lidar
+                        },
                         lidarCount: ctx.lidarPoints.length,
                         lidarInArea: ctx.lidarInArea.length,
+                        lidarQualifying: (ctx.qualifyingLidarPoints || []).length,
                         /* Filled from the reference GeoJSON or, when the map
                          * layer is on, from the loaded canvas layer. */
                         romanRoadSegments: ctx.romanRoadsInArea || 0,
@@ -1900,7 +2146,7 @@
                         ms: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0)
                     },
                     results: results,
-                    weights: scoringWeights(!ctx.ignoreLidar),
+                    weights: scoringWeights(!ctx.ignoreLidar && ctx.bonus.lidar, ctx.bonus),
                     thresholds: {
                         uatClearanceM: CONFIG.UAT.CLEARANCE_M,
                         siteRadiusM: CONFIG.SITE.RADIUS_M,
@@ -1966,25 +2212,37 @@
         var pct = res.scorePct;
         var p = res.parts;
         var apmLabel = tr('arch_report_apm_class_' + (p.apmCls || 0));
+
+        // Potential bonus — off, inside a bubble, attenuated, or absent.
+        var potRow;
+        if (p.potentialApplied === false) potRow = esc(tr('arch_report_bonus_off'));
+        else if (p.potentialInside) potRow = esc(tr('arch_report_pot_inside', { score: pctComp(p.potentialScore) }));
+        else if (p.potentialDistM !== null && p.potentialDistM <= CONFIG.POTENTIAL.PROXIMITY_M) {
+            potRow = esc(tr('arch_report_pot_near', { dist: fmtM(p.potentialDistM), score: pctComp(p.potentialScore) }));
+        } else potRow = esc(tr('arch_report_pot_none'));
+
+        // LiDAR bonus — ignored, switched off, exact hit, near, or absent.
+        var lidarTitle = p.lidarPoint ? (p.lidarPoint.category || p.lidarPoint.name || '—') : '—';
+        var lidarRow;
+        if (p.lidarIgnored) lidarRow = esc(tr('arch_report_ignore_lidar'));
+        else if (p.lidarBonus === false) lidarRow = esc(tr('arch_report_bonus_off'));
+        else if (res.annotated) lidarRow = esc(tr('arch_report_lidar_hit', { title: lidarTitle }));
+        else if (p.lidarDistM !== null && p.lidarDistM <= CONFIG.LIDAR.PROXIMITY_M) {
+            lidarRow = esc(tr('arch_report_lidar_near', { dist: fmtM(p.lidarDistM) }));
+        } else lidarRow = esc(tr('arch_report_lidar_none'));
+
+        // Roman-road bonus — off, applied, or no road nearby.
+        var roadRow;
+        if (p.romanRoadBonus === false) roadRow = esc(tr('arch_report_bonus_off'));
+        else if (p.romanRoadApplied) roadRow = esc(tr('arch_report_roads_near', { dist: fmtM(p.romanRoadDistM) }));
+        else roadRow = esc(tr('arch_report_roads_none'));
+
         var rows = [
             ['<b>' + esc(tr('arch_report_row_apm')) + '</b>',
              esc(apmLabel) + ' · ' + pctComp(p.apmComp)],
-            ['<b>' + esc(tr('arch_report_row_potential')) + '</b>',
-             p.potentialInside
-                ? esc(tr('arch_report_pot_inside', { score: pctComp(p.potentialScore) }))
-                : (p.potentialDistM !== null && p.potentialDistM <= CONFIG.POTENTIAL.PROXIMITY_M
-                    ? esc(tr('arch_report_pot_near', { dist: fmtM(p.potentialDistM), score: pctComp(p.potentialScore) }))
-                    : esc(tr('arch_report_pot_none')))],
-            ['<b>' + esc(tr('arch_report_row_lidar')) + '</b>',
-             res.annotated
-                ? esc(tr('arch_report_lidar_hit', { title: p.lidarPoint ? (p.lidarPoint.category || p.lidarPoint.name || '—') : '—' }))
-                : (p.lidarDistM !== null && p.lidarDistM <= CONFIG.LIDAR.PROXIMITY_M
-                    ? esc(tr('arch_report_lidar_near', { dist: fmtM(p.lidarDistM) }))
-                    : esc(tr(p.lidarIgnored ? 'arch_report_ignore_lidar' : 'arch_report_lidar_none')))],
-            ['<b>' + esc(tr('arch_report_row_roads')) + '</b>',
-             p.romanRoadApplied
-                ? esc(tr('arch_report_roads_near', { dist: fmtM(p.romanRoadDistM) }))
-                : esc(tr('arch_report_roads_none'))],
+            ['<b>' + esc(tr('arch_report_row_potential')) + '</b>', potRow],
+            ['<b>' + esc(tr('arch_report_row_lidar')) + '</b>', lidarRow],
+            ['<b>' + esc(tr('arch_report_row_roads')) + '</b>', roadRow],
             ['<b>' + esc(tr('arch_report_row_uat')) + '</b>',
              esc(tr('arch_report_uat_ok', { dist: fmtM(p.uatClearanceM) }))],
             ['<b>' + esc(tr('arch_report_row_period')) + '</b>',
@@ -2947,6 +3205,9 @@
             lat: _state.point.lat.toFixed(5), lng: _state.point.lng.toFixed(5)
         });
         updateRunButton();
+        // A new centre means a new 50 km training pool for the Next-Gen train
+        // baseline — refresh the period list the window offers.
+        if (readSettings().baseline === 'nextgen_train') refreshPeriodOptions();
     }
 
     /* Oglinda verticală a sliderului de rază + dock-ul de acțiune centrat jos
@@ -2974,6 +3235,10 @@
         var map = window._dlMap;
         var row = el('archReportRow');
         if (row) row.classList.toggle('is-on', _state.active);
+        // Switching the layer on opens its configuration window — the same
+        // contract the APM Next-Gen panel has (and closing it turns the
+        // layer's map side off with it, via the row switch).
+        setPanelOpen(_state.active);
         if (!map) return;
         if (!_state.active) {
             map.off('click', onMapClick);
@@ -2997,12 +3262,164 @@
         notifyDistanceMirror(true);
     }
 
+    /* ═══════════════════════════════════════════════════════════════════════
+     * 15. THE REPORT WINDOW — baseline, training period, bonus scoring
+     *     (same shell, size and type as the APM Next-Gen panel: .apm-panel
+     *      + the shared resize grip from js/window-resize.js)
+     * ═══════════════════════════════════════════════════════════════════════ */
+
+    var BASELINE_TABS = [
+        ['archReportBaselineApm20', 'apm20'],
+        ['archReportBaselineCustom', 'nextgen_custom'],
+        ['archReportBaselineTrain', 'nextgen_train']
+    ];
+
+    function checkedOr(id, dflt) {
+        var node = el(id);
+        return node ? !!node.checked : dflt;
+    }
+
+    /* Everything the window asks for, read fresh on every run. Elements that
+     * are missing (headless harness, older shell) fall back to the defaults,
+     * so a bare page still behaves like the classic APM 2.0 report. */
+    function readSettings() {
+        var input = el('archReportBaseline');
+        var baseline = input ? String(input.value || '') : '';
+        if (CONFIG.BASELINE.MODES.indexOf(baseline) === -1) baseline = CONFIG.BASELINE.DEFAULT;
+        var periodEl = el('archReportPeriod');
+        var periodKey = periodEl && periodEl.value && periodEl.value !== 'all'
+            ? String(periodEl.value) : null;
+        if (baseline !== 'nextgen_train') periodKey = null;
+        return {
+            baseline: baseline,
+            periodKey: periodKey,
+            ignoreLidar: !!(el('archReportIgnoreLidar') && el('archReportIgnoreLidar').checked),
+            bonuses: {
+                roads: checkedOr('archReportBonusRoads', CONFIG.BONUSES.roads),
+                potential: checkedOr('archReportBonusPotential', CONFIG.BONUSES.potential),
+                lidar: checkedOr('archReportBonusLidar', CONFIG.BONUSES.lidar)
+            }
+        };
+    }
+
+    function setPanelOpen(open) {
+        var panel = el('archReportPanel');
+        if (!panel) return;
+        panel.hidden = !open;
+        if (panel.setAttribute) panel.setAttribute('aria-hidden', String(!open));
+        var btn = el('archReportSettingsBtn');
+        if (btn && btn.setAttribute) btn.setAttribute('aria-expanded', String(!!open));
+    }
+
+    /* The period list is the Next-Gen training pool around the report's own
+     * point (same 50 km dataset, same ≥10-sites rule the engine applies). */
+    function refreshPeriodOptions() {
+        var sel = el('archReportPeriod');
+        if (!sel) return;
+        var settings = readSettings();
+        if (settings.baseline !== 'nextgen_train') return;
+        var note = el('archReportPeriodNote');
+        var api = nextGenReportApi();
+        if (!api || typeof api.periods !== 'function') {
+            if (note) note.textContent = tr('arch_report_period_unavailable');
+            return;
+        }
+        if (!_state.point) {
+            if (note) note.textContent = tr('arch_report_need_point');
+            return;
+        }
+        if (_state.periodToken) _state.periodToken.cancelled = true;
+        var token = { cancelled: false };
+        _state.periodToken = token;
+        if (note) note.textContent = tr('arch_report_step_sites');
+        var centre = { lat: _state.point.lat, lon: _state.point.lng };
+        api.periods(centre, token).then(function (groups) {
+            if (token.cancelled) return;
+            var live = el('archReportPeriod');
+            if (live !== sel) return;
+            var current = sel.value;
+            while (sel.firstChild) sel.removeChild(sel.firstChild);
+            var all = document.createElement('option');
+            all.value = 'all';
+            all.textContent = tr('arch_report_period_all');
+            sel.appendChild(all);
+            (groups || []).forEach(function (g) {
+                var opt = document.createElement('option');
+                opt.value = g.key;
+                opt.textContent = g.label + (g.count != null ? ' (' + g.count + ')' : '');
+                opt.disabled = !g.selectable || g.count < 10;
+                sel.appendChild(opt);
+            });
+            var keep = current === 'all' || (groups || []).some(function (g) { return g.key === current; });
+            sel.value = keep && current ? current : 'all';
+            if (note) note.textContent = tr('arch_report_period_hint');
+        }).catch(function (err) {
+            if (token.cancelled) return;
+            console.warn('[ArcheoReport] training periods unavailable:', err);
+            if (note) note.textContent = tr('arch_report_period_unavailable');
+        });
+    }
+
+    function setBaseline(value, rerun) {
+        if (CONFIG.BASELINE.MODES.indexOf(value) === -1) value = CONFIG.BASELINE.DEFAULT;
+        var input = el('archReportBaseline');
+        if (input) input.value = value;
+        BASELINE_TABS.forEach(function (tab) {
+            var btn = el(tab[0]);
+            if (!btn) return;
+            var active = tab[1] === value;
+            btn.classList.toggle('is-active', active);
+            if (btn.setAttribute) btn.setAttribute('aria-pressed', String(active));
+        });
+        var row = el('archReportPeriodRow');
+        if (row) row.hidden = value !== 'nextgen_train';
+        if (value === 'nextgen_train') refreshPeriodOptions();
+        if (rerun !== false && _state.point && !_state.running) runReport();
+    }
+
+    /* Any window setting that feeds the score re-runs the analysis in place —
+     * exactly like the ignore-LIDAR switch has always done. */
+    function settingsChanged() {
+        if (_state.point && !_state.running) runReport();
+    }
+
     function wireUI() {
         var toggle = el('archReportToggle');
         if (toggle && !toggle.dataset.archReportWired) {
             toggle.dataset.archReportWired = '1';
             toggle.addEventListener('change', function () { setActive(this.checked); });
         }
+        var settingsBtn = el('archReportSettingsBtn');
+        if (settingsBtn && !settingsBtn.dataset.archReportWired) {
+            settingsBtn.dataset.archReportWired = '1';
+            settingsBtn.addEventListener('click', function () {
+                setPanelOpen(!!el('archReportPanel') && el('archReportPanel').hidden !== false);
+            });
+        }
+        var panelClose = el('archReportPanelClose');
+        if (panelClose && !panelClose.dataset.archReportWired) {
+            panelClose.dataset.archReportWired = '1';
+            panelClose.addEventListener('click', function () { setPanelOpen(false); });
+        }
+        BASELINE_TABS.forEach(function (tab) {
+            var btn = el(tab[0]);
+            if (btn && !btn.dataset.archReportWired) {
+                btn.dataset.archReportWired = '1';
+                btn.addEventListener('click', function () { setBaseline(tab[1]); });
+            }
+        });
+        var period = el('archReportPeriod');
+        if (period && !period.dataset.archReportWired) {
+            period.dataset.archReportWired = '1';
+            period.addEventListener('change', function () { settingsChanged(); });
+        }
+        ['archReportBonusRoads', 'archReportBonusPotential', 'archReportBonusLidar'].forEach(function (id) {
+            var node = el(id);
+            if (node && !node.dataset.archReportWired) {
+                node.dataset.archReportWired = '1';
+                node.addEventListener('change', function () { settingsChanged(); });
+            }
+        });
         var run = el('archReportRunBtn');
         if (run && !run.dataset.archReportWired) {
             run.dataset.archReportWired = '1';
@@ -3144,9 +3561,11 @@
             results: _state.results,
             model: _state.model,
             figures: _state.figures,
+            settings: readSettings(),
             pdfLang: pdfLanguage()
         };
     };
+    window._archeoReportOpenPanel = function (open) { setPanelOpen(open !== false); };
     // Console helpers:  _archeoReportSetPoint(46.77, 23.59) then runArcheoReport()
     window._archeoReportSetPoint = function (lat, lng) {
         _state.point = { lat: lat, lng: lng };
@@ -3198,6 +3617,13 @@
         buildUatGrid: buildUatGrid,
         buildApmGrid: buildApmGrid,
         apmClassAt: apmClassAt,
+        readSettings: readSettings,
+        setBaseline: setBaseline,
+        setPanelOpen: setPanelOpen,
+        isBonusLidarPoint: isBonusLidarPoint,
+        normalizeCategory: normalizeCategory,
+        rasterizeNextGenGrid: rasterizeNextGenGrid,
+        nextGenReportApi: nextGenReportApi,
         apmGridPolygons: apmGridPolygons,
         outlineCells: outlineCells,
         drawApmFigurePolygons: drawApmFigurePolygons,
