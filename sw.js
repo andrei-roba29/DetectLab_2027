@@ -946,7 +946,9 @@
 // v377: rely on the native iOS keyboard instead of the temporary app keys.
 // v378: keep the app alive during iOS OAuth and provide a callback exit.
 // v379: prewarm prediction exclusions in bounded blocks for TRAIN heatmaps.
-const CACHE_NAME = 'detectlab-v379-apm-train-heat';
+// v380: bound the 50 km TRAIN prediction raster and use one coarse UAT pyramid
+//   pass, so the heatmap no longer exhausts the tab at the final score step.
+const CACHE_NAME = 'detectlab-v380-apm-train-bounded-grid';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1015,6 +1017,12 @@ const PRECACHE_URLS = [
   'js/apm-next/apm-pipeline.js',
   'js/apm-next/apm-ui.js',
   'js/apm-next/apm-i18n.js',
+  'js/apm-next/apm-raster.js?v=20261102-apm-train-bounded-grid',
+  'js/apm-next/apm-i18n.js?v=20261102-apm-train-bounded-grid',
+  'js/apm-next/apm-pipeline.js?v=20261102-apm-train-bounded-grid',
+  'js/apm-next/apm-ui.js?v=20261102-apm-train-bounded-grid',
+  'js/apm-next/apm-worker.js?v=20261102-apm-train-bounded-grid',
+  'js/archeo-potential.js?v=20261102-apm-train-bounded-grid',
   'js/d3.min.js',
   'js/rbush.min.js',
   'js/vendor/polygon-clipping.umd.min.js',

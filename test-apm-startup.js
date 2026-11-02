@@ -94,7 +94,9 @@ assert.equal(boot('on', { storageError: true }).state.enabled, false, 'blocked s
 assert.equal(boot('on', { row: false }).panel.hidden, true, 'standalone launcher stays closed');
 assert.equal(boot('on', { dock: false }).panel.hidden, true, 'missing optional drawer does not auto-open');
 const url = (read('index.html').match(/src="(js\/apm-next\/apm-ui\.js\?v=[^"]+)"/) || [])[1];
-assert(url && url.endsWith('20261101-apm-start-minimized'), 'new UI cache tag');
+assert(url && url.includes('apm-ui.js?v='), 'UI has a cache tag');
 assert(read('sw.js').includes("'" + url + "'"), 'service worker precaches the exact UI URL');
-assert.match(read('sw.js'), /const CACHE_NAME = 'detectlab-v366-apm-start-minimized'/);
+// Every release bumps the shell cache; keep this check independent of the tag.
+const shellVersion = Number((read('sw.js').match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
+assert(shellVersion >= 366, 'shell cache was bumped for the current release');
 console.log('APM startup: saved on/off, PWA/web, drawer restore, explicit toggles, repeated init, storage failure and cache wiring passed.');

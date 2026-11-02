@@ -16,7 +16,7 @@ Both MANUAL and TRAIN show a **continuous, semi-transparent score heatmap**, wit
 
 - Colour is continuous: navy → teal → amber → orange → deep red. The intermediate ramp stops follow the run's medium/high/very-high thresholds; scores are **not stretched to the local minimum/maximum**. Lower-scoring areas remain visible without becoming polygons. Labels describe relative archaeological potential, not calibrated discovery probabilities.
 - Only `score >= thresholds.veryhigh` is contoured. MANUAL's default is 0.85; TRAIN uses its learned very-high threshold. The legend shows the actual cutoff. Existing minimum fragment area and boundary smoothing apply; if no hotspot survives, **no lower class is promoted** to produce a polygon.
-- All scoring and contouring stay at the original analysis resolution in the worker. Only the display texture is downsampled to at most **512 × 512** pixels, averaging valid scores with coverage alpha at masked edges. No-data cells are transparent; valid zero scores are retained. The RGBA texture is transferred to the main thread without cloning the full score raster.
+- All scoring and contouring stay at the (bounded) analysis resolution in the worker; see *TRAIN heatmap: bounded prediction raster and UAT budget* below. Only the display texture is downsampled to at most **512 × 512** pixels, averaging valid scores with coverage alpha at masked edges. No-data cells are transparent; valid zero scores are retained. The RGBA texture is transferred to the main thread without cloning the full score raster.
 - Leaflet canvas tiles project map pixels back to geographic raster coordinates and interpolate the texture with premultiplied alpha. This avoids the north/south distortion of stretching a geographic image over Web Mercator. Heat tiles do not intercept map gestures; outlines remain clickable above them. Re-run, Clear and switching APM off remove both result layers together.
 - Medium/high/very-high areas in the panel are calculated from the **full-resolution classified score cells**, independent of contour smoothing or omitted polygon fragments. These totals should not be read as exact exported polygon areas.
 - **Export hotspot GeoJSON** contains only very-high polygon features plus provenance, chosen settlement period, thresholds and rendering metadata. It does not embed the heatmap image or full score raster. The legacy polygonisation helper still supports all-class polygons for compatibility, but the production worker requests highest-only contours.
@@ -163,6 +163,7 @@ Notes:
 | `css/next-gen-apm.css` | `.apm-*` styles. |
 | `samples/apm-next-SYNTHETIC-sample-sites.csv` | Synthetic TRAIN sample (36 rows). |
 | `test-apm-next.js` | Node test suite: `node test-apm-next.js` (60 tests). |
+| `test-apm-train-performance.js` | TRAIN heatmap regression: bounded 50 km grid, worker guard, real pipeline/worker run, UAT tile budget and fallback. |
 | `test-apm-next-browser.js` | Browser checks (14), run with `PUPPETEER_MODULE_DIR` set. |
 | `LIVE_TEST.md` | Steps for the first live test and what to send back. |
 
@@ -195,9 +196,27 @@ Synthetic fixture performance: for 45 rule-following sites plus 5 uniformly rand
 
 The defaults are in one object, `DetectLabApmCore.robustTrainConfig` (`js/apm-next/apm-core.js`): position radius 60 m (at least one DEM cell), minimum 20 sites, maximum 20% down-weighted, Tukey weight floor 0.08, outlier distance 3.25 MAD-scaled units, and alternate-pattern cluster minimum 8 / >15% with radius 1 standardized unit. CV optimizer tolerance is relaxed to 1e-4 to meet the browser budget; the full-data optimizer uses the same tolerance. These are configurable starting points, not calibrated archaeological thresholds. A local synthetic benchmark with 1,000 sites plus 3,000 backgrounds completed the fit/CV path in about 1.8 s; actual browser hardware and bigger site pools may differ.
 
+## TRAIN heatmap: bounded prediction raster and UAT budget (2026-11-02)
+
+**Reported problem:** TRAIN was very slow and the tab crashed exactly when the heatmap should have appeared.
+
+**Cause.** TRAIN trains on a fixed 50 km area and also *predicted* over that whole area at the native 25 m DEM resolution. That grid is about **4240 × 4240 = 18 million cells**. Every stage keeps one or more full-size arrays: terrain (slope/aspect/curvature/valid), altitude and soil percentiles, water distance transforms, the score grid, d3's Float64 contour grid and polygon-clipping's ring/exclusion geometry. A local reproduction with 12.5 million cells (30 m) died with `FATAL ERROR: … JavaScript heap out of memory` during `score`, i.e. right before the reply carrying the RGBA heatmap. The main thread was also doing ~4,000 native z14 UAT tile downloads, block by block, with tiles evicted from the bounded 600-entry cache before they could be sampled, leaving unverified (excluded) cells.
+
+**What changed.**
+
+- `raster.boundedGridForBBox()` keeps the same geographic extent but grows the cell size when a window exceeds **1,048,576 cells (1024 × 1024)**. A 50 km TRAIN prediction is now ~1024 × 1024 at roughly 100 m per cell; MANUAL's 1–10 km windows stay within a few percent of the native 25 m. TRAIN's site/background sampling grid uses a separate 4-million-cell budget, which also reduces the number of full-size WCS DEM tiles. The 512 × 512 display texture, contouring and class areas still use the full (bounded) analysis raster; the effective cell size is reported in provenance and as an `info.coarsePrediction` note (EN/RO), not as a warning.
+- `computeArcheoExclusionMask()` uses a **coarser UAT pyramid level** (up to three zooms below native, at most 400 tiles) for large TRAIN windows and keeps all decoded tile masks in a run-local map, so there are no cache evictions, repeated downloads or unverified holes. If that pyramid level is incomplete or all-transparent, it falls back to the native level and the previous block-prewarm path — slower, but still fail-closed and correct. Row-wise Mercator caching and four probes per large cell keep the mask loop cheap.
+- The worker now rejects any analysis above **2,097,152 cells** with a readable error instead of exhausting the tab; the pipeline's budget means normal runs never hit it.
+- TRAIN no longer duplicates its warning list in the result (`t.warnings` and `warnings` were the same array).
+- Asset tag `20261102-apm-train-bounded-grid`, shell cache `detectlab-v380-apm-train-bounded-grid`.
+
+**Verification.** `node test-apm-train-performance.js` (9 checks) runs the real pipeline, protection-mask contract and worker source with mocked providers/tiles: the 25 m / 50 km run returns a visible 512 × 512 heatmap from a 1024 × 1024 grid in about 7 s in Node (10 DEM blocks), the coarse UAT pass uses ~290 tiles with zero unknown cells even with a 120-tile cache, cancellation aborts the download, missing or all-transparent coarse pyramids fall back to native coverage, and an oversized grid is refused with a readable error. `node test-apm-next.js`, `test-apm-exclusions.js`, `test-apm-heatmap.js`, `test-apm-train-network.js` and `test-archeo-potential.js` still pass. **Not verified:** live R2 pyramid levels, live WCS/Supabase latency, and the appearance on a real device; all numbers above are local synthetic measurements.
+
 ## Known limitations
 
 - Distances use a local equirectangular approximation (see the error table above).
+- Large TRAIN heatmaps are scored at ~100 m cells (not the 25 m DEM native resolution), and their UAT exclusions are sampled from a coarser tile pyramid; small built-up features may be missed inside a coarse cell.
+- If the UAT tile pyramid is unavailable below the native level, a 50 km run falls back to thousands of native tiles and remains slow, though it no longer crashes.
 - The EEA39 test is a coarse bounding approximation.
 - Curves are editable in MANUAL only. In TRAIN they are learned from the sites.
 - The panel's position next to the app's other controls is not verified in the real app.

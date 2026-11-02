@@ -169,7 +169,17 @@ importScripts(
         return { score: score, stats: { cells: cnt, min: cnt ? mn : null, max: cnt ? mx : null, mean: cnt ? sum / cnt : null } };
     }
 
+    /* Defensive ceiling: the pipeline now builds bounded prediction grids, but
+     * a stale session or a direct caller must fail with a readable message
+     * instead of exhausting the tab while contouring the full score raster. */
+    var MAX_SCORE_CELLS = 2 * 1024 * 1024;
+
     function handleScore(m) {
+        var cells = state.analysis ? state.analysis.grid.w * state.analysis.grid.h : 0;
+        if (cells > MAX_SCORE_CELLS) {
+            throw new Error('Prediction grid is too large to score safely (' + cells +
+                ' cells, limit ' + MAX_SCORE_CELLS + '). Re-run the analysis to rebuild a bounded grid.');
+        }
         var cfg = m.mode === 'manual'
             ? {
                 curves: m.curves, weights: m.weights, minSlopeDeg: m.minSlopeDeg,
