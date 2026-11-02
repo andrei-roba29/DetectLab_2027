@@ -259,3 +259,21 @@ and matching versioned assets). The UI asset is
 - Asset tag `20261102-apm-continuous-heat` (apm-heatmap, apm-ui, apm-worker, archeo-potential), shell cache `detectlab-v386-apm-continuous-heat`.
 
 **Verification.** `node test-apm-exclusions.js`, `test-apm-heatmap.js`, `test-apm-train-performance.js`, `test-apm-next.js`, `test-apm-train-network.js` and `test-archeo-potential.js` pass. With `PUPPETEER_MODULE_DIR` pointing at `puppeteer-core` + `@sparticuz/chromium`, `test-apm-next-browser.js` and the new `test-apm-heat-texture-browser.js` pass as well. **Not verified:** frame rate on a real Android device; the timings above come from desktop Node and headless Chromium.
+
+## TRAIN "Run" step feels like it loads forever (2026-11-02)
+
+**Reported problem:** after pressing "Run TRAIN model" (and in MANUAL mode too), the run can take a very long time, with no clear end in sight.
+
+**Cause.** The prediction step fetched its three inputs strictly one after another even though none of them depends on another's result:
+
+1. the prediction-window DEM raster (`prov.loadDemGrid`),
+2. the water geometry in MANUAL mode (`fetchWaterChain`; TRAIN already has it from the sampling phase), and
+3. the UAT built-up/known-site protection mask (`computeArcheoExclusionMask`) — for TRAIN's fixed 50 km window this is often a few hundred tiles on a cold cache.
+
+Each of these is a separate network round trip. Fetching them in sequence added their times together instead of taking the longest of the three, so the run step's wall-clock time was roughly DEM + water + mask instead of `max(DEM, water, mask)`.
+
+**What changed.** `js/apm-next/apm-pipeline.js` now starts all of the independent fetches together (`Promise.all`) and only combines them once every one has resolved, right before handing the analysis to the worker. `setPredictionAnalysis` (the function MANUAL and TRAIN both funnel through before scoring — see the 2026-11-01 note below) accepts an already-settled exclusion-mask result instead of always starting its own request, so the shared-mask contract and its regression test still hold; callers that don't pre-fetch (including the existing unit tests) keep working exactly as before. No scoring, masking or terrain logic changed — this only changes *when* each network request starts.
+
+Asset tag `20261102-apm-parallel-fetch` (apm-pipeline.js only), shell cache `detectlab-v388-apm-parallel-fetch`.
+
+**Verification.** `node test-apm-exclusions.js`, `test-apm-train-performance.js`, `test-apm-next.js`, `test-apm-train-network.js`, `test-apm-robust-train.js` and `test-apm-romania-contract.js` pass, including the "both prediction modes use the shared mask before sending data to the worker" contract test. **Not measured:** real-world wall-clock improvement against the production UAT/DEM endpoints (the automated tests use mocked network providers); the saving is proportional to how much the mask/water fetches previously added on top of the DEM fetch, which varies with connection speed and site density.

@@ -309,18 +309,23 @@ function assertTextureMasked(heatmap, sourceMask, label) {
     console.log('  ok  tiny holes survive area filtering, smoothing, heat downsampling and interpolation');
     const html = read('index.html'), sw = read('sw.js');
     const TAG = '20261102-apm-continuous-heat', BOUNDED = '20261102-apm-train-bounded-grid';
+    const PARALLEL = '20261102-apm-parallel-fetch';
     for (const [file, version] of [['apm-heatmap', TAG],
-        ['apm-raster', BOUNDED], ['apm-i18n', BOUNDED], ['apm-pipeline', BOUNDED], ['apm-ui', TAG]]) {
+        ['apm-raster', BOUNDED], ['apm-i18n', BOUNDED], ['apm-pipeline', PARALLEL], ['apm-ui', TAG]]) {
         const tag = 'js/apm-next/' + file + '.js?v=' + version;
         assert.ok(html.includes(tag) && sw.includes(tag), file + ' is versioned and precached');
     }
+    // The prediction-path DEM/water/UAT-mask fetches were re-tagged to run in
+    // parallel instead of in sequence; the older BOUNDED tag still stays
+    // precached for shells that have not refreshed yet.
+    assert.ok(sw.includes('js/apm-next/apm-pipeline.js?v=' + BOUNDED), 'older pipeline tag stays precached for older shells');
     assert.ok(sw.includes('js/apm-next/apm-polygonise.js?v=20261101-train-source'));
     assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + TAG));
     assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + TAG));
     assert.ok(html.includes('js/archeo-potential.js?v=' + TAG));
     assert.ok(sw.includes('js/archeo-potential.js?v=' + TAG));
     assert.ok(read('js/apm-next/apm-worker.js').includes("'apm-heatmap.js?v=" + TAG + "'"), 'worker imports the new heat module');
-    assert.match(sw, /const CACHE_NAME = 'detectlab-v386-apm-continuous-heat'/);
+    assert.match(sw, /const CACHE_NAME = 'detectlab-v388-apm-parallel-fetch'/);
     console.log('  ok  updated prediction, mask, worker and display assets are wired into the PWA cache');
     console.log('\nAll APM spatial-exclusion checks passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
