@@ -12,7 +12,7 @@ const css = fs.readFileSync('css/window-resize.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 const sw = fs.readFileSync('sw.js', 'utf8');
 const tag = '20261102-pwa-window-resize-bottom-clearance';
-for (const asset of [`css/window-resize.css?v=${tag}`, 'js/window-resize.js?v=20261102-arch-report-window']) {
+for (const asset of [`css/window-resize.css?v=${tag}`, 'js/window-resize.js?v=20261102-arch-report-focus']) {
     assert(html.includes(asset), `${asset} is loaded by index.html`);
     assert(sw.includes(asset), `${asset} is precached for offline PWA`);
 }

@@ -348,6 +348,74 @@ section('Focus-area geometry and exclusions');
     const clipped = R.buildFocusAreas(seed, ctx);
     check('secondary focus stops at rejected APM cells', bounds(clipped.secondary).maxX <= CENTER.x + 126);
     check('transects stop at the same rejected cells', clipped.lines.every(l => R.projectToLocalMeters(l[0][0], l[0][1], ctx.lat0).x <= CENTER.x + 126));
+
+    // Rounded outlines: exact areas in m², rounder than the raw 50 m staircase.
+    const areaOf = rings => Math.abs(rings.reduce((sum, ring) => {
+        const pts = ring.map(p => R.projectToLocalMeters(p[0], p[1], ctx.lat0));
+        let a = 0;
+        for (let i = 0; i < pts.length; i++) {
+            const q = pts[i], w = pts[(i + 1) % pts.length];
+            a += q.x * w.y - w.x * q.y;
+        }
+        return sum + a / 2;
+    }, 0));
+    const perimOf = rings => rings.reduce((sum, ring) => {
+        const pts = ring.map(p => R.projectToLocalMeters(p[0], p[1], ctx.lat0));
+        let len = 0;
+        for (let i = 0; i < pts.length; i++) {
+            const q = pts[i], w = pts[(i + 1) % pts.length];
+            len += Math.hypot(w.x - q.x, w.y - q.y);
+        }
+        return sum + len;
+    }, 0);
+    const circularity = (a, p) => 4 * Math.PI * a / (p * p);
+    check('focus result exposes exact areas (m²) and outline length',
+        f.areaM2 > 0 && f.secondaryAreaM2 >= f.areaM2 && f.perimeterM > 0,
+        JSON.stringify({ a: f.areaM2, s: f.secondaryAreaM2, p: f.perimeterM }));
+    check('reported main area equals the shoelace area of the drawn rings (±1 m²)',
+        Math.abs(f.areaM2 - areaOf(f.main)) <= 1, f.areaM2 + ' vs ' + areaOf(f.main));
+    check('reported survey area equals the shoelace area of the drawn survey rings (±1 m²)',
+        Math.abs(f.secondaryAreaM2 - areaOf(f.secondary)) <= 1, f.secondaryAreaM2 + ' vs ' + areaOf(f.secondary));
+    check('reported outline length equals the drawn perimeter (±1 m)',
+        Math.abs(f.perimeterM - perimOf(f.main)) <= 1, f.perimeterM + ' vs ' + perimOf(f.main));
+    // Raw baseline: the same code path with the 50 m cells left as they are.
+    const savedRound = CFG.ROUND;
+    CFG.ROUND = { SAMPLE_M: 50, OPEN_M: 0, CLOSE_M: 0 };
+    const raw = R.buildFocusAreas(seed, ctx);
+    CFG.ROUND = savedRound;
+    const cRaw = circularity(raw.areaM2, raw.perimeterM), cRound = circularity(f.areaM2, f.perimeterM);
+    console.log('  [focus] raw area ' + raw.areaM2 + ' m² circ ' + cRaw.toFixed(3) +
+        ' → rounded ' + f.areaM2 + ' m² circ ' + cRound.toFixed(3) +
+        ' · survey ' + f.secondaryAreaM2 + ' m² · outline ' + f.perimeterM + ' m');
+    check('rounding makes the focus outline rounder (higher circularity)', cRound > cRaw + 0.05,
+        cRaw.toFixed(3) + ' → ' + cRound.toFixed(3));
+    check('rounding keeps the focus area close to the cell area (within 10 %)',
+        Math.abs(f.areaM2 - raw.areaM2) <= 0.10 * raw.areaM2, raw.areaM2 + ' vs ' + f.areaM2);
+    // Exclusions are cell-based. A site polygon strip cuts the east side of the
+    // footprint; no excluded cell centre may fall inside the rounded outline.
+    {
+        const strip = [
+            { x: CENTER.x + 150, y: CENTER.y - 400 }, { x: CENTER.x + 210, y: CENTER.y - 400 },
+            { x: CENTER.x + 210, y: CENTER.y + 400 }, { x: CENTER.x + 150, y: CENTER.y + 400 }
+        ];
+        ctx.polygons = [{ rings: [strip] }];
+        const cut = R.buildFocusAreas(seed, ctx);
+        ctx.polygons = [];
+        const rings = cut.main.map(r => r.map(p => R.projectToLocalMeters(p[0], p[1], ctx.lat0)));
+        const insideRings = (x, y) => rings.reduce((n, r) => n + (R.pointInPolygon(x, y, r) ? 1 : 0), 0) % 2 === 1;
+        let leaked = 0, excluded = 0;
+        for (let row = -12; row <= 12; row++) for (let col = -12; col <= 12; col++) {
+            const x = seed.x + col * cell, y = seed.y + row * cell;
+            const screened = R.focusCellAllowed(x, y, cell, ctx) && R.evaluateSeed({ x, y, origin: 'focus' }, ctx).ok;
+            if (screened) continue;
+            excluded++;
+            if (insideRings(x, y)) leaked++;
+        }
+        check('the site strip removes cells from the focus area', cut.areaM2 > 0 && cut.areaM2 < f.areaM2,
+            f.areaM2 + ' → ' + cut.areaM2);
+        check('rounded focus outline never covers an excluded cell (' + excluded + ' checked)',
+            excluded > 0 && leaked === 0, leaked + ' leaked');
+    }
 }
 
 /* ═══════════════ 4. mandatory exclusions ═══════════════ */
