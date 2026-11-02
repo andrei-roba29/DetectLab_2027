@@ -1086,7 +1086,7 @@ const PRECACHE_URLS = [
   // v283: Google-Earth-style two-finger twist deadband + pinch arbitration
   // (a two-finger zoom can no longer turn the map).
   'js/map-rotate.js?v=20261026-touch-rotate-deadband',
-  'js/tutorial.js?v=20261101-expanded-guide',
+  'js/tutorial.js?v=20261102-tutorial-video',
   'js/layer-panel-rows.js?v=20261025-layer-glass',
   'js/layer-panel-rows.js?v=20261101-walachia-sheet',
   'css/styles.css?v=20261028-historical-tile-fallback',

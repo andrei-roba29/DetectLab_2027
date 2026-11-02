@@ -747,7 +747,7 @@
         return !!(document.body && document.body.classList.contains('is-pwa'));
     }
 
-    var TUTORIAL_VIDEO_URL = 'https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/Tutorial.mp4';
+    var TUTORIAL_VIDEO_URL = 'https://dacboefvooxgsngxkavx.supabase.co/storage/v1/object/public/Harti/TUTORIAL.MOV';
 
     function stopTutorialVideo() {
         var v = document.getElementById('dlTutVideo');
@@ -1630,7 +1630,7 @@
                 '</div>' +
                 '<div class="dl-tut-perf-video">' +
                     '<video id="dlTutVideo" playsinline webkit-playsinline controls preload="metadata">' +
-                        '<source src="' + TUTORIAL_VIDEO_URL + '" type="video/mp4">' +
+                        '<source src="' + TUTORIAL_VIDEO_URL + '" type="video/quicktime">' +
                     '</video>' +
                 '</div>' +
             '</div>';
