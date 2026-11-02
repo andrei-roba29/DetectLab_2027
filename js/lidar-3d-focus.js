@@ -605,6 +605,43 @@
         return pane ? PANE_NAME : null;
     }
 
+    /* Leaflet's stock Renderer transform reconstructs its anchor from the
+     * viewport size and padding. That is not the SVG bounds' actual origin
+     * after map-rotate expands them, so the disc slides during zoom after a
+     * rotated 3D camera is handed back to 2D. Scale the exact drawn anchor.
+     * Keep this renderer private: other overlays retain their own contracts. */
+    var discRenderer = null;
+    var discRendererMap = null;
+    function discRendererOption(map, pane) {
+        var L = leaflet();
+        if (!L || !L.SVG || !L.SVG.extend) return undefined;
+        if (discRenderer && discRendererMap === map) return discRenderer;
+        var DiscSVG = L.SVG.extend({
+            _update: function () {
+                // SVG skips its bounds update during a CSS zoom. The anchor
+                // must describe the same settled frame as those bounds.
+                var skip = !!(this._map && this._map._animatingZoom && this._bounds);
+                L.SVG.prototype._update.call(this);
+                if (this._map && !skip) {
+                    this._discPixelOrigin = this._map.getPixelOrigin().clone();
+                }
+            },
+            _updateTransform: function (center, zoom) {
+                if (!this._discPixelOrigin || !this._bounds) {
+                    return L.SVG.prototype._updateTransform.call(this, center, zoom);
+                }
+                var scale = this._map.getZoomScale(zoom, this._zoom);
+                var offset = this._discPixelOrigin.add(this._bounds.min)
+                    .multiplyBy(scale).subtract(this._map._getNewPixelOrigin(center, zoom));
+                if (L.Browser.any3d) L.DomUtil.setTransform(this._container, offset, scale);
+                else L.DomUtil.setPosition(this._container, offset);
+            }
+        });
+        discRenderer = new DiscSVG({ pane: pane, padding: 0.1 });
+        discRendererMap = map;
+        return discRenderer;
+    }
+
     function drawDisc(focus, options) {
         options = options || {};
         var L = leaflet();
@@ -616,6 +653,7 @@
         var radius = Number(focus.radiusKm) * 1000;
         var style = {
             pane: pane,
+            renderer: discRendererOption(map, pane),
             color: '#c8a96e',
             weight: 2,
             dashArray: '6 5',
@@ -633,7 +671,8 @@
         discState.circle.setRadius(radius);
         if (!discState.dot) {
             discState.dot = L.circleMarker(latlng, {
-                pane: pane, radius: 4, color: '#ffe9b8', weight: 2,
+                pane: pane, renderer: discRendererOption(map, pane),
+                radius: 4, color: '#ffe9b8', weight: 2,
                 fillColor: '#c8a96e', fillOpacity: 1, interactive: false
             }).addTo(map);
             discState.dot._dl3dSkip = true;
@@ -733,7 +772,8 @@
             var pane = map.getPane(PANE_NAME) ? PANE_NAME : undefined;
             if (!discState.preview) {
                 discState.preview = L.circle(latlng, {
-                    pane: pane, radius: picking.radiusKm * 1000, color: '#ffe9b8',
+                    pane: pane, renderer: discRendererOption(map, pane),
+                    radius: picking.radiusKm * 1000, color: '#ffe9b8',
                     weight: 1.5, dashArray: '4 5', fillColor: '#c8a96e',
                     fillOpacity: 0.05, interactive: false
                 }).addTo(map);

@@ -53,9 +53,9 @@ assert.match(index, /data-key="map_title">Explore the <span class="hl">APM Layer
     'the map title is restored');
 assert.match(index, /id="mapSearchWrap"/, 'the search bar is present');
 assert.match(index, /id="transpPanel"/, 'the layer panel is present');
-// The full-screen SceneView atlas is an optional new-tab target, never a cover.
-assert.match(index, /<a class="map-tab roman-atlas-link" href="europe-roman-atlas.html" target="_blank"/,
-    'the ArcGIS SceneView atlas is reachable in a new tab from the map header');
+// The atlas remains in the top navigation, but no longer has a map-header tab.
+assert.doesNotMatch(index, /roman-atlas-link|3D ArcGIS atlas/,
+    'the 3D ArcGIS atlas tab is removed from the map header');
 assert.match(index, /<li><a href="europe-roman-atlas.html">/, 'the top nav keeps the Roman Atlas link');
 
 /* ── 3. Country selection: gate + dock restored (pre-PR behaviour) ── */

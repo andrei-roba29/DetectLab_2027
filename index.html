@@ -31,7 +31,7 @@
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
     <link rel="stylesheet" href="css/maplibre-gl.css?v=20261013-3d-terrain">
-    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261031-lidar-dock-minimized">
+    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261102-premium-3d">
     <link rel="stylesheet" href="css/hist-shift.css?v=20261014-hist-shift">
     <!-- „Alte hărți / Other maps” — punctele verzi + suprapunerea liberă a
          hărților ne-georeferențiate (Hungaricana + NLS Map Finder). -->
@@ -936,6 +936,17 @@
            the map in normal flow at a stable layout-viewport height instead. */
         html.is-pwa.dl-ios-native-layout,
         body.is-pwa.dl-ios-native-layout {
+            overflow: hidden !important;
+            height: 100% !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            scroll-behavior: auto !important;
+        }
+        /* Only native text entry may scroll the document. Leaving it
+           permanently scrollable retains WebKit's keyboard-sized empty tail. */
+        html.is-pwa.dl-ios-native-layout.dl-ios-editing,
+        body.is-pwa.dl-ios-native-layout.dl-ios-editing {
             overflow-x: hidden !important;
             overflow-y: auto !important;
             height: auto !important;
@@ -1163,7 +1174,6 @@
                 <div class="map-tabs" aria-label="Map view">
                     <button class="map-tab active t" data-key="tab_free" onclick="switchTab(this,'free')">🔓 Free Preview</button>
                     <button class="map-tab" id="tabWeather" onclick="switchTab(this,'weather')">🌤 Vreme</button>
-                    <a class="map-tab roman-atlas-link" href="europe-roman-atlas.html" target="_blank" rel="noopener" title="Open the ArcGIS SceneView atlas in a new tab" style="display:inline-flex;align-items:center;text-decoration:none;white-space:nowrap">↗ 3D ArcGIS atlas</a>
                 </div>
             </div>
             <div class="map-frame">
@@ -5110,7 +5120,7 @@
         </div>
     </footer>
 
-    <script src="js/ios-input-focus.js?v=20261101-ios-flow-keyboard"></script>
+    <script src="js/ios-input-focus.js?v=20261102-ios-viewport-settle"></script>
     <script src="js/translations.js?v=20261030-report-exclusions"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
@@ -5270,7 +5280,7 @@
          — so nothing can be visible in 2D and missing in 3D. MapLibre GL
          itself is downloaded only when 3D is opened (js/map3d-terrain.js). -->
     <script src="js/map3d-mirror.js?v=20261030-lidar-photo-3d"></script>
-    <script src="js/map3d-terrain.js?v=20261101-desktop-3d-hint"></script>
+    <script src="js/map3d-terrain.js?v=20261102-premium-3d"></script>
     <!-- LiDAR in the 3D view (js/lidar-3d-focus.js): a national LiDAR pyramid
          cannot be draped the way a historical sheet is, so pressing 3D with a
          LiDAR layer switched on asks first — HOW MUCH (the chosen layers in
@@ -5280,7 +5290,7 @@
          tile path (js/map3d-terrain.js → prefetchTiles) before 3D opens, then
          the view opens framed on it, on tiles that are already in memory.
          Installs the viewer's entry gate (DetectLabMap3D.setEntryGate). -->
-    <script src="js/lidar-3d-focus.js?v=20261031-lidar-dock-minimized"></script>
+    <script src="js/lidar-3d-focus.js?v=20261102-lidar-disc-zoom-anchor"></script>
     <!-- Mutarea hărților istorice (gratuite + premium) prin long-press:
          switch ON = drag-ul mișcă suprapunerea istorică (limitat, persistent),
          long-press din nou + switch OFF = lock pe poziția curentă. -->
