@@ -1000,7 +1000,7 @@
 //   SceneView gate, the no-WebGL canvas fallback, the country dock, Exit view
 //   and the country-scoped layer window are back; the Romania-only lock is
 //   retired again. Re-tag map-app.js + window-resize.js for installed PWAs.
-const CACHE_NAME = 'detectlab-v402-layer-i18n';
+const CACHE_NAME = 'detectlab-v403-danish-lidar-chevron';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -2079,7 +2079,11 @@ const PRECACHE_URLS = [
   'js/finland-layers.js?v=20261103-layer-i18n',
   'js/asig-albania-layers.config.js?v=20261103-layer-i18n',
   'js/asig-albania-layers.js?v=20261103-layer-i18n',
-  'js/uk-heritage-layers.js?v=20261103-layer-i18n'
+  'js/uk-heritage-layers.js?v=20261103-layer-i18n',
+  // v403: Heritage, Historical maps and Ortophoto now use the LiDAR
+  // accordion's blue SVG expand chevron, hover/focus and reduced-motion CSS.
+  'css/styles.css?v=20261103-danish-lidar-chevron',
+  'js/danish-layers.js?v=20261103-danish-lidar-chevron'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

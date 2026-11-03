@@ -294,7 +294,7 @@ const TAGS = {
     'js/map3d-terrain.js': '20261026-desktop-basemap',
     'css/map3d-terrain.css': '20261026-pwa-3d-button-size',
     'js/danish-layers.config.js': '20261028-kulturarv-sublayers',
-    'js/danish-layers.js': '20261028-kulturarv-sublayers'
+    'js/danish-layers.js': '20261103-danish-lidar-chevron'
 };
 ['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css',
     'js/danish-layers.config.js'].forEach(function (asset) {
@@ -311,8 +311,8 @@ const TAGS = {
  * under some explicit tag, so a cold start has it offline. */
 assert(indexHtml.indexOf('js/danish-layers.js?v=' + TAGS['js/danish-layers.js']) !== -1,
     'index.html loads js/danish-layers.js with a cache-busting tag');
-assert(swJs.indexOf("'js/danish-layers.js?v=") !== -1,
-    'sw.js pre-caches js/danish-layers.js under a tag');
+assert(swJs.indexOf("'js/danish-layers.js?v=" + TAGS['js/danish-layers.js'] + "'") !== -1,
+    'sw.js pre-caches the live js/danish-layers.js tag');
 console.log('  ✓ cache bumped and the new tagged assets are pre-cached');
 
 console.log('\n✅ test-map3d-mobile.js passed all checks successfully.');
