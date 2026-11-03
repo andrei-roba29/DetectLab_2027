@@ -2066,7 +2066,7 @@
                                     <path d="M3 6.5 Q6.5 5 10 6.5" stroke="#c8a96e" stroke-width="0.7" fill="none" />
                                     <path d="M3 9 Q6.5 7.5 10 9" stroke="#c8a96e" stroke-width="0.7" fill="none" />
                                 </svg>
-                                <span class="t" data-key="layer_historical">Historical Maps</span>
+                                <span class="t" data-key="layer_historical">Hărți istorice</span>
                             </span>
                             <span style="display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0">
                                 <button onclick="toggleHistSubLayers()" id="histExpandBtn" title="Expand/Collapse sublayers" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:rgba(200,169,110,0.8);display:flex;align-items:center;transition:color 0.2s;" onmouseover="this.style.color='#c8a96e'" onmouseout="this.style.color='rgba(200,169,110,0.8)'">
@@ -2074,7 +2074,7 @@
                                         <polyline points="2,4 6,8 10,4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
                                     </svg>
                                 </button>
-                                <label class="apm-toggle-switch" title="Toggle Historical Maps">
+                                <label class="apm-toggle-switch" title="Comută Hărți istorice">
                                     <input type="checkbox" id="histToggle" onchange="toggleHistLayer(this.checked)">
                                     <span class="apm-toggle-track"></span>
                                 </label>
@@ -3117,7 +3117,7 @@
                                     <path d="M3 6.5 Q6.5 5 10 6.5" stroke="#c8a96e" stroke-width="0.7" fill="none" />
                                     <path d="M3 9 Q6.5 7.5 10 9" stroke="#c8a96e" stroke-width="0.7" fill="none" />
                                 </svg>
-                                <span class="t" data-key="layer_historical_premium">Hărți istorice / Historical Maps</span>
+                                <span class="t" data-key="layer_historical_premium">Hărți istorice</span>
 
                             </span>
                             <span style="display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0">
@@ -3126,7 +3126,7 @@
                                         <polyline points="2,4 6,8 10,4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
                                     </svg>
                                 </button>
-                                <label class="apm-toggle-switch" title="Toggle Harti istorice group">
+                                <label class="apm-toggle-switch" title="Comută Hărți istorice">
                                     <input type="checkbox" id="histPremiumToggle" onchange="toggleHistPremiumLayer(this.checked)">
                                     <span class="apm-toggle-track"></span>
                                 </label>
@@ -5286,7 +5286,7 @@
     </footer>
 
     <script src="js/ios-input-focus.js?v=20261102-ios-viewport-settle"></script>
-    <script src="js/translations.js?v=20261102-ro-heritage"></script>
+    <script src="js/translations.js?v=20261103-layer-i18n"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
     <script src="js/leaflet.js"></script>
@@ -5380,7 +5380,7 @@
     <!-- The Danish layers (Denmark): the CONFIG is the single description of
          every Danish layer and it is loaded before the registry, which mirrors
          it. js/danish-layers.js (below, after map-app.js) draws them. -->
-    <script src="js/danish-layers.config.js?v=20261028-kulturarv-sublayers"></script>
+    <script src="js/danish-layers.config.js?v=20261103-layer-i18n"></script>
     <!-- The Albanian layers (ASIG geoportal): same contract — the catalogue is
          the single description of every Albanian layer. data/asig-layers.data.js
          is the catalogue itself (sections, display titles, exact WMS/WMTS
@@ -5390,7 +5390,7 @@
          it. js/asig-albania-layers.js (below, after map-app.js) draws them and
          gates the whole group to the Albania view (country: 'AL'). -->
     <script src="data/asig-layers.data.js?v=20261024-asig-lidar"></script>
-    <script src="js/asig-albania-layers.config.js?v=20261024-asig-lidar"></script>
+    <script src="js/asig-albania-layers.config.js?v=20261103-layer-i18n"></script>
     <!-- The Finnish layers: the CONFIG is the single description of every
          Finnish layer (endpoints, kinds, zoom limits, attributions) and it is
          loaded before the registry, which mirrors it. js/finland-tm35.js is
@@ -5398,8 +5398,8 @@
          registry audit and js/finland-layers.js (below, after map-app.js)
          depend on. -->
     <script src="js/finland-tm35.js?v=20261019-finland-filter"></script>
-    <script src="js/finland-layers.config.js?v=20261019-finland-filter"></script>
-    <script src="js/layer-registry.js?v=20261030-walachia"></script>
+    <script src="js/finland-layers.config.js?v=20261103-layer-i18n"></script>
+    <script src="js/layer-registry.js?v=20261103-layer-i18n"></script>
     <!-- Roman roads („Drumuri romane”): the parser owns the record/geometry
          format, the layer paints the road network on canvas tiles, and the
          worker streams + parses the NDJSON off the main thread. map-app.js
@@ -5418,7 +5418,7 @@
     <script src="js/rvt-panel.js?v=20261101-desktop-3d-hint" defer></script>
     <!-- Danish layers: panel rows, basemap-control buttons and the lazy
          Leaflet layers, all built from js/danish-layers.config.js. -->
-    <script src="js/danish-layers.js?v=20261028-kulturarv-sublayers"></script>
+    <script src="js/danish-layers.js?v=20261103-layer-i18n"></script>
     <!-- Albanian layers (ASIG): the catalogue panel of the single Albania group
          (#albaniaRow) — collapsible Romania-style sections (chevron + master
          switch), one pill on/off switch + opacity slider per layer, a search
@@ -5429,15 +5429,15 @@
          query every active WMS layer and show the answer in a sandboxed
          iframe. The group is shown only while Albania is the selected country. -->
     <script src="js/asig-heritage.js?v=20261026-viewport-heritage"></script>
-    <script src="js/asig-albania-layers.js?v=20261027-albania-heritage-free-tab"></script>
+    <script src="js/asig-albania-layers.js?v=20261103-layer-i18n"></script>
     <!-- Finnish layers: panel rows and the lazy Leaflet layers — canvas
          reprojection from the ETRS-TM35FIN grid, MVT cadastral decoding,
          WMS tiles, debounced WFS, local GeoJSON — all built from
          js/finland-layers.config.js. -->
-    <script src="js/finland-layers.js?v=20261019-finland-filter"></script>
+    <script src="js/finland-layers.js?v=20261103-layer-i18n"></script>
     <!-- UK heritage: viewport-limited ArcGIS FeatureServer overlays for
          Historic England, RCAHMW, Heneb and Cadw. -->
-    <script src="js/uk-heritage-layers.js?v=20261028-uk-heritage-free-sublayers"></script>
+    <script src="js/uk-heritage-layers.js?v=20261103-layer-i18n"></script>
     <script src="js/historical-eu-maps.js?v=20261101-ro-hist-sheets"></script>
     <!-- The layers window's own row chrome: tags every nested `*SubLayers`
          row with the shared glass material and gives each historical-map row
@@ -5990,6 +5990,29 @@
         }
 
         var LAYER_NAME_TO_KEY = {
+            'Historical maps': 'layer_historical_premium',
+            'Hărți istorice': 'layer_historical_premium',
+            'Historische Karten': 'layer_historical_premium',
+            'Cartes historiques': 'layer_historical_premium',
+            'Mappe storiche': 'layer_historical_premium',
+            'Mapas históricos': 'layer_historical_premium',
+            'Mapy historyczne': 'layer_historical_premium',
+            'Історичні карти': 'layer_historical_premium',
+            'Történelmi térképek': 'layer_historical_premium',
+            'Historické mapy': 'layer_historical_premium',
+            'Historische kaarten': 'layer_historical_premium',
+            'Исторически карти': 'layer_historical_premium',
+            'Ιστορικοί χάρτες': 'layer_historical_premium',
+            'Historiske kort': 'layer_historical_premium',
+            'Historiska kartor': 'layer_historical_premium',
+            'Historiske kart': 'layer_historical_premium',
+            'Historialliset kartat': 'layer_historical_premium',
+            'Ajaloolised kaardid': 'layer_historical_premium',
+            'Vēsturiskās kartes': 'layer_historical_premium',
+            'Istoriniai žemėlapiai': 'layer_historical_premium',
+            'Povijesne karte': 'layer_historical_premium',
+            'Историјске карте': 'layer_historical_premium',
+            'Zgodovinski zemljevidi': 'layer_historical_premium',
             'APM Layer': 'layer_apm',
             'Biblioteca din Babel': 'layer_babel',
             'APM 2.0': 'layer_apm20',

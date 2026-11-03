@@ -25,7 +25,11 @@
     "service_role_entitlement_write_permitted": true,
     "site_table_rows_after_migration": 51614,
     "obsolete_period_count_function_removed": true,
-    "health": {"auth": "healthy", "db": "healthy", "rest": "healthy"}
+    "health": {
+      "auth": "healthy",
+      "db": "healthy",
+      "rest": "healthy"
+    }
   },
   "limits": [
     "One-centre SQL execution measurement is not an endpoint latency or broad performance benchmark",

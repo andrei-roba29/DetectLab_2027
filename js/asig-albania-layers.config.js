@@ -115,7 +115,35 @@
 
         /* ISO2 of the only country these rows belong to. */
         country: 'AL',
-        groupLabel: { ro: 'Albania · geoportalul ASIG', en: 'Albania · ASIG geoportal' },
+        groupLabel: {
+            "en": "Albania · ASIG geoportal",
+            "ro": "Albania · geoportalul ASIG",
+            "de": "Albania · ASIG geoportal",
+            "fr": "Albania · ASIG geoportal",
+            "it": "Albania · ASIG geoportal",
+            "es": "Albania · ASIG geoportal",
+            "pl": "Albania · ASIG geoportal",
+            "uk": "Albania · ASIG geoportal",
+            "hu": "Albania · ASIG geoportal",
+            "cs": "Albania · ASIG geoportal",
+            "sk": "Albania · ASIG geoportal",
+            "nl": "Albania · ASIG geoportal",
+            "bg": "Albania · ASIG geoportal",
+            "el": "Albania · ASIG geoportal",
+            "pt": "Albania · ASIG geoportal",
+            "da": "Albanien · ASIG-geoportalen",
+            "sv": "Albania · ASIG geoportal",
+            "no": "Albania · ASIG geoportal",
+            "fi": "Albania · ASIG geoportal",
+            "et": "Albania · ASIG geoportal",
+            "lv": "Albania · ASIG geoportal",
+            "lt": "Albania · ASIG geoportal",
+            "hr": "Albania · ASIG geoportal",
+            "sr": "Albania · ASIG geoportal",
+            "sl": "Albania · ASIG geoportal",
+            "ru": "Albania · ASIG geoportal",
+            "sq": "Albania · ASIG geoportal"
+        },
         groupInfo: 'The ASIG geoportal catalogue for Albania: orthophotos, hillshades, cadastre, ' +
             'historical sheets, environment and planning/mining layers, plus one Heritage toggle that ' +
             'switches on every archaeological, cultural and natural protected area at once. Source: ' +
@@ -123,7 +151,35 @@
 
         /* WGS84 coverage used to clip each WMS BBOX (south-west / north-east). */
         countryBounds: CATALOGUE.bounds || [[39.538, 18.773], [42.758, 21.179]],
-        view: { center: [41.3275, 19.8187], zoom: 9, label: { ro: 'Tirana', en: 'Tirana' } },
+        view: { center: [41.3275, 19.8187], zoom: 9, label: {
+            "en": "Tirana",
+            "ro": "Tirana",
+            "de": "Tirana",
+            "fr": "Tirana",
+            "it": "Tirana",
+            "es": "Tirana",
+            "pl": "Tirana",
+            "uk": "Tirana",
+            "hu": "Tirana",
+            "cs": "Tirana",
+            "sk": "Tirana",
+            "nl": "Tirana",
+            "bg": "Tirana",
+            "el": "Tirana",
+            "pt": "Tirana",
+            "da": "Tirana",
+            "sv": "Tirana",
+            "no": "Tirana",
+            "fi": "Tirana",
+            "et": "Tirana",
+            "lv": "Tirana",
+            "lt": "Tirana",
+            "hr": "Tirana",
+            "sr": "Tirana",
+            "sl": "Tirana",
+            "ru": "Tirana",
+            "sq": "Tirana"
+        } },
 
         sectionLabels: CATALOGUE.sectionLabels || {},
         sectionNotes: SECTION_NOTES,

@@ -5,7 +5,7 @@
 [National Library of Scotland Map Finder](https://maps.nls.uk/geo/find/) care pe
 portaluri apar doar printr-un nume de loc / o amprentă de foaie, nu ca strat aliniat —
 să intre în aplicație ca sub-strat în grupul premium
-**„Hărți istorice / Historical Maps”**, sub numele
+**„Hărți istorice”**, sub numele
 **„Alte hărți / Other maps”**:
 
 1. cînd stratul e pornit, fiecare loc care are hărți apare ca **punct verde

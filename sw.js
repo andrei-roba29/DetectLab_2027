@@ -275,7 +275,7 @@
 //   44.14573, 23.61337 și păstrează un singur obiectiv «fortificație».
 // v146: lansare detectlab.eu — limba implicită și datele de contact urmează
 //   domeniul (.ro / .eu), iar harta nu mai este blocată la limita României.
-// v147: Hărți Istorice Europene (CENAGIS / IH PAN) — 22 de hărți și planuri
+// v147: Hărți istorice europene (CENAGIS / IH PAN) — 22 de hărți și planuri
 //   urbane istorice categorisite pe fiecare țară europeană (Web & PWA).
 // v148: acțiunile rapide rămân legate de PROPRIA oglindă verticală. Astfel,
 //   cele trei butoane Josephine Map + nu mai dispar când un alt substrat al
@@ -1000,7 +1000,7 @@
 //   SceneView gate, the no-WebGL canvas fallback, the country dock, Exit view
 //   and the country-scoped layer window are back; the Romania-only lock is
 //   retired again. Re-tag map-app.js + window-resize.js for installed PWAs.
-const CACHE_NAME = 'detectlab-v401-globe-country-restore';
+const CACHE_NAME = 'detectlab-v402-layer-i18n';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -2069,6 +2069,17 @@ const PRECACHE_URLS = [
   // v401: restored globe/country wiring re-tags these two shell modules.
   'js/map-app.js?v=20261103-globe-country-restore',
   'js/window-resize.js?v=20261103-globe-country-restore'
+,
+  // v402: every layer label now has an equivalent in all 25 menu languages.
+  'js/translations.js?v=20261103-layer-i18n',
+  'js/layer-registry.js?v=20261103-layer-i18n',
+  'js/danish-layers.config.js?v=20261103-layer-i18n',
+  'js/danish-layers.js?v=20261103-layer-i18n',
+  'js/finland-layers.config.js?v=20261103-layer-i18n',
+  'js/finland-layers.js?v=20261103-layer-i18n',
+  'js/asig-albania-layers.config.js?v=20261103-layer-i18n',
+  'js/asig-albania-layers.js?v=20261103-layer-i18n',
+  'js/uk-heritage-layers.js?v=20261103-layer-i18n'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

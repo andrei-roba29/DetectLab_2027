@@ -1,11 +1,11 @@
 /* =====================================================================
- * historical-eu-maps.js — Hărți Istorice Europene (CENAGIS / IH PAN)
+ * historical-eu-maps.js — Hărți istorice europene (CENAGIS / IH PAN)
  * ---------------------------------------------------------------------
  * Colecție completă de hărți istorice, topografice și planuri urbane
  * georeferențiate, găzduite pe infrastructura CENAGIS (Politechnika Warszawska)
  * și dezvoltate în colaborare cu Instytut Historii PAN (Atlas Fontium / PastMaps).
  *
- * Rândurile sunt listate PLAT în grupul „Hărți istorice / Historical Maps”
+ * Rândurile sunt listate PLAT în grupul „Hărți istorice”
  * (index.html #histPremiumSubLayers): fără subcategorie proprie, fără titlu
  * de tip „Hărți europene · CENAGIS / IH PAN” deasupra listei.
  *
@@ -563,7 +563,7 @@
     }
 
     // The old European-only master switch is now an alias for the combined
-    // Historical Maps group. Turning that parent OFF clears these WMS layers.
+    // historical maps group. Turning that parent OFF clears these WMS layers.
     function toggleHistEuLayer(on) {
         var masterToggle = document.getElementById('histPremiumToggle');
         if (on) {
@@ -702,7 +702,7 @@
             return aTitle.localeCompare(bTitle, lang);
         });
 
-        // These sheets are listed flat inside the single “Historical Maps”
+        // These sheets are listed flat inside the single “Hărți istorice”
         // group — there is no “European maps · CENAGIS / IH PAN” subcategory
         // heading (nor any replacement one) above them.
         var emptyText = (lang === 'ro') ? 'Nu există alte hărți CENAGIS pentru țara selectată.' : 'No other CENAGIS maps cover the selected country.';
@@ -780,7 +780,7 @@
 
     root.DetectLabEuMaps = DetectLabEuMaps;
     // Compatibility alias for existing integrations; there is no longer a
-    // second European Historical Maps parent group in the layer panel.
+    // second European historical maps parent group in the layer panel.
     root.toggleHistEuLayer = toggleHistEuLayer;
 
     if (document.readyState === 'loading') {

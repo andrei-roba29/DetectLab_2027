@@ -5,7 +5,7 @@
 // Verifies:
 //   1. Leaflet layers point at the ArcGIS tiled services with the correct
 //      native zoom range and per-service bounds.
-//   2. The UI rows live inside PREMIUM → Harti istorice (histPremiumSubLayers)
+//   2. The UI rows live inside PREMIUM → Hărți istorice (histPremiumSubLayers)
 //      with the exact requested names, opacity sliders and info buttons
 //      carrying the required copyright texts plus the digitization credit
 //      (Universitatea „Ștefan cel Mare” din Suceava · sursă bukowina1856.eu).
@@ -84,7 +84,7 @@ assert.match(mapApp, /transylvania1859:[\s\S]{0,900}coverageMaxZoom:\s*14/, 'Tra
 assert.match(mapApp, /galicia1855:[\s\S]{0,900}coverageMinZoom:\s*6/, 'Galicia rectangle hides only from z6');
 assert.match(mapApp, /galicia1855:[\s\S]{0,900}coverageMaxZoom:\s*14/, 'Galicia rectangle returns above z14');
 
-// ── 3. UI rows inside PREMIUM → Harti istorice ──────────────────────
+// ── 3. UI rows inside PREMIUM → Hărți istorice ──────────────────────
 const subStart = html.indexOf('id="histPremiumSubLayers"');
 const subEnd = html.indexOf('/histPremiumSubLayers');
 assert.ok(subStart > -1 && subEnd > subStart, 'histPremiumSubLayers panel exists');
@@ -227,7 +227,7 @@ for (let z = 3; z <= 20; z++) {
 assert.ok(read('sw.js').includes('tiles.arcgis.com'), 'sw.js allowlist covers tiles.arcgis.com');
 
 console.log('  ✓ tile endpoints (Siebenburgen_1859 z7-14, Kummerer_1855 z6-14) + service bounds');
-console.log('  ✓ exact names + copyright info popups inside PREMIUM → Harti istorice');
+console.log('  ✓ exact names + copyright info popups inside PREMIUM → Hărți istorice');
 console.log('  ✓ digitization credit (Universitatea „Ștefan cel Mare” din Suceava · bukowina1856.eu)');
 console.log('    in the ⓘ popup, the Leaflet attribution and the offline-maps descriptions');
 console.log('  ✓ premium gating (group category, master switch, wrapped toggles)');

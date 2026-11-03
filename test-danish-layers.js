@@ -956,7 +956,28 @@ async function testMapModule() {
     assert.strictEqual(sandbox.document.getElementById('danishGroupTitle').textContent,
         'Danmark · danske kort', 'the group title follows the language');
     assert.strictEqual(API._test.tr(CONFIG.byId('dtk25').title), 'Danmark · DTK25 topografisk kort (1:25 000)');
-    ok('UI strings are DA + EN, and the group re-renders on a language change');
+    /* The historical-maps name is canonical in Romanian and translated in all
+     * 25 menu languages; every Danish title now carries the same language set. */
+    const UI_LANGS = ['en','ro','de','fr','it','es','pl','uk','hu','cs','sk','nl','bg','el','pt','da','sv','no','fi','et','lv','lt','hr','sr','sl'];
+    const HIST = {
+        en: 'Historical maps', ro: 'Hărți istorice', de: 'Historische Karten', fr: 'Cartes historiques',
+        it: 'Mappe storiche', es: 'Mapas históricos', pl: 'Mapy historyczne', uk: 'Історичні карти',
+        hu: 'Történelmi térképek', cs: 'Historické mapy', sk: 'Historické mapy', nl: 'Historische kaarten',
+        bg: 'Исторически карти', el: 'Ιστορικοί χάρτες', pt: 'Mapas históricos', da: 'Historiske kort',
+        sv: 'Historiska kartor', no: 'Historiske kart', fi: 'Historialliset kartat', et: 'Ajaloolised kaardid',
+        lv: 'Vēsturiskās kartes', lt: 'Istoriniai žemėlapiai', hr: 'Povijesne karte', sr: 'Историјске карте',
+        sl: 'Zgodovinski zemljevidi'
+    };
+    const historical = CONFIG.panelGroups.find((g) => g.id === 'historical');
+    UI_LANGS.forEach((l) => {
+        assert.ok(CONFIG.groupLabel[l], l + ': the group label is translated');
+        assert.strictEqual(historical.title[l], HIST[l], l + ': the historical group has the proper name');
+        CONFIG.layers.forEach((layer) => assert.ok(layer.title[l], l + ': ' + layer.id + ' has a title'));
+    });
+    sandbox._currentLang = () => 'de';
+    assert.strictEqual(API._test.tr(historical.title), 'Historische Karten',
+        'a third language resolves through the shared title object');
+    ok('every layer title is translated in all 25 menu languages');
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
