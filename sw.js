@@ -996,7 +996,11 @@
 // precached. Shell assets are updated for installed PWAs.
 // v400: the PWA minimized-window drawer (arrow + panel) sits 1 mm lower than
 // on the web. Web placement is unchanged.
-const CACHE_NAME = 'detectlab-v400-pwa-dock-1mm';
+// v401: restore the globe world map / country selection flow: the lazy ArcGIS
+//   SceneView gate, the no-WebGL canvas fallback, the country dock, Exit view
+//   and the country-scoped layer window are back; the Romania-only lock is
+//   retired again. Re-tag map-app.js + window-resize.js for installed PWAs.
+const CACHE_NAME = 'detectlab-v401-globe-country-restore';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1919,9 +1923,15 @@ const PRECACHE_URLS = [
   'css/styles.css?v=20261008-roman-dare-icons',
   // v184: the ArcGIS-basemap working map, restored country gate (lazy ArcGIS
   // SceneView + canvas fallback) and country dock, in the documented load
-  // order (gate → dock → map-app). The globe gate and country dock are retired
-  // (Romania-only lock, js/romania-lock.js); only the current tag is listed.
-  'js/romania-lock.js?v=20261101-romania-only',
+  // order (gate → dock → map-app).
+  // v249: the gate header/✕/zoom stack now clear the phone's status bar and
+  // home indicator (env(safe-area-inset-*), see GLOBE_GATE_SAFE_AREA.md).
+  'css/globe-country-picker.css?v=20261021-gate-safe-area',
+  /* Older tag stays listed: an installed PWA still running an older
+   * index.html keeps working offline through its own URL. */
+  'css/globe-country-picker.css?v=20261013-no-change-pill',
+  'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
+  'js/globe-country-picker.js?v=20261015-outline-zoom-anchor',
   // v221: a TURNED map used to clip vector geometry away. L.Renderer derives the
   // box of every <svg> from the padded viewport corners through
   // containerPointToLayerPoint, which map-rotate.js un-rotates — so Leaflet
@@ -1932,9 +1942,21 @@ const PRECACHE_URLS = [
   // the tile grid's compensation. The gate outline also re-captures its zoom
   // anchor only when Leaflet really recomputed the renderer bounds.
   'js/map-rotate.js?v=20261016-rotated-vector-clip',
+  'js/globe-country-picker.js?v=20261017-outline-zoom-settle',
+  'js/globe-country-picker.js?v=20261014-country-exit-3d',
+  'js/globe-country-picker.js?v=20261013-no-change-pill',
   'js/wms-health.js?v=20261014-provider-guard',
   'js/wms-health.js?v=20261014-guard-watch',
   'js/wms-health.js?v=20261013-wms-guard',
+  // v167: country dock glued under the search bar (country switcher +
+  // World-hillshade checkbox) and the “Exit view” button of the locked
+  // country view. The hillshade tiles themselves stay network-only.
+  'css/country-dock.css?v=20261021-country-exit-3d-stack',
+  'js/country-dock.js?v=20261021-country-exit-3d-stack',
+  'css/country-dock.css?v=20261008',
+  'js/country-dock.js?v=20261008',
+  'js/country-dock.js?v=20261009-3d-globe',
+  'js/country-dock.js?v=20261013-country-2d',
   'js/map-app.js?v=20261011-arcgis-basemap',
   'js/map-app.js?v=20261014-search-exit-3d',
   'js/map-app.js?v=20261013-fr-lidar',
@@ -2043,7 +2065,10 @@ const PRECACHE_URLS = [
   'js/lidar-photo-filter.js?v=20261101-lidar-service-levels',
   'js/lidar-photo-filter.js?v=20261101-lidar-geographic-mask',
   'js/lidar-photo-filter.js?v=20261101-lidar-deep-zoom',
-  'js/lidar-photo-filter.js?v=20261101-desktop-3d-hint'
+  'js/lidar-photo-filter.js?v=20261101-desktop-3d-hint',
+  // v401: restored globe/country wiring re-tags these two shell modules.
+  'js/map-app.js?v=20261103-globe-country-restore',
+  'js/window-resize.js?v=20261103-globe-country-restore'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

@@ -9,7 +9,7 @@
     // also stay grip-free.
     var selector = [
         '#iosBldSettingsPanel', '#iosfreeModalInner',
-        '.hist-shift-panel', '.om-panel',
+        '.country-dock-panel', '.hist-shift-panel', '.om-panel',
         '.offline-map-panel', '.offline-library', '.apm-panel', '.arch-report-panel', '#rvt-body',
         '#map3d-focus .m3d-focus-card', '.om-modal-card', '.layer-info-box',
         '.ios-modal-card', '.babel-dialog', '.premium-box',

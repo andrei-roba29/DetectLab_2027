@@ -1,0 +1,372 @@
+/* ══════════════════════════════════════════════════════════════
+   DetectLab — country gate (ArcGIS SceneView + canvas fallback)
+   The preferred lazy-loaded SceneView and the existing no-WebGL canvas
+   share the same country data, direct-click selection flow, and map lock.
+   The dark background keeps the temporary gate visually consistent with the
+   working map during hand-off. See
+   GLOBE_COUNTRY_GATE.md.
+   ══════════════════════════════════════════════════════════════ */
+
+.globe-gate {
+    position: absolute;
+    inset: 0;
+    z-index: 10600;
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #030916;
+    opacity: 1;
+    /* The flat Leaflet map is prepared underneath before this fades away. */
+    transition: opacity .72s cubic-bezier(.22, .61, .36, 1);
+    will-change: opacity;
+}
+
+.globe-gate.hidden {
+    display: none !important;
+}
+
+.globe-gate.is-leaving {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.globe-gate-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* The module creates its own <canvas class="globe-gate-cv"> inside this
+   container (js/globe-country-picker.js → buildCanvas()). */
+.globe-gate-cv {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+    cursor: grab;
+    outline: none;
+}
+.globe-gate-cv:active { cursor: grabbing; }
+
+/* ── Zoom buttons (bottom-right, like the old nav control) ── */
+.globe-gate-zoom {
+    position: absolute;
+    right: 14px;
+    /* Clear of the home indicator / gesture area in the installed PWA, exactly
+       like the working map's bottom Leaflet corner (body.is-pwa .leaflet-bottom,
+       index.html). 0px on the website. */
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.globe-gate-zoom button {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 1px solid rgba(185,255,0,0.45);
+    background: rgba(8,10,22,0.78);
+    color: #ddffb0;
+    font: 700 19px/1 system-ui, sans-serif;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(0,0,0,.4);
+}
+.globe-gate-zoom button:hover { background: rgba(185,255,0,0.16); }
+
+/* ── Chrome: title / description / legend, floating above the globe ── */
+.globe-gate-chrome {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 3;
+    /* The gate covers the whole map frame, and in the installed PWA that frame
+       is the whole screen (body.is-pwa #map-section is position:fixed at
+       top:0 with min-height:100vh, index.html), so y = 0 is under the phone's
+       translucent status bar / notch. Without the inset the title started at
+       y = 14 and its first ~45px — the whole “Choose your country” line and
+       the start of the description — were painted behind the clock, and the
+       ✕ sat half under the same bar. The inset is 0 everywhere the gate is
+       not under system chrome, so the browser layout is untouched. */
+    padding: calc(18px + env(safe-area-inset-top, 0px)) 20px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+    pointer-events: none;
+    background: linear-gradient(to bottom, rgba(4,6,16,0.82) 0%, rgba(4,6,16,0.35) 70%, rgba(4,6,16,0) 100%);
+}
+
+.globe-gate-title {
+    font-family: 'Cinzel', serif;
+    font-size: 1.3rem;
+    letter-spacing: .02em;
+    color: #F5F0EB;
+    text-shadow: 0 2px 10px rgba(0,0,0,.6);
+}
+
+.globe-gate-desc {
+    margin: 0;
+    max-width: 440px;
+    font-size: .85rem;
+    line-height: 1.5;
+    color: rgba(245,240,235,0.78);
+}
+
+.globe-gate-legend {
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: .72rem;
+    color: rgba(245,240,235,0.72);
+}
+
+.globe-gate-swatch {
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+    border-radius: 3px;
+    border: 1px solid #000;
+    vertical-align: middle;
+    margin-right: 2px;
+}
+.globe-gate-swatch--default { background: rgba(107,95,130,0.34); }
+.globe-gate-swatch--hover { background: rgba(57,255,20,0.42); box-shadow: 0 0 8px rgba(57,255,20,.42); }
+
+.globe-gate-legend span + span { margin-left: 2px; }
+
+/* ── Hovered-country name pill, follows the cursor loosely by just
+   sitting centered near the bottom — simpler & always reachable on touch. ── */
+.globe-gate-hint {
+    position: absolute;
+    left: 50%;
+    bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    z-index: 3;
+    padding: 7px 16px;
+    border-radius: 999px;
+    background: rgba(8,10,22,0.78);
+    border: 1px solid rgba(185,255,0,0.55);
+    color: #ddffb0;
+    font: 600 13px/1.2 system-ui, sans-serif;
+    box-shadow: 0 6px 22px rgba(0,0,0,.45);
+    opacity: 0;
+    transition: opacity .15s ease, transform .15s ease;
+    pointer-events: none;
+    white-space: nowrap;
+    max-width: calc(100% - 40px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.globe-gate-hint.show { opacity: 1; }
+
+/* ── Imagery credit (bottom-left), the gate's counterpart of the working
+   map's attribution control; never intercepts drags on the globe. ── */
+.globe-gate-attrib {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    z-index: 3;
+    padding: 3px 8px;
+    border-top-right-radius: 6px;
+    background: rgba(3,9,22,0.62);
+    color: rgba(245,240,235,0.62);
+    font: 500 10px/1.3 system-ui, sans-serif;
+    letter-spacing: .01em;
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
+}
+.globe-gate-attrib:empty { display: none; }
+
+/* ── Loading / error states ── */
+.globe-gate-loading,
+.globe-gate-error {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    text-align: center;
+    padding: 24px;
+    background: #030916;
+    color: rgba(245,240,235,0.85);
+    font: 500 .9rem/1.5 system-ui, sans-serif;
+}
+.globe-gate-loading.hidden,
+.globe-gate-error.hidden { display: none !important; }
+
+.globe-gate-spinner {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 3px solid rgba(185,255,0,0.18);
+    border-top-color: #b9ff00;
+    animation: globeGateSpin 0.9s linear infinite;
+}
+@keyframes globeGateSpin { to { transform: rotate(360deg); } }
+
+.globe-gate-error button {
+    margin-top: 4px;
+    padding: 9px 20px;
+    border-radius: 999px;
+    border: 1px solid rgba(185,255,0,0.6);
+    background: rgba(185,255,0,0.12);
+    color: #ddffb0;
+    font: 600 .85rem system-ui, sans-serif;
+    cursor: pointer;
+}
+.globe-gate-error button:hover { background: rgba(185,255,0,0.22); }
+
+/* ── No-WebGL fallback: a plain country <select>, shown instead of the
+   globe canvas when the device/browser cannot run it. ── */
+.globe-gate-fallback {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 24px;
+    background: #030916;
+}
+.globe-gate-fallback.hidden { display: none !important; }
+.globe-gate-fallback select {
+    padding: 9px 12px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.25);
+    font: 500 .9rem system-ui, sans-serif;
+    max-width: 220px;
+}
+.globe-gate-fallback button {
+    padding: 9px 20px;
+    border-radius: 999px;
+    border: 1px solid rgba(185,255,0,0.6);
+    background: rgba(185,255,0,0.12);
+    color: #ddffb0;
+    font: 600 .85rem system-ui, sans-serif;
+    cursor: pointer;
+}
+.globe-gate-fallback button:hover { background: rgba(185,255,0,0.22); }
+
+/* ── Gate pill button — the gate's own ✕ control ──
+   The class used to be shared with the “Change Country” re-entry pill, which
+   sat under the “?” help button; that pill is gone (the dock switches
+   country), so this styles only #globeGateCloseBtn now. Its visibility is set
+   by the picker (inline display), not by a body.country-selected rule. */
+.globe-gate-reopen {
+    position: absolute;
+    /* Same reasoning as .globe-gate-chrome: the gate's own ✕ is a fixed 12px
+       from the screen edge, which in the installed PWA is inside the status
+       bar. Fullscreen is covered by the same declaration — the frame is the
+       screen in both cases. */
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    right: 14px;
+    z-index: 640;
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(185,255,0,0.45);
+    background: rgba(8,10,22,0.72);
+    backdrop-filter: blur(6px);
+    color: #ddffb0;
+    font: 600 12px system-ui, sans-serif;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(0,0,0,.4);
+}
+.globe-gate-reopen:hover { background: rgba(185,255,0,0.16); }
+
+/* Keep the "exit full screen" control reachable even while the globe
+   gate (very high z-index) is open above everything else in the frame. */
+.map-frame.is-fullscreen .btn-close-fullscreen {
+    z-index: 10700 !important;
+}
+
+@media (max-width: 640px) {
+    .globe-gate-title { font-size: 1.1rem; }
+    .globe-gate-desc { font-size: .78rem; }
+    /* Phones are the case the inset exists for: the shorter padding must not
+       drop the title back under the status bar. */
+    .globe-gate-chrome { padding: calc(14px + env(safe-area-inset-top, 0px)) 14px 10px; }
+}
+
+/* ── Optional ArcGIS SceneView surface ──
+   #globeGateArcGIS *is* the ArcGIS view container: once the SceneView is
+   created the SDK adds its own `.esri-view` class to this very element, and
+   that class carries `display: flex` — the value the SDK's layout depends on.
+   `.esri-view-root` (the SDK's child, `flex: 100%`) is stretched to the host
+   height by that flex context, and `.esri-view-surface`/the drawing canvas
+   then fill the root. Overriding the container's display (e.g. `block`, the
+   pre-2026-10-12 rule) collapses the root to 0 px: the SDK keeps its fallback
+   300×150 canvas, never resizes it, and the gate renders as a flat black
+   panel that only shows its own chrome and zoom buttons — the "black screen,
+   no globe" regression. Same display value, both axes: flex. */
+.globe-gate-arcgis {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    background: #030916;
+}
+.globe-gate.is-arcgis .globe-gate-arcgis { display: flex; }
+/* The SDK's .esri-view-root sizing (flex: 100%) is re-stated so the gate keeps
+   working with a theme/base stylesheet that failed to load. */
+.globe-gate-arcgis .esri-view-root { flex: 100%; position: relative; }
+.globe-gate-arcgis .esri-view-surface,
+.globe-gate-arcgis canvas {
+    width: 100%;
+    height: 100%;
+    outline: none;
+}
+.globe-gate-arcgis .esri-view-surface { touch-action: none; }
+.globe-gate.is-arcgis .globe-gate-canvas {
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+.globe-gate.is-canvas .globe-gate-arcgis { display: none !important; }
+
+/* Country selection is performed directly on the interactive globe. */
+/* The inline style in index.html zeroes `top` so the shared .globe-gate-reopen
+   anchor does not apply; the screen-edge offset lives here — with the status
+   bar inset added, or the ✕ opens underneath the phone's clock. */
+#globeGateCloseBtn {
+    top: calc(12px + env(safe-area-inset-top, 0px)) !important;
+    left: calc(12px + env(safe-area-inset-left, 0px)) !important;
+    right: auto !important;
+    z-index: 20;
+}
+
+/* Loading and last-resort states must sit above the interactive globe. */
+.globe-gate-loading,
+.globe-gate-error,
+.globe-gate-fallback { z-index: 8; }
+
+@media (max-width: 760px) {
+    .globe-gate-attrib {
+        left: 10px;
+        bottom: 0;
+        z-index: 6;
+        max-width: 55%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
