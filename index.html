@@ -36,6 +36,8 @@
     <!-- „Alte hărți / Other maps” — punctele verzi + suprapunerea liberă a
          hărților ne-georeferențiate (Hungaricana + NLS Map Finder). -->
     <link rel="stylesheet" href="css/other-maps.css?v=20261028-other-maps-fix">
+    <link rel="stylesheet" href="css/globe-country-picker.css?v=20261021-gate-safe-area">
+    <link rel="stylesheet" href="css/country-dock.css?v=20261021-country-exit-3d-stack">
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
     <link rel="stylesheet" href="css/tutorial.css?v=20261102-video-speed">
     <link rel="stylesheet" href="css/offline-maps.css?v=20261025-layer-glass">
@@ -1415,7 +1417,48 @@
                         </div>
                         <ul class="map-search-results" id="mapSearchResults"></ul>
 
+                        <!-- Country dock — glued under the search bar once a
+                             country has been picked on the globe: the
+                             slide-down button shows the current 2-letter code
+                             and drops open the full initials list (hover = full
+                             name). Selecting a country transitions from
+                             the temporary 3D gate to the flat 2D map.
+                             js/country-dock.js. -->
+                        <div class="country-dock" id="countryDock">
+                            <div class="country-dock-row">
+                                <button type="button" class="country-dock-btn" id="countryDockBtn"
+                                        aria-expanded="false" aria-controls="countryDockPanel"
+                                        title="Change country — the map view stays locked to the country you pick">
+                                    <span class="country-dock-globe" aria-hidden="true">🌍</span>
+                                    <span class="country-dock-code" id="countryDockCode">—</span>
+                                    <span class="country-dock-caret" aria-hidden="true">▾</span>
+                                </button>
+                            </div>
+                            <div class="country-dock-panel" id="countryDockPanel" hidden>
+                                <div class="country-dock-panel-head">
+                                    <span class="t" data-key="country_dock_title">Change country</span>
+                                    <button type="button" class="country-dock-x" id="countryDockClose"
+                                            aria-label="Close">✕</button>
+                                </div>
+                                <div class="country-dock-grid" id="countryDockGrid" role="listbox"
+                                     aria-label="Countries"></div>
+                                <div class="country-dock-name" id="countryDockName" aria-live="polite"></div>
+                                <p class="country-dock-hint t" data-key="country_dock_hint">Hover a code for the country name. Picking one moves and locks the flat 2D map view to it.</p>
+                            </div>
+                        </div>
                     </div>
+
+                    <!-- “Exit view” — appears in the middle of the lower edge
+                         only once the locked country view is zoomed all the
+                         way out; it releases the lock and reopens the globe so
+                         another country can be chosen. js/country-dock.js -->
+                    <button type="button" class="country-exit-view" id="countryExitViewBtn" hidden
+                            title="Leave the locked country view and choose another country">
+                        <span aria-hidden="true">✕</span>
+                        <span class="t" data-key="country_exit_view">Exit view</span>
+                    </button>
+
+
 
                     <!-- Radius loading overlay -->
                     <div class="map-radius-loader" id="mapRadiusLoader">
@@ -1461,6 +1504,48 @@
                         <a href="#pricing" class="btn-primary t" data-key="lock_btn">View Plans</a>
                     </div>
 
+                    <!-- Country gate: a lazy-loaded ArcGIS SceneView is preferred;
+                         the existing no-WebGL canvas picker stays available when
+                         the SDK, network, or 3D context cannot start. Both renderers
+                         consume js/globe-country-picker.js's same 50-country / 10m
+                         geometry and preserve its single-country map lock.
+                         There is no “Change Country” pill next to the “?” help
+                         button any more: the dock under the search bar already
+                         switches country, and the “Exit view” button reopens the
+                         globe (js/country-dock.js). -->
+                    <div class="globe-gate hidden" id="globeGate" aria-hidden="true">
+                        <div class="globe-gate-arcgis" id="globeGateArcGIS" aria-label="Interactive country globe"></div>
+                        <div class="globe-gate-canvas" id="globeGateCanvas"></div>
+                        <div class="globe-gate-chrome">
+                            <div class="globe-gate-title t" id="globeGateTitle" data-key="globe_gate_title">Choose your country</div>
+                            <p class="globe-gate-desc t" id="globeGateDesc" data-key="globe_gate_desc">Rotate the globe and click a country to select it and zoom in.</p>
+                            <div class="globe-gate-legend">
+                                <span class="globe-gate-swatch globe-gate-swatch--default"></span><span class="t" data-key="globe_gate_legend_default">Available country</span>
+                                <span class="globe-gate-swatch globe-gate-swatch--hover"></span><span class="t" data-key="globe_gate_legend_hover">Hovered</span>
+                            </div>
+                        </div>
+                        <button type="button" id="globeGateCloseBtn" class="globe-gate-reopen" style="display:none;top:auto;right:auto;left:14px" aria-label="Close">✕</button>
+                        <div class="globe-gate-zoom">
+                            <button type="button" id="globeGateZoomIn" aria-label="Zoom in">+</button>
+                            <button type="button" id="globeGateZoomOut" aria-label="Zoom out">−</button>
+                        </div>
+                        <div class="globe-gate-hint" id="globeGateHint"></div>
+                        <div class="globe-gate-attrib" id="globeGateAttrib" aria-label="Imagery attribution">Imagery © Esri — World Imagery</div>
+                        <div class="globe-gate-loading" id="globeGateLoading">
+                            <span class="globe-gate-spinner" aria-hidden="true"></span>
+                            <span class="t" data-key="globe_gate_loading">Loading world map…</span>
+                        </div>
+                        <div class="globe-gate-error hidden" id="globeGateError">
+                            <p id="globeGateErrorText">The world map could not load. Please check your connection and try again.</p>
+                            <button type="button" id="globeGateRetryBtn" class="t" data-key="globe_gate_retry">Retry</button>
+                        </div>
+                        <!-- Secondary no-WebGL list retained as the last-resort picker
+                             if both the SceneView and 2D canvas cannot initialize. -->
+                        <div class="globe-gate-fallback hidden" id="globeGateFallback">
+                            <select id="globeGateFallbackSelect"></select>
+                            <button type="button" id="globeGateFallbackBtn">OK</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Harta Iosefină — fixed față de map-frame, nu se mișcă cu pana -->
@@ -5277,10 +5362,15 @@
     <script src="js/lantmateriet-hojdmodell-layer.js?v=20261007-se-hojdmodell"></script>
     <!-- Physical-distance clustering for Patrimoniu pins and protection radiuses. -->
     <script src="js/patrimoniu-clustering.js?v=20260914-patrimoniu-cluster"></script>
-    <!-- Romania-only view lock: no globe gate and no country dock any more —
-         the map is locked to Romania's bounds. Must load before map-app.js,
-         which attaches it to the Leaflet map. -->
-    <script src="js/romania-lock.js?v=20261101-romania-only"></script>
+    <!-- Lightweight local adapter only; the ArcGIS CDN SDK/theme are loaded after the gate opens. -->
+    <script src="js/globe-arcgis-gate.js?v=20261013-handoff-zoom"></script>
+    <script src="js/globe-country-picker.js?v=20261017-outline-zoom-settle"></script>
+    <!-- Country dock: the slide-down country switcher glued under the search
+         bar, the small World-hillshade overlay checkbox and the bottom-centre
+         “Exit view” button. Loaded after the globe gate (it only talks to it
+         through window.DetectLabGlobeGate) and before map-app.js, which
+         attaches it to the Leaflet map. -->
+    <script src="js/country-dock.js?v=20261021-country-exit-3d-stack"></script>
     <!-- Single shared layer registry (js/layer-registry.js): every raster
          layer — historical WMS sheets, R2/Supabase tile pyramids, LiDAR
          relief, CORONA, VEG-FP, base imagery — is defined ONCE here. The 2D
@@ -5317,7 +5407,7 @@
          See ROMAN_ROADS_PERFORMANCE.md. -->
     <script src="js/roman-roads-parser.js?v=20261015-roman-roads"></script>
     <script src="js/roman-roads.js?v=20261015-roman-roads"></script>
-    <script src="js/map-app.js?v=20261102-ro-heritage"></script>
+    <script src="js/map-app.js?v=20261103-globe-country-restore"></script>
     <script src="js/romania-heritage.js?v=20261102-ro-heritage"></script>
     <link rel="stylesheet" href="css/romania-heritage.css?v=20261102-ro-heritage">
     <link rel="stylesheet" href="css/rvt-panel.css?v=20261101-robust-train">
@@ -6713,6 +6803,6 @@
     }
 </script>
 <script src="js/hybrid-tile-switch.js"></script>
-<script src="js/window-resize.js?v=20261102-apm-lidar-desktop" defer></script>
+<script src="js/window-resize.js?v=20261103-globe-country-restore" defer></script>
 </body>
 </html>

@@ -9,7 +9,9 @@ const script = fs.readFileSync('js/window-resize.js', 'utf8');
 const css = fs.readFileSync('css/window-resize.css', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
 const sw = fs.readFileSync('sw.js', 'utf8');
-for (const asset of ['css/window-resize.css?v=20261102-pwa-window-resize-bottom-clearance', 'js/window-resize.js?v=20261102-apm-lidar-desktop']) {
+const resizeScriptUrl = (html.match(/src="(js\/window-resize\.js\?v=[^"]+)"/) || [])[1];
+assert(resizeScriptUrl, 'index.html loads the window resize script');
+for (const asset of ['css/window-resize.css?v=20261102-pwa-window-resize-bottom-clearance', resizeScriptUrl]) {
     assert(html.includes(asset) && sw.includes(asset), 'new asset is loaded and precached');
 }
 assert(!/'\\.transp-panel'/.test(script), 'the layers window is never given a resize grip');
