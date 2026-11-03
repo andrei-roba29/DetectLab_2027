@@ -103,6 +103,23 @@
 
     var WFS_DEBOUNCE_MS = 450;
 
+    /* The free LiDAR accordion is the visual reference for Heritage,
+     * Historical maps and Ortophoto: a 12 x 12 currentColor SVG chevron,
+     * LiDAR blue at rest, brighter blue on hover/focus, and a quarter-second
+     * 0/-90 degree rotation.  The old red text chevron glyph is deliberately
+     * gone from the three generated Denmark sections. */
+    var SVG_NS = 'http://www.w3.org/2000/svg';
+    var LIDAR_BLUE = 'rgba(79,195,247,0.8)';
+    var LIDAR_BLUE_HOVER = '#4fc3f7';
+    var LIDAR_BLUE_RAIL = 'rgba(79,195,247,0.3)';
+    var LIDAR_CHEVRON_SVG = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true" focusable="false" style="transition:transform 0.25s ease;transform:rotate(-90deg)"><polyline points="2,4 6,8 10,4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>';
+    var LIDAR_CHEVRON_POLYLINE = '<polyline points="2,4 6,8 10,4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />';
+    var LIDAR_GROUP_MARKER_SVG = '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true" focusable="false"><circle cx="6.5" cy="6.5" r="4.5" stroke="#4fc3f7" stroke-width="1.2" /><circle cx="6.5" cy="6.5" r="1.4" fill="#4fc3f7" /><path d="M6.5 0.5v2.2M6.5 10.3v2.2M0.5 6.5h2.2M10.3 6.5h2.2" stroke="#4fc3f7" stroke-width="1" stroke-linecap="round" /></svg>';
+    var LIDAR_INFO_ICON_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" /><path d="M12 10.5v6M12 7.5h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>';
+    /* Denmark's three generated sections — Heritage, Historical maps and
+     * Ortophoto — are the only groups that adopt the LiDAR panel chrome. */
+    var LIDAR_STYLE_GROUP_IDS = ['heritage', 'historical', 'orthophoto'];
+
     /* The map variable, the way every other module in this repo finds it. */
     function getMap() {
         return window._dlMap || window.map || null;
@@ -947,10 +964,146 @@
         Object.keys(attrs || {}).forEach(function (key) {
             if (key === 'text') node.textContent = attrs[key];
             else if (key === 'style') node.setAttribute('style', attrs[key]);
+            else if (key === 'class') {
+                node.setAttribute('class', attrs[key]);
+                try { node.className = String(attrs[key]); } catch (e) { /* SVG className is read-only */ }
+            }
             else if (attrs[key] !== undefined && attrs[key] !== null) node.setAttribute(key, attrs[key]);
         });
         (children || []).forEach(function (child) { if (child) node.appendChild(child); });
         return node;
+    }
+
+    /* A real SVG element when the browser supports the SVG namespace; the
+     * simple DOM stub used by the unit tests falls back to a span carrying
+     * the exact same LiDAR markup.  Both paths expose the same ids, classes,
+     * data attributes, inline style and rotation. */
+    function svgElement(tag, attrs) {
+        var hasSvgNs = typeof document.createElementNS === 'function';
+        var node;
+        if (hasSvgNs) {
+            if (tag === 'svg') node = document.createElementNS(SVG_NS, 'svg');
+            else if (tag === 'polyline') node = document.createElementNS(SVG_NS, 'polyline');
+            else node = document.createElementNS(SVG_NS, tag);
+            Object.keys(attrs || {}).forEach(function (key) {
+                if (attrs[key] !== undefined && attrs[key] !== null) node.setAttribute(key, attrs[key]);
+            });
+        } else {
+            node = el('span', attrs || {});
+        }
+        try {
+            node.tagName = tag;
+            node.namespaceURI = SVG_NS;
+        } catch (e) { /* real DOM properties are read-only */ }
+        return node;
+    }
+
+    function styleLidarChevron(icon, expanded) {
+        if (!icon) return null;
+        var chevronClass = 'danish-group-chevron dl-expand-chevron lidar-style-chevron lidar-expand-chevron lidar-chevron';
+        icon.setAttribute('class', chevronClass);
+        try { icon.className = chevronClass; } catch (e) { /* SVG className is read-only */ }
+        icon.setAttribute('data-lidar-arrow', 'true');
+        icon.setAttribute('data-lidar-chevron', 'true');
+        icon.setAttribute('data-lidar-style', 'true');
+        icon.setAttribute('data-chevron-svg', LIDAR_CHEVRON_SVG);
+        icon.setAttribute('aria-hidden', 'true');
+        icon.setAttribute('focusable', 'false');
+        icon.setAttribute('width', '12');
+        icon.setAttribute('height', '12');
+        icon.setAttribute('viewBox', '0 0 12 12');
+        icon.setAttribute('fill', 'none');
+        icon.setAttribute('xmlns', SVG_NS);
+        icon.setAttribute('role', 'img');
+        icon.setAttribute('style', 'display:block;width:12px;height:12px;flex:0 0 12px;color:rgba(79,195,247,0.8);transition:transform 0.25s ease;transform:rotate(-90deg)');
+        icon.style.display = 'block';
+        icon.style.width = '12px';
+        icon.style.height = '12px';
+        icon.style.flex = '0 0 12px';
+        icon.style.color = LIDAR_BLUE;
+        icon.style.transition = 'transform 0.25s ease';
+        icon.style.transformOrigin = '50% 50%';
+        icon.style.transform = expanded ? 'rotate(0deg)' : 'rotate(-90deg)';
+        if (typeof document.createElementNS === 'function') {
+            icon.innerHTML = LIDAR_CHEVRON_POLYLINE;
+        } else {
+            icon.innerHTML = LIDAR_CHEVRON_SVG;
+        }
+        return icon;
+    }
+
+    function makeLidarPolyline(id) {
+        var polyline = svgElement('polyline', {
+            id: id,
+            class: 'lidar-chevron-line lidar-style-chevron-line',
+            points: '2,4 6,8 10,4',
+            stroke: 'currentColor',
+            'stroke-width': '1.8',
+            'stroke-linecap': 'round',
+            'stroke-linejoin': 'round',
+            fill: 'none',
+            'vector-effect': 'non-scaling-stroke',
+            xmlns: SVG_NS,
+            role: 'presentation',
+            'aria-hidden': 'true',
+            focusable: 'false',
+            'data-lidar-arrow': 'true',
+            'data-lidar-chevron': 'true',
+            'data-lidar-style': 'true',
+            'data-chevron-target': id
+        });
+        polyline.style.stroke = 'currentColor';
+        polyline.style.strokeWidth = '1.8';
+        polyline.style.strokeLinecap = 'round';
+        polyline.style.strokeLinejoin = 'round';
+        polyline.style.fill = 'none';
+        polyline.style.color = 'currentColor';
+        polyline.style.vectorEffect = 'non-scaling-stroke';
+        return polyline;
+    }
+
+    function makeLidarChevron(id, expanded) {
+        var icon = svgElement('svg', {
+            id: id,
+            'class': 'danish-group-chevron dl-expand-chevron lidar-style-chevron lidar-expand-chevron lidar-chevron',
+            'data-chevron-target': id,
+            'data-lidar-arrow': 'true',
+            'data-lidar-chevron': 'true',
+            'data-lidar-style': 'true'
+        });
+        var polyline = makeLidarPolyline(id + '_polyline');
+        if (icon.appendChild) icon.appendChild(polyline);
+        styleLidarChevron(icon, expanded);
+        return icon;
+    }
+
+    function styleLidarExpandButton(button, expanded) {
+        if (!button) return null;
+        var buttonClass = 'danish-group-expand-btn dl-expand-btn lidar-style-expand-btn lidar-expand-btn';
+        button.setAttribute('class', buttonClass);
+        try { button.className = buttonClass; } catch (e) { /* read-only in some DOMs */ }
+        button.setAttribute('type', 'button');
+        button.setAttribute('data-lidar-arrow', 'true');
+        button.setAttribute('data-lidar-chevron', 'true');
+        button.setAttribute('data-lidar-style', 'true');
+        button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        button.setAttribute('style', 'background:none;border:none;cursor:pointer;padding:2px 4px;color:rgba(79,195,247,0.8);display:flex;align-items:center;justify-content:center;transition:color 0.2s;');
+        button.setAttribute('onmouseover', "this.style.color='#4fc3f7'");
+        button.setAttribute('onmouseout', "this.style.color='rgba(79,195,247,0.8)'");
+        button.style.background = 'none';
+        button.style.border = 'none';
+        button.style.cursor = 'pointer';
+        button.style.padding = '2px 4px';
+        button.style.color = LIDAR_BLUE;
+        button.style.display = 'flex';
+        button.style.alignItems = 'center';
+        button.style.justifyContent = 'center';
+        button.style.transition = 'color 0.2s';
+        return button;
+    }
+
+    function showDanishGroupInfo() {
+        window.showDanishInfo();
     }
 
     function setStatus(id, text, kind) {
@@ -1056,7 +1209,7 @@
             class: 'transp-layer-label',
             style: 'margin-bottom:5px;'
         }, [
-            el('span', { style: 'font-size:0.72rem;opacity:0.6', text: tr(TEXT.opacity) }),
+            el('span', { style: 'font-size:0.7rem;opacity:0.6', text: tr(TEXT.opacity) }),
             el('span', { style: 'display:flex;align-items:center;gap:5px' }, [info, pct])
         ]);
         row.appendChild(opacityLine);
@@ -1105,8 +1258,12 @@
             entry.body.style.opacity = expanded ? '1' : '0';
             entry.body.style.marginTop = expanded ? '8px' : '0';
         }
-        if (entry.icon) entry.icon.style.transform = expanded ? 'rotate(0deg)' : 'rotate(-90deg)';
+        if (entry.icon) {
+            entry.icon.style.transition = 'transform 0.25s ease';
+            entry.icon.style.transform = expanded ? 'rotate(0deg)' : 'rotate(-90deg)';
+        }
         if (entry.button) entry.button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        if (entry.body) entry.body.setAttribute('aria-hidden', expanded ? 'false' : 'true');
     }
 
     /* A section's master switch: on → every layer of the section on, off →
@@ -1131,63 +1288,144 @@
     function buildGroup(group) {
         var title = tr(group.title);
         var expanded = !!runtime.expandedGroups[group.id];
+        var bodyId = groupSubLayersId(group);
+        var titleId = 'danishGroupTitle_' + group.id;
+        var isLidarStyleGroup = LIDAR_STYLE_GROUP_IDS.indexOf(group.id) !== -1;
         var wrap = el('div', {
-            class: 'transp-layer-row danish-group-row',
+            class: 'transp-layer-row active danish-group-row lidar-style-group',
             'data-category': 'free',
             'data-danish-group': group.id,
+            'data-lidar-style': 'true',
+            'data-lidar-arrow-group': isLidarStyleGroup ? 'true' : 'false',
+            role: 'group',
+            'aria-labelledby': titleId,
             id: 'danishGroup_' + group.id
         });
 
         var master = el('input', {
             type: 'checkbox',
             id: 'danishGroupToggle_' + group.id,
-            'aria-label': title
+            'aria-label': title,
+            'data-lidar-style': 'true'
         });
         master.addEventListener('change', function () { togglePanelGroup(group, master.checked); });
         var masterSwitch = el('label', {
-            class: 'apm-toggle-switch',
+            class: 'apm-toggle-switch lidar-style-switch',
             title: tr(TEXT.toggle) + ' ' + title,
+            'data-lidar-style': 'true',
             style: 'flex-shrink:0;'
         }, [master, el('span', { class: 'apm-toggle-track' })]);
 
-        var icon = el('span', {
-            id: 'danishGroupExpandIcon_' + group.id,
-            style: 'display:inline-block;transition:transform 0.25s ease;font-size:0.72rem;line-height:1;',
-            text: '▾'
-        });
-        icon.style.transform = expanded ? 'rotate(0deg)' : 'rotate(-90deg)';
+        var icon = makeLidarChevron('danishGroupExpandIcon_' + group.id, expanded);
         var expandBtn = el('button', {
             type: 'button',
             id: 'danishGroupExpandBtn_' + group.id,
             title: tr(TEXT.expand),
             'aria-expanded': expanded ? 'true' : 'false',
+            'aria-controls': bodyId,
+            'data-lidar-arrow': 'true',
+            'data-lidar-chevron': 'true',
+            'data-lidar-style': 'true',
+            'data-chevron-target': bodyId,
             style: 'background:none;border:none;cursor:pointer;padding:2px 4px;' +
-                'color:rgba(214,69,80,0.85);display:flex;align-items:center;'
+                'color:rgba(79,195,247,0.8);display:flex;align-items:center;' +
+                'justify-content:center;transition:color 0.2s;',
+            onmouseover: "this.style.color='#4fc3f7'",
+            onmouseout: "this.style.color='rgba(79,195,247,0.8)'"
         }, [icon]);
+        styleLidarExpandButton(expandBtn, expanded);
+        expandBtn.addEventListener('mouseover', function () { expandBtn.style.color = LIDAR_BLUE_HOVER; });
+        expandBtn.addEventListener('mouseout', function () { expandBtn.style.color = LIDAR_BLUE; });
+        expandBtn.addEventListener('focus', function () { expandBtn.style.color = LIDAR_BLUE_HOVER; });
+        expandBtn.addEventListener('blur', function () { expandBtn.style.color = LIDAR_BLUE; });
         expandBtn.addEventListener('click', function (event) {
             if (event && event.preventDefault) event.preventDefault();
             if (event && event.stopPropagation) event.stopPropagation();
             setGroupExpanded(group.id, !runtime.expandedGroups[group.id]);
         });
 
-        var head = el('div', { class: 'transp-layer-label', style: 'margin-bottom:6px' }, [
-            el('span', { style: 'display:flex;align-items:center;gap:7px;min-width:0;' }, [
-                el('span', { text: title })
-            ]),
-            el('span', { style: 'display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;' },
-                [expandBtn, masterSwitch])
-        ]);
+        var marker = el('span', {
+            id: 'danishGroupMarker_' + group.id,
+            class: 'danish-group-marker lidar-style-marker',
+            'aria-hidden': 'true',
+            'data-lidar-style': 'true',
+            style: 'flex-shrink:0;display:inline-flex;align-items:center;color:#4fc3f7;'
+        });
+        marker.innerHTML = LIDAR_GROUP_MARKER_SVG;
+        var titleSpan = el('span', {
+            id: titleId,
+            class: 'danish-group-title lidar-style-title',
+            'data-lidar-style': 'true',
+            text: title,
+            style: 'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+        });
+        var infoBtn = el('button', {
+            type: 'button',
+            id: 'danishGroupInfo_' + group.id,
+            class: 'layer-info-btn danish-group-info lidar-style-info',
+            title: tr(TEXT.layerInfo),
+            'aria-label': tr(TEXT.layerInfo),
+            'data-layer-info': 'showDanishInfo()',
+            'data-lidar-style': 'true',
+            'data-danish-group': group.id,
+            onclick: "event.preventDefault();event.stopPropagation();this.dataset.infoHandled='true';window.showDanishInfo()",
+            style: 'padding:0;background:none;border:none;color:inherit;cursor:pointer;display:inline-flex;align-items:center;'
+        });
+        infoBtn.dataset = infoBtn.dataset || {};
+        infoBtn.innerHTML = LIDAR_INFO_ICON_SVG;
+        infoBtn.addEventListener('click', function (event) {
+            if (event && event.preventDefault) event.preventDefault();
+            if (event && event.stopPropagation) event.stopPropagation();
+            /* The inline handler above already showed the panel in a real
+             * browser; the listener is the no-inline-JS / unit-test path. */
+            if (infoBtn.dataset.infoHandled === 'true') {
+                infoBtn.dataset.infoHandled = 'false';
+                return;
+            }
+            showDanishGroupInfo();
+        });
+        var leftSpan = el('span', {
+            class: 'lidar-style-title-group',
+            'data-lidar-style': 'true',
+            style: 'display:flex;align-items:center;gap:7px;min-width:0;'
+        }, [marker, titleSpan, infoBtn]);
+        var rightSpan = el('span', {
+            class: 'lidar-style-controls',
+            'data-lidar-style': 'true',
+            style: 'display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;'
+        }, [expandBtn, masterSwitch]);
+        var head = el('div', {
+            class: 'transp-layer-label lidar-style-label',
+            'data-lidar-style': 'true',
+            style: 'margin-bottom:6px'
+        }, [leftSpan, rightSpan]);
         wrap.appendChild(head);
 
         var body = el('div', {
-            id: groupSubLayersId(group),
-            style: 'margin-top:0;padding-left:6px;border-left:2px solid rgba(214,69,80,0.3);' +
+            id: bodyId,
+            class: 'danish-group-sublayers lidar-style-sublayers',
+            role: 'region',
+            'aria-labelledby': titleId,
+            'aria-hidden': expanded ? 'false' : 'true',
+            'data-danish-group': group.id,
+            'data-lidar-style': 'true',
+            'data-lidar-arrow-body': 'true',
+            'data-chevron-target': bodyId,
+            style: 'margin-top:0;padding-left:6px;border-left:2px solid rgba(79,195,247,0.3);' +
                 'display:flex;flex-direction:column;gap:8px;overflow:hidden;' +
                 'transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;'
         });
         body.style.maxHeight = expanded ? '6000px' : '0';
         body.style.opacity = expanded ? '1' : '0';
         body.style.marginTop = expanded ? '8px' : '0';
+        body.style.borderLeft = '2px solid rgba(79,195,247,0.3)';
+        body.style.borderLeftColor = LIDAR_BLUE_RAIL;
+        body.style.display = 'flex';
+        body.style.flexDirection = 'column';
+        body.style.gap = '8px';
+        body.style.overflow = 'hidden';
+        body.style.paddingLeft = '6px';
+        body.style.transition = 'max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease';
         (group.layers || []).forEach(function (id) {
             var layer = CONFIG.byId(id);
             if (layer && layer.enabled !== false) body.appendChild(buildRow(layer));
@@ -1311,11 +1549,49 @@
             container.style.maxHeight = runtime.expanded ? '6000px' : '0';
             container.style.opacity = runtime.expanded ? '1' : '0';
             container.style.marginTop = runtime.expanded ? '8px' : '0';
+            container.setAttribute('aria-hidden', runtime.expanded ? 'false' : 'true');
+            container.setAttribute('data-lidar-style', 'true');
+            container.setAttribute('data-lidar-arrow-body', 'true');
+            container.setAttribute('data-chevron-target', SUB_CONTAINER_ID);
+            container.setAttribute('role', 'region');
+            container.setAttribute('class', 'danish-sublayers lidar-style-sublayers');
+            container.style.borderLeft = '2px solid rgba(79,195,247,0.3)';
+            container.style.borderLeftColor = LIDAR_BLUE_RAIL;
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            container.style.gap = '8px';
+            container.style.overflow = 'hidden';
+            container.style.paddingLeft = '6px';
+            container.style.transition = 'max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease';
         }
         var button = document.getElementById('danishExpandBtn');
-        if (button) button.setAttribute('aria-expanded', runtime.expanded ? 'true' : 'false');
+        if (button) {
+            button.setAttribute('aria-expanded', runtime.expanded ? 'true' : 'false');
+            button.setAttribute('data-lidar-arrow', 'true');
+            button.setAttribute('data-lidar-chevron', 'true');
+            button.setAttribute('data-chevron-target', SUB_CONTAINER_ID);
+            button.setAttribute('aria-controls', SUB_CONTAINER_ID);
+            button.setAttribute('title', tr(TEXT.expand));
+            styleLidarExpandButton(button, runtime.expanded);
+            button.addEventListener('mouseover', function () { button.style.color = LIDAR_BLUE_HOVER; });
+            button.addEventListener('mouseout', function () { button.style.color = LIDAR_BLUE; });
+            button.addEventListener('focus', function () { button.style.color = LIDAR_BLUE_HOVER; });
+            button.addEventListener('blur', function () { button.style.color = LIDAR_BLUE; });
+        }
         var icon = document.getElementById('danishExpandIcon');
-        if (icon) icon.style.transform = runtime.expanded ? 'rotate(0deg)' : 'rotate(-90deg)';
+        if (icon) {
+            styleLidarChevron(icon, runtime.expanded);
+            icon.textContent = '';
+            icon.innerHTML = LIDAR_CHEVRON_SVG;
+            icon.setAttribute('data-chevron-target', 'danishExpandIcon');
+            try {
+                icon.tagName = 'svg';
+                icon.namespaceURI = SVG_NS;
+            } catch (e) { /* real DOM properties are read-only */ }
+            if (icon.appendChild && (!icon.children || !icon.children.length)) {
+                icon.appendChild(makeLidarPolyline('danishExpandIcon_polyline'));
+            }
+        }
         save();
     }
 

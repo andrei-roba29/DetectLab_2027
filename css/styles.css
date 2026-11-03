@@ -8472,7 +8472,7 @@
    still need their own rules, which is what keeps 375 px unchanged. */
 .danish-sublayers {
     padding-left: 6px;
-    border-left: 2px solid rgba(214, 69, 80, 0.3);
+    border-left: 2px solid rgba(79, 195, 247, 0.3);
 }
 
 .danish-layer-section {
@@ -8613,16 +8613,171 @@
 /* The shared pill switch hides its checkbox, so keyboard focus has to land
    on the track that follows it; the section chevron gets the same ring. */
 #transpPanel .danish-layer-row .apm-toggle-switch input:focus-visible + .apm-toggle-track,
-#transpPanel .danish-group-row .apm-toggle-switch input:focus-visible + .apm-toggle-track,
 #transpPanel .albania-layer-row .apm-toggle-switch input:focus-visible + .apm-toggle-track,
 #transpPanel .albania-section .apm-toggle-switch input:focus-visible + .apm-toggle-track {
     outline: 2px solid #d64550;
     outline-offset: 1px;
 }
 
-#transpPanel .danish-group-row button:focus-visible {
-    outline: 2px solid #d64550;
+/* Heritage, Historical maps and Ortophoto use the LiDAR accordion's blue
+   arrow, brighter hover/focus blue, 12 px SVG chevron and blue section rail.
+   The dynamic ids are covered by these shared classes / data attributes. */
+.danish-group-chevron,
+.dl-expand-chevron,
+.lidar-style-chevron,
+.lidar-expand-chevron,
+.lidar-chevron,
+#danishExpandIcon {
+    display: block;
+    width: 12px;
+    height: 12px;
+    flex: 0 0 12px;
+    color: rgba(79,195,247,0.8);
+    transition: transform 0.25s ease;
+    transform-origin: 50% 50%;
+    will-change: transform;
+    pointer-events: none;
+    user-select: none;
+    line-height: 0;
+    font-size: 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.danish-group-chevron svg,
+.dl-expand-chevron svg,
+.lidar-style-chevron svg,
+.lidar-expand-chevron svg,
+.lidar-chevron svg,
+#danishExpandIcon svg {
+    width: 12px;
+    height: 12px;
+    display: block;
+}
+
+.lidar-chevron-line,
+.lidar-style-chevron-line {
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    vector-effect: non-scaling-stroke;
+    color: currentColor;
+}
+
+.danish-group-expand-btn,
+.dl-expand-btn,
+.lidar-style-expand-btn,
+.lidar-expand-btn,
+#danishExpandBtn {
+    background: none;
+    border: 0;
+    cursor: pointer;
+    padding: 2px 4px;
+    color: rgba(79,195,247,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: color 0.2s;
+    appearance: none;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.danish-group-expand-btn:hover,
+.danish-group-expand-btn:focus-visible,
+.dl-expand-btn:hover,
+.dl-expand-btn:focus-visible,
+.lidar-style-expand-btn:hover,
+.lidar-style-expand-btn:focus-visible,
+.lidar-expand-btn:hover,
+.lidar-expand-btn:focus-visible,
+#danishExpandBtn:hover,
+#danishExpandBtn:focus-visible {
+    color: #4fc3f7;
+}
+
+.danish-group-expand-btn[aria-expanded="true"] .danish-group-chevron {
+    transform: rotate(0deg);
+}
+.danish-group-expand-btn[aria-expanded="false"] .danish-group-chevron {
+    transform: rotate(-90deg);
+}
+
+#transpPanel .danish-group-row .apm-toggle-switch input:focus-visible + .apm-toggle-track,
+#transpPanel .danish-group-row button:focus-visible,
+#transpPanel .danish-group-row .danish-group-expand-btn:focus-visible {
+    outline: 2px solid #4fc3f7;
     outline-offset: 1px;
+}
+
+.danish-group-sublayers,
+.lidar-style-sublayers,
+#danishSubLayers .danish-group-sublayers {
+    border-left-color: rgba(79,195,247,0.3) !important;
+}
+
+.danish-group-marker,
+.lidar-style-marker {
+    flex-shrink: 0;
+    color: #4fc3f7;
+    display: inline-flex;
+    align-items: center;
+}
+
+.danish-group-title,
+.lidar-style-title,
+.lidar-style-title-group {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.danish-group-info,
+.lidar-style-info {
+    color: inherit;
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+}
+
+.danish-group-row[data-lidar-arrow-group="true"] .danish-group-chevron,
+.danish-group-expand-btn[data-lidar-arrow="true"] .danish-group-chevron,
+.danish-group-chevron[data-lidar-chevron="true"],
+.danish-group-chevron[data-lidar-style="true"],
+.danish-group-chevron[data-chevron-svg],
+.danish-group-chevron[data-chevron-target],
+.danish-group-expand-btn[data-chevron-target][aria-controls],
+.danish-group-sublayers[data-lidar-arrow-body="true"],
+.danish-group-row[role="group"][aria-labelledby][data-category="free"][data-danish-group],
+.danish-group-sublayers[role="region"][aria-labelledby][aria-hidden],
+.danish-group-info[data-layer-info] {
+    color: rgba(79,195,247,0.8);
+}
+
+.lidar-style-label {
+    margin-bottom: 6px;
+}
+.lidar-style-title-group {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+.lidar-style-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+.lidar-style-switch {
+    flex-shrink: 0;
 }
 
 /* The Danish bases mirrored into the existing basemap control. */
@@ -8669,8 +8824,34 @@
     #histExpandIcon,
     #lidarExpandIcon,
     #romanExpandIcon,
-    #histPremiumExpandIcon {
+    #histPremiumExpandIcon,
+    .danish-group-chevron,
+    .dl-expand-chevron,
+    .lidar-style-chevron,
+    .lidar-expand-chevron,
+    .lidar-chevron,
+    #danishExpandIcon,
+    .danish-group-expand-btn,
+    .dl-expand-btn,
+    .lidar-style-expand-btn,
+    .lidar-expand-btn,
+    #danishExpandBtn,
+    .danish-group-sublayers,
+    .lidar-style-sublayers,
+    .danish-group-row,
+    .lidar-style-group,
+    .lidar-style-label,
+    .lidar-style-title,
+    .lidar-style-controls,
+    .lidar-style-marker,
+    .lidar-style-info,
+    .danish-group-marker,
+    .danish-group-info,
+    .danish-group-title,
+    .lidar-chevron-line,
+    .lidar-style-chevron-line {
         transition: none !important;
+        animation: none !important;
     }
 }
 

@@ -575,6 +575,28 @@ async function testMapModule() {
     assert.ok(API, 'the module exposes its API');
     assert.ok(sandbox.toggleDanishLayers && sandbox.setDanishBase && sandbox.showDanishInfo,
         'the inline handlers in index.html exist');
+    const legacyIcon = dom.byId['danishExpandIcon'];
+    assert.ok(legacyIcon, 'the legacy static Danish icon is present in the stub');
+    assert.ok((legacyIcon.getAttribute('class') || '').indexOf('danish-group-chevron') !== -1,
+        'the legacy static icon uses the shared LiDAR chevron class');
+    assert.ok((legacyIcon.getAttribute('data-chevron-svg') || '').indexOf('<svg') !== -1,
+        'the legacy static icon exposes the exact SVG chevron');
+    assert.ok((legacyIcon.innerHTML || '').indexOf('<svg') !== -1,
+        'the legacy static icon carries the SVG markup');
+    assert.strictEqual(legacyIcon.style.transform, 'rotate(0deg)',
+        'the legacy static icon follows the always-expanded container');
+    const infoCalls = [];
+    const originalInfo = sandbox.showDanishInfo;
+    sandbox.showDanishInfo = function () { infoCalls.push(true); };
+    let prevented = false;
+    let stopped = false;
+    dom.byId['danishGroupInfo_heritage'].dispatch('click', {
+        preventDefault() { prevented = true; },
+        stopPropagation() { stopped = true; }
+    });
+    assert.strictEqual(infoCalls.length, 1, 'the group info button opens the Danish info panel');
+    assert.ok(prevented && stopped, 'the group info button does not toggle the section');
+    sandbox.showDanishInfo = originalInfo;
 
     /* Rendered rows, in panel order: the LiDAR mount first (it lives in the
        shared LiDAR accordion, after the global derivate row), then the
@@ -601,8 +623,77 @@ async function testMapModule() {
             group.id + ' contains exactly the requested sublayers in order');
         assert.ok(dom.byId['danishGroupToggle_' + group.id], group.id + ' has a master on/off switch');
         assert.strictEqual(dom.byId['danishGroupToggle_' + group.id].type, 'checkbox');
-        assert.ok(dom.byId['danishGroupExpandBtn_' + group.id], group.id + ' has an expand chevron');
-        assert.strictEqual(dom.byId[groupBodyId(group)].style.maxHeight, '0',
+        const expandBtn = dom.byId['danishGroupExpandBtn_' + group.id];
+        const icon = dom.byId['danishGroupExpandIcon_' + group.id];
+        const body = dom.byId[groupBodyId(group)];
+        assert.ok(expandBtn, group.id + ' has an expand chevron');
+        assert.ok(icon, group.id + ' has a LiDAR-style SVG chevron');
+        assert.strictEqual(icon.tagName.toLowerCase(), 'svg', group.id + ': the chevron is an SVG element');
+        assert.strictEqual(icon.namespaceURI, 'http://www.w3.org/2000/svg',
+            group.id + ': the chevron uses the SVG namespace');
+        assert.ok(icon.classList.contains('danish-group-chevron'), group.id + ': shared Danish chevron class');
+        assert.ok(icon.classList.contains('lidar-style-chevron'), group.id + ': shared LiDAR-style chevron class');
+        assert.ok(icon.classList.contains('dl-expand-chevron'), group.id + ': expand-chevron class');
+        assert.strictEqual(icon.getAttribute('aria-hidden'), 'true', group.id + ': decorative icon is hidden');
+        assert.strictEqual(icon.getAttribute('focusable'), 'false', group.id + ': decorative icon is not focusable');
+        assert.strictEqual(icon.getAttribute('width'), '12', group.id + ': 12 px LiDAR chevron');
+        assert.strictEqual(icon.getAttribute('height'), '12', group.id + ': 12 px LiDAR chevron');
+        assert.strictEqual(icon.getAttribute('viewBox'), '0 0 12 12', group.id + ': LiDAR viewBox');
+        assert.strictEqual(icon.getAttribute('fill'), 'none', group.id + ': outlined LiDAR chevron');
+        assert.strictEqual(icon.getAttribute('data-lidar-arrow'), 'true', group.id + ': LiDAR arrow marker');
+        assert.strictEqual(icon.getAttribute('data-lidar-chevron'), 'true', group.id + ': LiDAR chevron marker');
+        assert.ok((icon.getAttribute('data-chevron-svg') || '').indexOf('<svg') !== -1,
+            group.id + ': exact SVG chevron markup is exposed');
+        assert.ok(icon.innerHTML.indexOf('<polyline') !== -1,
+            group.id + ': the SVG polyline is rendered');
+        assert.strictEqual(icon.style.transition, 'transform 0.25s ease',
+            group.id + ': LiDAR rotation transition');
+        assert.strictEqual(icon.style.transform, 'rotate(-90deg)',
+            group.id + ': the collapsed arrow is rotated like LiDAR');
+        assert.strictEqual(icon.style.color, 'rgba(79,195,247,0.8)',
+            group.id + ': LiDAR blue at rest');
+        assert.ok(icon.children.length >= 1 &&
+            icon.children[0].tagName.toLowerCase() === 'polyline',
+            group.id + ': the chevron has a polyline');
+        const polyline = icon.children[0];
+        assert.strictEqual(polyline.getAttribute('points'), '2,4 6,8 10,4',
+            group.id + ': LiDAR polyline points');
+        assert.strictEqual(polyline.getAttribute('stroke'), 'currentColor',
+            group.id + ': LiDAR currentColor stroke');
+        assert.strictEqual(polyline.getAttribute('stroke-width'), '1.8',
+            group.id + ': LiDAR 1.8 stroke');
+        assert.strictEqual(polyline.getAttribute('stroke-linecap'), 'round',
+            group.id + ': LiDAR rounded stroke caps');
+        assert.strictEqual(polyline.getAttribute('stroke-linejoin'), 'round',
+            group.id + ': LiDAR rounded stroke joins');
+        assert.ok((expandBtn.getAttribute('class') || '').indexOf('danish-group-expand-btn') !== -1,
+            group.id + ': shared expand-button class');
+        assert.strictEqual(expandBtn.getAttribute('aria-controls'), groupBodyId(group),
+            group.id + ': the arrow controls its section body');
+        assert.strictEqual(expandBtn.getAttribute('aria-expanded'), 'false',
+            group.id + ': the arrow starts collapsed');
+        assert.strictEqual(expandBtn.getAttribute('data-lidar-arrow'), 'true',
+            group.id + ': the button is marked as a LiDAR arrow');
+        assert.strictEqual(expandBtn.style.color, 'rgba(79,195,247,0.8)',
+            group.id + ': LiDAR blue arrow button');
+        assert.ok((expandBtn.getAttribute('onmouseover') || '').indexOf('#4fc3f7') !== -1,
+            group.id + ': LiDAR hover blue');
+        assert.ok(dom.byId['danishGroupMarker_' + group.id], group.id + ' has a LiDAR-style leading marker');
+        assert.ok(dom.byId['danishGroupTitle_' + group.id], group.id + ' has an accessible title');
+        assert.ok(dom.byId['danishGroupInfo_' + group.id], group.id + ' has a LiDAR-style info button');
+        assert.ok((dom.byId['danishGroupInfo_' + group.id].innerHTML || '').indexOf('<svg') !== -1,
+            group.id + ': info button uses an SVG icon');
+        assert.ok((wrap.getAttribute('class') || '').indexOf('lidar-style-group') !== -1,
+            group.id + ': the section row is LiDAR-styled');
+        assert.strictEqual(wrap.getAttribute('role'), 'group', group.id + ': accessible group');
+        assert.strictEqual(wrap.getAttribute('aria-labelledby'), 'danishGroupTitle_' + group.id,
+            group.id + ': labelled by its translated title');
+        assert.strictEqual(body.getAttribute('aria-hidden'), 'true',
+            group.id + ': collapsed body is hidden from assistive tech');
+        assert.strictEqual(body.getAttribute('role'), 'region', group.id + ': accessible body region');
+        assert.strictEqual(body.style.borderLeftColor, 'rgba(79,195,247,0.3)',
+            group.id + ': LiDAR blue section rail');
+        assert.strictEqual(body.style.maxHeight, '0',
             group.id + ' starts collapsed, like the Romanian Historical Maps group');
     }
 
@@ -791,10 +882,20 @@ async function testMapModule() {
         status: 200, headers: { 'Content-Type': 'text/xml' }
     }));
     const heritageBody = dom.byId['danishHeritageSubLayers'];
+    const heritageBtn = dom.byId['danishGroupExpandBtn_heritage'];
+    const heritageIcon = dom.byId['danishGroupExpandIcon_heritage'];
     assert.strictEqual(heritageBody.style.maxHeight, '0', 'Heritage starts collapsed');
-    dom.byId['danishGroupExpandBtn_heritage'].dispatch('click');
+    heritageBtn.dispatch('mouseover');
+    assert.strictEqual(heritageBtn.style.color, '#4fc3f7', 'hover brightens the LiDAR arrow');
+    heritageBtn.dispatch('mouseout');
+    assert.strictEqual(heritageBtn.style.color, 'rgba(79,195,247,0.8)', 'mouseout restores LiDAR blue');
+    heritageBtn.dispatch('click');
     assert.strictEqual(heritageBody.style.maxHeight, '6000px', 'the chevron expands the section');
-    assert.strictEqual(dom.byId['danishGroupExpandBtn_heritage'].getAttribute('aria-expanded'), 'true');
+    assert.strictEqual(heritageBtn.getAttribute('aria-expanded'), 'true');
+    assert.strictEqual(heritageIcon.style.transform, 'rotate(0deg)',
+        'the LiDAR chevron rotates to 0 degrees when expanded');
+    assert.strictEqual(heritageBody.getAttribute('aria-hidden'), 'false',
+        'the expanded body is exposed to assistive tech');
     assert.strictEqual(API.isActive('naturtyper'), true, 'naturtyper is already on');
     const heritageMaster = dom.byId['danishGroupToggle_heritage'];
     assert.strictEqual(heritageMaster.checked, false, 'the master is off while only some layers are on');
@@ -1024,6 +1125,41 @@ function testWiring() {
     assert.ok(css.indexOf('focus-visible') !== -1, 'and keyboard focus stays visible');
     ok('map-app hook, service worker, stylesheet and keyboard focus are wired');
 
+    const renderer = read('js/danish-layers.js');
+    assert.ok(renderer.indexOf('▾') === -1, 'the old text chevron is gone from the renderer');
+    assert.ok(renderer.indexOf('polyline points="2,4 6,8 10,4"') !== -1,
+        'the renderer uses the LiDAR SVG polyline');
+    assert.ok(renderer.indexOf('rgba(79,195,247,0.8)') !== -1 && renderer.indexOf('#4fc3f7') !== -1,
+        'the renderer uses the LiDAR blue hover palette');
+    assert.ok(renderer.indexOf('layer-group-arrow-highlight') === -1,
+        'the forbidden arrow highlight class is absent');
+    assert.ok(css.indexOf('.danish-group-chevron') !== -1 &&
+        css.indexOf('.lidar-style-chevron') !== -1 &&
+        css.indexOf('#danishExpandIcon') !== -1,
+        'the stylesheet covers dynamic and legacy Danish chevrons');
+    assert.ok(css.indexOf('rgba(79,195,247,0.8)') !== -1 &&
+        css.indexOf('#4fc3f7') !== -1 &&
+        css.indexOf('rgba(79,195,247,0.3)') !== -1,
+        'the stylesheet uses the LiDAR blue palette and rail');
+    const reducedBlocks = css.match(/@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\n\}/g) || [];
+    const reduced = reducedBlocks.find((block) => block.indexOf('.danish-group-chevron') !== -1) || '';
+    assert.ok(reduced.indexOf('.danish-group-chevron') !== -1 &&
+        reduced.indexOf('transition: none !important') !== -1,
+        'reduced motion disables the dynamic chevron transition');
+    assert.ok(css.indexOf('layer-group-arrow-highlight') === -1,
+        'the forbidden arrow highlight class is absent from CSS');
+    const cssUrl = 'css/styles.css?v=20261103-danish-lidar-chevron';
+    const jsUrl = 'js/danish-layers.js?v=20261103-danish-lidar-chevron';
+    assert.ok(html.indexOf('href="' + cssUrl + '"') !== -1, 'index.html loads the restyled stylesheet');
+    assert.ok(html.indexOf('src="' + jsUrl + '"') !== -1, 'index.html loads the restyled renderer');
+    assert.ok(sw.indexOf("'" + cssUrl + "'") !== -1 && sw.indexOf("'" + jsUrl + "'") !== -1,
+        'sw.js precaches the live LiDAR-arrow assets');
+    assert.ok(Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]) >= 403,
+        'the service-worker shell is bumped for the LiDAR arrow');
+    assert.ok(fs.existsSync(path.join(__dirname, 'test-danish-lidar-chevron.js')),
+        'the dedicated LiDAR-chevron regression suite is present');
+    ok('Denmark’s three group arrows use LiDAR SVG, hover, reduced motion and fresh cache tags');
+
     /* ── the backend is deployed as its own app root ────────────────────────
      * Railway builds this repository with `backend/` as the root directory, so
      * the app lands at /app and a relative import that climbs out of it becomes
@@ -1089,7 +1225,7 @@ function buildDom() {
             tagName: String(tag).toUpperCase(),
             children: [], attributes: {}, style: {}, className: '',
             textContent: '', checked: false, value: '', type: '',
-            parentNode: null, listeners: {},
+            parentNode: null, listeners: {}, namespaceURI: '', dataset: {}, _innerHTML: '',
             appendChild(child) { child.parentNode = this; this.children.push(child); this.descendants.push(child); return child; },
             insertBefore(child) { child.parentNode = this; this.children.unshift(child); this.descendants.push(child); return child; },
             removeChild(child) {
@@ -1102,14 +1238,19 @@ function buildDom() {
                 if (key === 'value') this.value = String(value);
                 if (key === 'id') { this.id = String(value); byId[this.id] = this; }
                 if (key === 'type') this.type = String(value);
+                if (key === 'class') this.className = String(value);
+                if (key === 'xmlns') this.namespaceURI = String(value);
             },
             getAttribute(key) { return this.attributes[key] === undefined ? null : this.attributes[key]; },
             addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); },
             dispatch(type, payload) { (this.listeners[type] || []).forEach((fn) => fn(payload || {})); },
             querySelector() { return null; },
             querySelectorAll() { return []; },
-            set innerHTML(value) { if (value === '') { this.children = []; this.descendants = []; } },
-            get innerHTML() { return ''; },
+            set innerHTML(value) {
+                this._innerHTML = String(value);
+                if (value === '') { this.children = []; this.descendants = []; }
+            },
+            get innerHTML() { return this._innerHTML || ''; },
             get lastChild() { return this.children[this.children.length - 1] || null; },
             get classList() {
                 const self = this;
@@ -1141,6 +1282,11 @@ function buildDom() {
         readyState: 'complete',
         documentElement: makeElement('html'),
         createElement: makeElement,
+        createElementNS: (namespace, tag) => {
+            const element = makeElement(tag);
+            element.namespaceURI = String(namespace);
+            return element;
+        },
         getElementById: (id) => byId[id] || null,
         addEventListener() {},
         createTextNode: (text) => ({ textContent: text })
