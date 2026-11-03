@@ -7,7 +7,7 @@ The Romanian country view no longer offers the Central-European series that
 and the two sheets that only reach a **region** of the country (WIG 1:100k →
 far north, Valahia 1855-1859 → southern half) are listed only while the view
 actually shows that region. The layer window is `#transpPanel`, the premium
-“Hărți istorice / Historical maps” group.
+“Hărți istorice” group.
 
 Removed for `RO` (country view):
 

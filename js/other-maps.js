@@ -18,7 +18,7 @@
  * sub-layer is on.
  *
  * This module brings those sheets onto the DetectLab map as a sub-layer of
- * the free “Hărți istorice / Historical Maps” group:
+ * the free “Hărți istorice” group:
  *
  *   1. every place that owns at least one sheet is painted as a
  *      semi-transparent green dot;

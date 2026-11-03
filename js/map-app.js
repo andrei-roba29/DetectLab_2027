@@ -29,7 +29,7 @@
         // (900/1100/1200/1000px) + overflow:hidden. Când conținutul depășea
         // plafonul (zoom de browser, fonturi mai mari, harti noi adăugate),
         // ultimele rânduri erau tăiate — ex. "Hartă administrativă a Galiției
-        // și Lodomeriei – 1855" (ultima din Harti istorice PREMIUM) nu mai
+        // și Lodomeriei – 1855" (ultima din Hărți istorice premium) nu mai
         // era vizibilă în totalitate. Măsurăm înălțimea naturală la fiecare
         // expandare în loc să folosim valori fixe. fallbackPx rămâne
         // salvăgarda doar dacă conținutul nu poate fi măsurat (ex. tab-ul e
@@ -10222,9 +10222,9 @@
                     // Bucovina 1861-1864, Harta Austro-Ungară, Moldova 1868, Moldova WWII,
                     // Harta tactică poloneză 1933 și WWI sunt acum straturi premium
                     // independente (tab Premium) — nu mai sunt controlate de switch-ul
-                    // master Historical Maps.
+                    // master Historical maps.
 
-                    // Oprirea switch-ului mare "Historical Maps" oprește automat toate
+                    // Oprirea switch-ului mare "Hărți istorice" oprește automat toate
                     // switch-urile substraturilor lui (Harta Iosefină gratuită, Harta
                     // Austriacă, Planuri de Tragere, Harta Sovietică) — nu doar stratul
                     // de pe hartă, ci și starea vizuală a switch-ului, ca să nu rămână
@@ -10245,12 +10245,12 @@
                         if (iosfreeRowEl) iosfreeRowEl.style.opacity = '0.45';
                     }
 
-                    // Actualizăm butonul Buildings Search când Historical Maps e pornit/oprit
+                    // Actualizăm butonul Buildings Search când Hărți istorice e pornit/oprit
                     if (typeof window._refreshIosBldBtnVisibility === 'function') window._refreshIosBldBtnVisibility();
                     if (!on && typeof window.clearIosBldSearchHelp === 'function') window.clearIosBldSearchHelp();
                 };
 
-            })(); // end Josephine/Historical Maps
+            })(); // end Josephine/Hărți istorice
 
             // ── JOSEPHINE MAP + BUILDINGS SEARCH HELP ────────────────────────────────────
             // Detectează pe Harta Iosefină + (stratul premium) structuri/clădiri istorice
@@ -13958,7 +13958,7 @@
                 });
 
                 // The CENAGIS map catalog is rendered inside the single premium
-                // Historical Maps accordion. This bounds-only entry contributes
+                // Hărți istorice accordion. This bounds-only entry contributes
                 // to the accordion's viewport highlight; each individual map is
                 // country-filtered by historical-eu-maps.js from its own extent.
                 layerDefs.push({
@@ -15592,7 +15592,7 @@
 
                 window.toggleSatellite60sMap = function (on) {
                     // Strat premium de sine stătător: switch-ul lui nu pornește
-                    // grupul "Historical Maps" și nu e oprit de switch-ul mare
+                    // grupul "Hărți istorice" și nu e oprit de switch-ul mare
                     // al grupului — see HIST_PREMIUM_SUBLAYER_TOGGLES.
                     _sat60On = !!on;
                     if (on) {
@@ -15679,7 +15679,7 @@
                 }, 350);
             };
 
-            // Substraturile grupului "Harti istorice / Historical maps" (premium).
+            // Substraturile grupului "Hărți istorice" (premium).
             // Când switch-ul mare e oprit, toate switch-urile astea (și straturile
             // lor de pe hartă) trebuie oprite automat — vezi bug-ul raportat.
             // NOTE: "Satellite imagery 60's" nu mai e aici — e acum un strat
@@ -16159,7 +16159,7 @@
                 if (toggle) toggle.checked = on;
                 if (!on) {
                     // Oprirea masterului oprește toate substraturile, exact ca
-                    // la „Harti istorice” / LIDAR — la repornire nu trebuie să
+                    // la „Hărți istorice” / LIDAR — la repornire nu trebuie să
                     // reapară un substrat rămas „aprins” din greșeală.
                     var ppiToggle = document.getElementById('vegfpPpiToggle');
                     if (ppiToggle) ppiToggle.checked = false;
@@ -16205,7 +16205,7 @@
             window.toggleVegfpPpiLayer = function (on) {
                 if (on) {
                     // Pornirea unui substrat pornește și masterul grupului
-                    // (ca la Harta Iosefină + din „Harti istorice”).
+                    // (ca la Harta Iosefină + din „Hărți istorice”).
                     var master = document.getElementById('vegfpToggle');
                     if (master && !master.checked) {
                         master.checked = true;

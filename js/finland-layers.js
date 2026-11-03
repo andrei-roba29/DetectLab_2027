@@ -140,8 +140,7 @@
         if (!pair) return '';
         if (typeof pair === 'string') return pair;
         var l = lang().toLowerCase();
-        if (l.indexOf('ro') === 0) return pair.ro || pair.en || pair.fi || '';
-        return pair.en || pair.ro || pair.fi || '';
+        return pair[l] || pair.en || pair.ro || pair.fi || '';
     }
 
     var TEXT = {

@@ -303,7 +303,7 @@ assert.match(mapApp, /var _vegfpPpiLayer = null;/, 'the PPI layer instance is ca
 assert.match(mapApp, /window\._vegfpPpiLayer = _vegfpPpiLayer;/,
     'the instance is exposed for the coverage rectangle');
 
-// Master/substrate coupling (same behaviour as „Harti istorice”).
+// Master/substrate coupling (same behaviour as „Hărți istorice”).
 assert.match(mapApp, /window\.toggleVegfpLayer = function \(on\) \{[\s\S]*?window\.toggleVegfpPpiLayer\(false\);/,
     'turning the group OFF turns every sublayer OFF');
 assert.match(mapApp, /window\.toggleVegfpPpiLayer = function \(on\) \{[\s\S]*?window\.toggleVegfpLayer\(true\);/,

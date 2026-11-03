@@ -125,7 +125,10 @@
     function tr(pair) {
         if (!pair) return '';
         if (typeof pair === 'string') return pair;
-        return isDa() ? (pair.da || pair.en || '') : (pair.en || pair.da || '');
+        var l = lang();
+        if (pair[l]) return pair[l];
+        if (typeof window._t === 'function' && pair.key) return window._t(pair.key);
+        return pair.en || pair.da || pair.ro || '';
     }
 
     /* The few labels this module generates itself. Everything static in the
@@ -1120,7 +1123,7 @@
     }
 
     /* One thematic section (Heritage / Historical maps / Ortophoto) in the
-     * shape of Romania's Historical Maps group: a glass `.transp-layer-row`
+     * shape of Romania's Hărți istorice group: a glass `.transp-layer-row`
      * whose `.transp-layer-label` header carries the section title, an
      * expand chevron and the master `.apm-toggle-switch`, over a
      * left-bordered `…SubLayers` column of buildRow() rows. Sections start

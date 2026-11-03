@@ -381,7 +381,7 @@ export function buildFirstNewsletter({ siteUrl } = {}) {
   const text = `Bun venit, {{first_name}}!
 
 Iti multumim ca te-ai abonat la newsletter-ul DetectLab. Vei primi maxim 2 e-mailuri pe luna cu:
-- Harti istorice noi (Iosefina, Bucovina, satelit 60s, LIDAR)
+- Hărți istorice noi (Iosefina, Bucovina, satelit 60s, LIDAR)
 - Reduceri Premium exclusive
 - Zone cu potential arheologic
 - Ghiduri utile

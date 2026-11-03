@@ -155,8 +155,7 @@ layers** and keeps the selection visible on the map:
   (`js/map-app.js?v=20261101-ro-region-sheets`,
   `js/historical-eu-maps.js?v=20261101-ro-hist-sheets`,
   `js/globe-country-picker.js?v=20261017-outline-zoom-settle`), shell `v356`.
-  The CENAGIS sheets are listed **flat** in the single “Hărți istorice /
-  Historical Maps” group: there is no “European maps · CENAGIS / IH PAN”
+  The CENAGIS sheets are listed **flat** in the single “Hărți istorice” group: there is no “European maps · CENAGIS / IH PAN”
   subcategory heading (nor any replacement one) above them.
 
 ## Semantics

@@ -3,7 +3,7 @@
 Grup premium de straturi din familia **Copernicus HR-VPP** (High Resolution
 Vegetation Phenology and Productivity), cu tile-uri **încărcate doar pentru
 suprafața României**. Panoul apare în tab-ul **Premium / Premium**, între
-„Harti istorice” și „Satellite imagery 60's”, cu un master switch, un buton de
+„Hărți istorice” și „Satellite imagery 60's”, cu un master switch, un buton de
 expandare a substraturilor și un buton ⓘ cu atribuirea
 *„© European Union's Copernicus Land Monitoring Service information”*.
 

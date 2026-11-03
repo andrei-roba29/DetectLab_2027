@@ -683,8 +683,14 @@ document.createElement = originalCreateElement;
         'index.html loads the generated catalogue before the config');
     /* Each asset carries the tag of whatever last changed it: the data file and
      * the config by the “LiDAR” rename, the module by the catalogue itself. */
-    check(/js\/asig-albania-layers\.js\?v=20261027-albania-heritage-free-tab/.test(html) &&
-        /js\/asig-albania-layers\.config\.js\?v=20261024-asig-lidar/.test(html),
+    /* The i18n pass re-tagged both assets; accept the current tag while still
+     * requiring the service worker to pre-cache exactly the same URLs. */
+    const moduleTag = (html.match(/js\/asig-albania-layers\.js\?v=([^"'\s]+)/) || [])[1];
+    const configTag = (html.match(/js\/asig-albania-layers\.config\.js\?v=([^"'\s]+)/) || [])[1];
+    const sw = read('sw.js');
+    check(!!moduleTag && !!configTag &&
+        sw.includes("'js/asig-albania-layers.js?v=" + moduleTag + "'") &&
+        sw.includes("'js/asig-albania-layers.config.js?v=" + configTag + "'"),
         'index.html loads the re-tagged module and config');
     check(html.includes('id="albaniaSubLayers"'), 'the single Albania mount is still in the shell');
     check(!/data-key="albania_group_title"/.test(html), 'no country-level layer heading');

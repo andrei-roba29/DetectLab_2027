@@ -182,9 +182,13 @@
     function text(pair) {
         if (!pair) return '';
         if (typeof pair === 'string') return pair;
-        return /^ro/i.test(lang()) ? (pair.ro || pair.en || '') : (pair.en || pair.ro || '');
+        var l = lang().toLowerCase();
+        return pair[l] || pair.en || pair.ro || '';
     }
-    function words() { return /^ro/i.test(lang()) ? STRINGS.ro : STRINGS.en; }
+    function words() {
+        var l = lang().toLowerCase();
+        return STRINGS[l] || STRINGS.en;
+    }
     function round(value, places) {
         var factor = Math.pow(10, places);
         return Math.round(value * factor) / factor;
