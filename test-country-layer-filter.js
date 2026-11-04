@@ -298,6 +298,31 @@ function groupRowOf(document, iconId) {
     return row;
 }
 
+/* APM Next-Gen is an on-demand premium analysis, not a Romanian tile layer.
+   Exercise the real country and viewport filtering for every picker country,
+   including after a stale visibility marker and a country switch. */
+{
+    const { window, document } = setupPanel();
+    const row = document.getElementById('apmNextRow');
+    assert(row && row.dataset.category === 'premium', 'Next-Gen is in the Premium tab');
+    const names = gateSource.match(/var NAMES = \{([\s\S]*?)\n    \};/);
+    assert(names, 'picker country list exists');
+    const countries = Array.from(names[1].matchAll(/^\s*([A-Z]{2}):/gm), m => m[1]);
+    assert(countries.length >= 45 && countries.includes('RO') && countries.includes('IS') && countries.includes('CY'));
+    for (const iso of countries) {
+        row.classList.add('country-layer-unavailable');
+        row.classList.add('viewport-layer-unavailable');
+        window.filterLayersForCountry(iso);
+        window.checkLayerVisibility(); // fixture viewport is far outside Romania and Europe
+        assert.equal(row.classList.contains(UNAVAILABLE), false, iso + ' country filter');
+        assert.equal(row.classList.contains('viewport-layer-unavailable'), false, iso + ' viewport filter');
+        assert.equal(row.getAttribute('aria-hidden'), 'false', iso + ' accessible');
+    }
+    window.unfilterLayersForCountry();
+    assert.equal(row.classList.contains(UNAVAILABLE), false, 'Next-Gen remains available on exit');
+    console.log('  ✓ APM Next-Gen stays in Premium for all ' + countries.length + ' picker countries and viewports');
+}
+
 /* ══════════════════════════════════════════════════════════════
    3. Italy selected: only layers attributed to Italy remain
    ══════════════════════════════════════════════════════════════ */

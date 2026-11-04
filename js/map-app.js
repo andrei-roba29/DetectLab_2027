@@ -13830,6 +13830,17 @@
                 });
 
                 // Premium top-level leaf layers
+                // Next-Gen computes results on demand rather than serving a
+                // Romania-only tile set. Keep its controls available for every
+                // country and viewport; individual input sources still report
+                // their actual coverage and failures in the APM panel.
+                layerDefs.push({
+                    key: 'apmNext',
+                    countryIndependent: true,
+                    viewportIndependent: true,
+                    getRow: function() { return document.getElementById('apmNextRow'); },
+                    group: null
+                });
                 layerDefs.push({
                     key: 'babel',
                     bounds: ROMANIA_BOUNDS,

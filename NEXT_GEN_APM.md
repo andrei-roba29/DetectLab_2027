@@ -21,9 +21,23 @@ Both MANUAL and TRAIN show a **continuous, semi-transparent score heatmap**, wit
 - Medium/high/very-high areas in the panel are calculated from the **full-resolution classified score cells**, independent of contour smoothing or omitted polygon fragments. These totals should not be read as exact exported polygon areas.
 - **Export hotspot GeoJSON** contains only very-high polygon features plus provenance, chosen settlement period, thresholds and rendering metadata. It does not embed the heatmap image or full score raster. The legacy polygonisation helper still supports all-class polygons for compatibility, but the production worker requests highest-only contours.
 
+## Availability across Europe
+
+APM Next-Gen is in the Premium layer list for every country supported by the
+country picker, in desktop and PWA views. It is an on-demand analysis, not the
+Romania-only APM or APM 2.0 tile layer. MANUAL uses the available elevation and
+water providers at the chosen point; coverage, resolution, network access and
+fallbacks vary by location and are reported in the result. Availability of the
+control does not guarantee that external data services will respond everywhere.
+
+TRAIN's built-in settlement dataset is **Romania only**. Elsewhere, select a
+point and explicitly upload a CSV of suitable local sites; no European built-in
+site database is implied. The Archaeological Report TRAIN integration currently
+uses only the Romanian built-in dataset. Premium entitlement remains required.
+
 ## Using it
 
-1. Click **APM** (bottom-left). The switch (stored as `localStorage.detectlab_apm_next`, default off) must be on, and the account must be premium. Otherwise the panel shows a gate message and Run is disabled.
+1. In the layer list, open **Premium** and enable **APM Next-Gen**. The switch (stored as `localStorage.detectlab_apm_next`, default off) must be on, and the account must be premium. Otherwise the panel shows a gate message and Run is disabled.
 2. Click **Pick point on map**. The APM settings window disappears completely and stays hidden while you pan or zoom. Select a point on the map to set the search-area centre; only then do the settings return. A dashed circle shows the search radius. Attempts to reopen the settings during selection are ignored; an explicit close or switching APM off still cancels selection.
 3. Choose MANUAL or TRAIN. TRAIN loads only the Romania Supabase RPC and defaults to All periods. Outside Romania, upload CSV. Database errors offer an explicit CSV upload, never an automatic fallback. Period options show counts; fewer than 10 sites blocks TRAIN, fewer than 30 warns.
 4. Run. Results show area per class, the sources actually used (label, version, resolution), warnings in the chosen language, and (TRAIN) model diagnostics. **Export hotspot GeoJSON** writes only the highest-potential polygons with provenance, thresholds, rendering metadata and diagnostics.
