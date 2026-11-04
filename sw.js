@@ -1000,7 +1000,12 @@
 //   SceneView gate, the no-WebGL canvas fallback, the country dock, Exit view
 //   and the country-scoped layer window are back; the Romania-only lock is
 //   retired again. Re-tag map-app.js + window-resize.js for installed PWAs.
-const CACHE_NAME = 'detectlab-v404-apm-europe';
+// v405: the fortification at 45.90249, 23.56876 is excluded from the LIDAR
+//   Scanner catalog: its row is removed from data/lidar_scanner_points.csv and
+//   the coordinate joins the persistent REMOVED_SCANNER_POINTS blacklist, so a
+//   stale cache or a regenerated CSV cannot bring it back. Re-tags
+//   lidar-scanner.js (shell + DATA_URL) and CACHE_NAME.
+const CACHE_NAME = 'detectlab-v405-lidar-scanner-exclusion';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1907,6 +1912,10 @@ const PRECACHE_URLS = [
   // v150: blacklist persistent pentru cele cinci coordonate retrase.
   'js/lidar-scanner.js?v=20261002-remove-five-points',
   'js/lidar-scanner.js?v=20261020-3d-analysis-points',
+  // v405: fortificația 45.90249, 23.56876 este retrasă din LIDAR Scanner;
+  // rândul a fost șters din CSV, iar coordonata a intrat în blacklist-ul
+  // persistent. Scriptul și DATA_URL sunt re-versionate pentru PWA.
+  'js/lidar-scanner.js?v=20261104-remove-fortification-45-90249',
   // v140: „Amprenta Vegetației / Vegetation Fingerprint” (premium) — primul
   // substrat PPI din CLMS HR-VPP, cu tile-uri WMTS limitate la România.
   // v141: + substratul SGU (VPP LSLOPE, anual); v142: + SGD (VPP RSLOPE).
