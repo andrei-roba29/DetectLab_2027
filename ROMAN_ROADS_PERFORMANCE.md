@@ -222,3 +222,10 @@ every tile lookup to an empty range (the layer painted nothing above z9).
   `[Roman] roads ready: … (N segment(s) sampled out to fit the memory budget)`.
 * If a future dataset stores one *point per record* the parser keeps it as a
   2-point segment (dot), which is the only sane reading of such an export.
+* Records whose geometry ships as split coordinates
+  (paths: [[x1, x2, ...], [y1, y2, ...]] instead of nested [ring][vertex][x,y]
+  pairs) used to be silently dropped: every "vertex" is a bare number, so
+  addPath() skipped them all without even incrementing the `skipped` counter.
+  The parser now re-zips them into [x, y] pairs, so segments stored in that
+  shape (e.g. some road exports around Cluj, incl. the area of Aiton) load
+  again once the NDJSON is refreshed.
