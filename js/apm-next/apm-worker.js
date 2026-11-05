@@ -65,6 +65,9 @@ importScripts(
         var waterOut = {};
         classes.forEach(function (c) { waterOut[c] = new Float64Array(n); });
         var inside = new Uint8Array(n);
+        // Only a few actual site rows, never backgrounds or additional terrain/water queries.
+        var previewSet = m.previewIndices && m.previewIndices.length && !m.waterMasks ? new Set(m.previewIndices.slice(0, 4)) : null;
+        var previews = previewSet ? [] : null;
         var distanceGrids = {};
         if (m.waterMasks) Object.keys(m.waterMasks).forEach(function(c){distanceGrids[c]=R.edt(m.waterMasks[c],m.w,m.h,m.dxM,m.dyM);});
         for (var p = 0; p < n; p++) {
@@ -83,13 +86,37 @@ importScripts(
                 }else{out[o]=m.elev[cell];out[o+1]=t.slope[cell];out[o+2]=t.aspect[cell];out[o+3]=t.curv[cell];}
                 out[o + 4] = t.valid[cell];
             }
+            var closest = null;
             classes.forEach(function (c) {
-                waterOut[c][p] = inside[p] ? (m.waterMasks ? (distanceGrids[c] ? distanceGrids[c][cell] : Infinity) : R.nearestWaterM(state.water[c], lon, lat)) : NaN;
+                var witness = previewSet && previewSet.has(p) && inside[p] && (m.previewWaterClasses || []).indexOf(c) >= 0 ? {} : null;
+                waterOut[c][p] = inside[p] ? (m.waterMasks ? (distanceGrids[c] ? distanceGrids[c][cell] : Infinity) : R.nearestWaterM(state.water[c], lon, lat, witness)) : NaN;
+                if (witness && witness.point && (!closest || witness.distanceM < closest.distanceM)) {
+                    closest = Object.assign({ waterClass: c }, witness);
+                }
             });
+            if (previewSet && previewSet.has(p)) {
+                // Copy at most 4 x 9x9 raw DEM/curvature cells. No full raster retained by the UI.
+                var patch = null;
+                if (inside[p] && out[o + 4] === 1) {
+                    patch = { size: 9, dxM: m.dxM, dyM: m.dyM, elevation: [], curvature: [] };
+                    var col = cell % m.w, row = Math.floor(cell / m.w);
+                    for (var yy = -4; yy <= 4; yy++) for (var xx = -4; xx <= 4; xx++) {
+                        var x = col + xx, y = row + yy, q = y * m.w + x;
+                        var available = x >= 0 && x < m.w && y >= 0 && y < m.h;
+                        patch.elevation.push(available && R.isValidElev(m.elev[q], m.nodata) ? m.elev[q] : null);
+                        patch.curvature.push(available && t.valid[q] ? t.curv[q] : null);
+                    }
+                }
+                previews.push({ index: p, valid: !!(inside[p] && out[o + 4] === 1), altitude: out[o],
+                    slope: out[o + 1], aspect: out[o + 2], curvature: out[o + 3],
+                    radiusM: Math.max(m.positionRadiusM || 0, m.dxM, m.dyM), nearest: closest, patch: patch, smoothed: !!m.smooth });
+            }
         }
         var transfer = [out.buffer, inside.buffer];
         classes.forEach(function (c) { transfer.push(waterOut[c].buffer); });
-        reply(m.id, { values: out, inside: inside, water: waterOut, classes: classes }, transfer);
+        var payload = { values: out, inside: inside, water: waterOut, classes: classes };
+        if (previews) payload.previews = previews;
+        reply(m.id, payload, transfer);
     }
 
     function handleSetWater(m) {

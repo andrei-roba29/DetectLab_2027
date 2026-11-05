@@ -603,6 +603,14 @@
             return { id: s.id, name: s.name, lat: s.lat, lon: s.lon, x: (s.lon - centre.lon) * mpd.lon, y: (s.lat - centre.lat) * mpd.lat, isSite: true, positionAccuracy: s.positionAccuracy };
         }).concat(bg.map(function (b) { return { lat: b.lat, lon: b.lon, x: b.x, y: b.y, isSite: false }; }));
 
+        // Optional read-only, bounded loading preview. Observer errors never fail TRAIN.
+        var previewCount = !isHoard && typeof params.onPreview === 'function' ? Math.min(4, nSites) : 0;
+        function preview(event) {
+            if (!previewCount || typeof params.onPreview !== 'function') return;
+            try { params.onPreview(event); } catch (ignore) { params.onPreview = null; }
+        }
+        if (previewCount) preview({ type: 'start', total: nSites, limit: previewCount });
+
         var bbox = core.circleBBox(centre.lat, centre.lon, areaM + 1000);
         var dem, cachedDem, demCoverage = null, demDecision = null, grid, water = { water: null, provider: null }, classes = [];
         function fetchTrainBlock(g) {
@@ -685,7 +693,9 @@
                             tile: { west: hg.west, north: hg.north, dLon: hg.dLon, dLat: hg.dLat },
                             smooth: !!params.smoothDem, nodata: undefined, points: flat,
                             positionRadii: isHoard ? idxs.map(function(pi){return hoardScale.pointRadius(pts[pi],60);}) : null,
-                            waterMasks: tileWater
+                            waterMasks: tileWater,
+                            previewIndices: previewCount && typeof params.onPreview === 'function' ? idxs.reduce(function(a, pi, k) { if (pi < previewCount) a.push(k); return a; }, []) : undefined,
+                            previewWaterClasses: previewCount ? params.waterClasses : undefined
                         }, transfer).then(function (r) {
                             idxs.forEach(function (pi, k) {
                                 var o = k * 5;
@@ -695,6 +705,11 @@
                                     elev: r.values[o], slope: r.values[o + 1], aspect: r.values[o + 2],
                                     curv: r.values[o + 3], valid: r.inside[k] && r.values[o + 4] === 1, water: water
                                 };
+                            });
+                            if (previewCount && typeof params.onPreview === 'function') (r.previews || []).forEach(function (sample) {
+                                var pi = idxs[sample.index], point = pts[pi];
+                                if (pi < previewCount && point) preview(Object.assign({}, sample, { type: 'sample', index: pi, id: point.id,
+                                    name: point.name, lat: point.lat, lon: point.lon, minSlopeDeg: params.minSlopeDeg }));
                             });
                             done += idxs.length;
                             progress('prog.sampling', 15 + Math.round(45 * done / pts.length), { pct: Math.round(100 * done / pts.length) });
@@ -710,6 +725,13 @@
                 var built = buildSampleSet(hard.points, {
                     minSlopeDeg: params.minSlopeDeg, radiusM: areaM, folds: 5, waterClasses: params.waterClasses.filter(function (c) { return classes.indexOf(c) >= 0; })
                 });
+                if (previewCount && typeof params.onPreview === 'function') for (var pi = 0; pi < previewCount; pi++) {
+                    var sampleIndex = built.samples.indexOf(merged[pi]);
+                    preview({ type: 'reference', index: pi, included: sampleIndex >= 0,
+                        soilPercentile: sampleIndex >= 0 ? built.S.vals.soil[sampleIndex] : null,
+                        altitudePercentile: sampleIndex >= 0 ? built.S.vals.altitude[sampleIndex] : null,
+                        aspectUsed: sampleIndex >= 0 && isFinite(built.S.vals.aspect[sampleIndex]) });
+                }
                 if (built.counts.sites < minSites) {
                     var e2 = core.keyedError('err.tooFewTerrain', { n: built.counts.sites, min: minSites },
                         'After terrain sampling only ' + built.counts.sites + ' sites had valid terrain (minimum ' + minSites + ').');

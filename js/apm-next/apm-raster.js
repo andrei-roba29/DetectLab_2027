@@ -307,23 +307,41 @@
     }
 
     /** Exact nearest distance (m) from lon/lat to any indexed segment; Infinity if none. */
-    function nearestWaterM(index, lon, lat) {
+    function nearestWaterM(index, lon, lat, witness) {
+        // Optional display witness. Never changes the distance calculation/search or allocates when absent.
+        if (witness) { witness.point = null; witness.segment = null; witness.distanceM = Infinity; }
         if (!index || !index.count) return Infinity;
         var mpd = core.metresPerDegree(lat);
         var r = 0.0005;                              // start ≈ 50 m
-        var best = Infinity;
+        var best = Infinity, bestK = -1;
         for (var guard = 0; guard < 40; guard++) {
             var hits = index.tree.search({ minX: lon - r, minY: lat - r, maxX: lon + r, maxY: lat + r });
             for (var h = 0; h < hits.length; h++) {
                 var k = hits[h].k, s = index.segs;
                 var d = segDistM(lon, lat, s[k], s[k + 1], s[k + 2], s[k + 3], mpd);
-                if (d < best) best = d;
+                if (d < best) { best = d; if (witness) bestK = k; }
             }
             // Anything closer than best is inside a box of half-width best (in degrees).
-            if (best <= Math.min(r * mpd.lat, r * mpd.lon)) return best;
+            if (best <= Math.min(r * mpd.lat, r * mpd.lon)) {
+                if (witness) waterWitness(index, bestK, lon, lat, mpd, best, witness);
+                return best;
+            }
             r = Math.max(r * 2, best / Math.min(mpd.lat, mpd.lon) * 1.01);
         }
+        if (witness) waterWitness(index, bestK, lon, lat, mpd, best, witness);
         return best;
+    }
+
+    // Reconstruct just the winning segment's projection, not a second search or request.
+    function waterWitness(index, k, lon, lat, mpd, distance, out) {
+        if (k < 0 || !isFinite(distance)) return;
+        var s = index.segs, x = (s[k] - lon) * mpd.lon, y = (s[k + 1] - lat) * mpd.lat;
+        var vx = (s[k + 2] - lon) * mpd.lon - x, vy = (s[k + 3] - lat) * mpd.lat - y;
+        var len2 = vx * vx + vy * vy, t = len2 > 0 ? -(x * vx + y * vy) / len2 : 0;
+        t = Math.max(0, Math.min(1, t));
+        out.point = { lon: lon + (x + t * vx) / mpd.lon, lat: lat + (y + t * vy) / mpd.lat };
+        out.segment = [[s[k], s[k + 1]], [s[k + 2], s[k + 3]]];
+        out.distanceM = distance;
     }
 
     /* ── Percentiles relative to a reference sample ───────────────────────── */

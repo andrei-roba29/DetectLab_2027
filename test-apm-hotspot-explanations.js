@@ -167,8 +167,9 @@ test('interior hit targets and lazy popup bindings retain outlines/holes; PWA wi
     assert(ui.includes("fill: true, fillColor: '#d9f5ff', fillOpacity: 0.001, fillRule: 'evenodd'"));
     assert(ui.includes('l.bindPopup(function(){return hotspotPopup(f,res);},'));
     assert(ui.includes('minWidth:200,maxWidth:320,maxHeight:320'));
-    for(const asset of ['js/apm-next/apm-ui.js','js/apm-next/apm-i18n.js','css/next-gen-apm.css'])assert(html.includes(asset+'?v=20261105-apm-hotspot-explain'));
-    for(const asset of ['apm-ui','apm-i18n','apm-worker','apm-explain'])assert(sw.includes('js/apm-next/'+asset+'.js?v=20261105-apm-hotspot-explain'));
-    assert(sw.includes('detectlab-v408-apm-hotspot-explain'));
+    for(const asset of ['js/apm-next/apm-ui.js','js/apm-next/apm-i18n.js','css/next-gen-apm.css'])assert(html.includes(asset+'?v=20261105-apm-loading-preview'));
+    for(const asset of ['apm-ui','apm-i18n','apm-worker','apm-loading-preview'])assert(sw.includes('js/apm-next/'+asset+'.js?v=20261105-apm-loading-preview'));
+    assert(sw.includes('js/apm-next/apm-explain.js?v=20261105-apm-hotspot-explain'));
+    assert(sw.includes('detectlab-v409-apm-loading-preview'));
 });
 console.log(`${passed} polygon-explanation checks passed.`);

@@ -204,10 +204,10 @@ function pipeline(idb){
     await test('PWA cache module ordering and worker version are coherent',()=>{
         const html=read('index.html'),sw=read('sw.js'),ui=read('js/apm-next/apm-ui.js');
         for(const asset of ['apm-train-cache','apm-pipeline','apm-ui']){
-            const tag=`js/apm-next/${asset}.js?v=${asset==='apm-ui'?'20261105-apm-hotspot-explain':'20261105-apm-mobile-train'}`;assert(html.includes(tag)&&sw.includes(tag));
+            const tag=`js/apm-next/${asset}.js?v=${asset==='apm-train-cache'?'20261105-apm-mobile-train':'20261105-apm-loading-preview'}`;assert(html.includes(tag)&&sw.includes(tag));
         }
         assert(html.indexOf('apm-train-cache.js')<html.indexOf('apm-pipeline.js'));
-        assert(sw.includes('detectlab-v408-apm-hotspot-explain'));assert(ui.includes('apm-worker.js?v=20261105-apm-hotspot-explain'));
+        assert(sw.includes('detectlab-v409-apm-loading-preview'));assert(ui.includes('apm-worker.js?v=20261105-apm-loading-preview'));
     });
     console.log(`${checks} mobile TRAIN regressions passed.`);
 })().catch(e=>{console.error(e);process.exitCode=1;});

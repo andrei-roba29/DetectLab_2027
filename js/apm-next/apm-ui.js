@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261105-apm-hotspot-explain';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261105-apm-loading-preview';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
@@ -64,6 +64,13 @@
 
     var map = null, layer = null, centreMarker = null, radiusCircle = null, downweightedLayer = null;
     var els = {}, ui = { panel: null, btn: null };
+    var loadingPreview = null, previewParams = null;
+    function stopLoadingPreview() {
+        if (previewParams) previewParams.onPreview = null;
+        if (loadingPreview) loadingPreview.stop();
+        loadingPreview = null; previewParams = null;
+    }
+
     var i18nBindings = [];          // [{ el, key, attr }] refreshed on language change
 
     /* ── small helpers ───────────────────────────────────────────────────── */
@@ -595,8 +602,22 @@
         state.busy = true;
         setBusyUi(true);
         setProgress(T('status.starting'), 2);
+        stopLoadingPreview();
+        if (mode === 'train' && !isHoard() && els.previewCb.checked && root.DetectLabApmLoadingPreview) {
+            try {
+                previewParams = params;
+                loadingPreview = root.DetectLabApmLoadingPreview.create({ host: els.previewHost, t: T,
+                    onCancel: cancelRun, onSkip: stopLoadingPreview, onStop: function () { params.onPreview = null; } });
+                var view = loadingPreview;
+                params.onPreview = function (event) { if (state.token === runToken && !runToken.cancelled) view.update(event); };
+                ui.panel.scrollTop = 0;
+            } catch (ignore) { stopLoadingPreview(); els.previewHost.replaceChildren(); }
+        }
         params.onProgress = function (key, pct, vars) {
-            if (state.token === runToken && !runToken.cancelled) setProgress(T(key, vars), pct);
+            if (state.token === runToken && !runToken.cancelled) {
+                setProgress(T(key, vars), pct);
+                if (loadingPreview) loadingPreview.setStage(key, vars);
+            }
         };
         var session = mode === 'train' ? state.trainSession : state.manualSession;
         var job = mode === 'train' ? (isHoard() && state.backgroundType === 'known-sites' ? hoardRecords().createProvider().getKnownSites(state.centre).then(function(data){params.knownSites=data; return pipe().runTrain(session,params);}) : pipe().runTrain(session, params)) : pipe().runManual(session, params);
@@ -612,6 +633,7 @@
             setStatus(T('status.error', { msg: errText(err) }), 'error');
         }).then(function () {
             if (state.token !== runToken) return;
+            stopLoadingPreview();
             state.token = null;
             state.busy = false;
             setBusyUi(false);
@@ -620,6 +642,7 @@
     }
 
     function cancelRun() {
+        stopLoadingPreview();
         if (state.token) state.token.cancelled = true;
         [state.manualSession, state.trainSession].forEach(function (s) {
             if (s.worker) { s.worker.terminate(); s.worker = null; s.analysisKey = null; }
@@ -1090,10 +1113,13 @@
         els.periodRow.hidden = true;
         els.periodHint = h('div', { class: 'apm-note apm-period-hint', role: 'status' });
         els.countNote = h('div', { class: 'apm-note', role: 'status' });
+        els.previewCb = h('input', { id: 'apmLoadingPreviewEnabled', type: 'checkbox', checked: true });
+        els.previewOption = h('label', { class: 'apm-check' }, [els.previewCb, h('span', { key: 'preview.enable' })]);
+        els.previewHost = h('div', { class: 'apm-preview-host' });
         els.trainBox = h('div', { class: 'apm-train' }, [
             h('label',{class:'apm-field'},[h('span',{key:'hoard.selector'}),els.category]),els.hoardOptions,
             (els.settlementSourceNote = h('div', { class: 'apm-note', key: 'train.sourceNote' })),
-            els.loadSites, els.csvRow, els.sitesCount, els.siteSummary, els.periodRow, els.periodHint, els.countNote,
+            els.loadSites, els.csvRow, els.sitesCount, els.siteSummary, els.periodRow, els.periodHint, els.countNote, els.previewOption,
             (els.settlementAreaNote = h('div', { class: 'apm-note', key: 'train.area' }))
         ]);
 
@@ -1179,6 +1205,7 @@
                 h('div', { class: 'apm-head-right' }, [close])
             ]),
             els.gate,
+            els.previewHost,
             els.controls,
             h('div', { class: 'apm-actions' }, [els.run, els.cancel, els.exportBtn, els.clearBtn]),
             els.progress,
@@ -1205,6 +1232,7 @@
         els.curvesBox.querySelectorAll('textarea').forEach(function (ta) { ta.disabled = !manual; });
         els.radiusRow.hidden = !manual && !isHoard();
         if (els.hoardOptions) els.hoardOptions.hidden = !isHoard();
+        if (els.previewOption) els.previewOption.hidden = isHoard();
         if (els.settlementSourceNote) els.settlementSourceNote.hidden = isHoard();
         if (els.settlementAreaNote) els.settlementAreaNote.hidden = isHoard();
         els.trainNote.hidden = manual || isHoard();
@@ -1217,6 +1245,7 @@
         if (mode === state.mode) return;
         if (state.busy) return;
         if (mode !== 'train' && state.sitesLoading) { cancelSiteLoad(); setStatus('', ''); }
+        stopLoadingPreview();
         state.mode = mode;
         renderModeTabs();
         if (state.centre) drawCentre();
@@ -1238,7 +1267,7 @@
         var open = typeof force === 'boolean' ? force : ui.panel.hidden;
         // Neither the layer-list button nor an external open() may cover the map mid-selection.
         if (open && state.picking) { setPanelVisible(false); return; }
-        if (!open) stopPick();                       // explicit close cancels selection
+        if (!open) { stopPick(); stopLoadingPreview(); } // close preview, not the background analysis
         setPanelVisible(open);
         if (open) { hideDock(); updateGate(); renderDebugLog(); }
     }
