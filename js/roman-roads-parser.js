@@ -141,7 +141,18 @@
             case 'MultiLineString': return g.coordinates || [];
         }
         if (g.paths && Array.isArray(g.paths)) {
-            /* ArcGIS JSON (`paths`) is [ring][vertex][x,y] in lng/lat. */
+            /* ArcGIS JSON (`paths`) is [ring][vertex][x,y] in lng/lat.
+             * Some exports ship split coordinates instead:
+             *   paths: [[x1, x2, ...], [y1, y2, ...]]
+             * Detect the flat numeric rings and re-zip them into [x, y]
+             * pairs; otherwise every "vertex" is a bare number, addPath()
+             * skips them all and the segment vanishes without even
+             * incrementing the skipped counter. */
+            if (g.paths.length && typeof g.paths[0][0] === 'number') {
+                var xs = g.paths[0], ys = g.paths[1] || [], ring = [];
+                for (var k = 0; k < xs.length && k < ys.length; k++) ring.push([xs[k], ys[k]]);
+                return ring.length > 1 ? [ring] : [];
+            }
             return g.paths.map(function (p) { return p; });
         }
         return [];

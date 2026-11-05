@@ -42,7 +42,7 @@ const workerSrc = read('js/roman-roads-worker.js');
 /* The roads' own assets were last touched by the roads work; map-app.js was
  * re-tagged since — most recently by the collapsible ArcGIS base-map list. */
 const VERSION_TAG = '20261015-roman-roads';
-const MAP_APP_TAG = '20261029-android-zoom-glass';
+const MAP_APP_TAG = '20261103-apm-europe';
 console.log('[Test] Roman roads — worker parser, canvas layer, no per-segment DOM...');
 
 /* ── 1. wiring ─────────────────────────────────────────────────────────────
@@ -195,6 +195,23 @@ function road(lng, lat, n, stepLng, stepLat) {
     assert(Math.abs(pp.origins[0] - 1388609) < 1 && pp.stats.projected === true,
         'pre-projected Web-Mercator input is not projected twice');
     console.log('  ✓ GeoJSON, WKT, bare arrays and projected input all still load');
+}
+
+/* 2f. split-coordinate ArcGIS paths ([[x1, x2, ...], [y1, y2, ...]]) must be
+ * re-zipped into [x, y] pairs instead of silently disappearing: every
+ * "vertex" is a bare number, so addPath() used to skip them all and the
+ * segment was dropped without even incrementing the skipped counter. */
+{
+    const collector = P.createCollector({});
+    collector.addRecord({ id: 9, paths: [[23.703, 23.72, 23.7687], [46.7899, 46.75, 46.6706]] });
+    const framed = collector.flush();
+    assert(framed && framed.payload.n === 1, 'split-coordinate paths become one segment');
+    const p = framed.payload;
+    assert(Math.abs(p.origins[0] - P.mercX(23.703)) < 1e-6 &&
+        Math.abs(p.origins[1] - P.mercY(46.7899)) < 1e-6,
+        'origin is the first [x, y] pair of the split record');
+    assert(p.stats.skipped === 0 && p.stats.sampled === 0, 'nothing is counted as dropped');
+    console.log('  ✓ split-coordinate paths ([[xs],[ys]]) parse to segments instead of vanishing');
 }
 
 /* 2e. budget: a stream many times the allowance must settle, not grow */
