@@ -18,6 +18,7 @@ importScripts(
     '../d3.min.js',
     '../vendor/polygon-clipping.umd.min.js',
     'apm-polygonise.js?v=20261102-apm-mask-band',
+    'apm-explain.js?v=20261105-apm-hotspot-explain',
     '../rbush.min.js'
 );
 
@@ -220,6 +221,7 @@ importScripts(
             smoothIters: m.smoothIters == null ? 1 : m.smoothIters,
             highestOnly: true, exclusionMask: state.analysis.exclusionMask
         });
+        DetectLabApmExplain.attach(fc,res.score,state.analysis,m.mode,cfg,m.thresholds.veryhigh);
         var H = DetectLabApmHeatmap;
         var heatmap = H.buildRaster(res.displayScore, state.analysis.grid, m.thresholds, 512, state.analysis.exclusionMask);
         // Pre-project the display raster to Web Mercator once, here in the

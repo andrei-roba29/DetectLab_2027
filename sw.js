@@ -1006,7 +1006,8 @@
 //   stale cache or a regenerated CSV cannot bring it back. Re-tags
 //   lidar-scanner.js (shell + DATA_URL) and CACHE_NAME.
 // v407: bounded TRAIN inputs, mobile blocks, worker ownership and cancel/restart guards.
-const CACHE_NAME = 'detectlab-v407-apm-mobile-train';
+// v408: per-polygon scored-cell explanations and interior hit targets.
+const CACHE_NAME = 'detectlab-v408-apm-hotspot-explain';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1063,6 +1064,7 @@ const PRECACHE_URLS = [
 
   // v301: Next-Gen APM (MANUAL) — see the header note above.
   'css/next-gen-apm.css?v=20261102-apm-lidar-desktop',
+  'css/next-gen-apm.css?v=20261105-apm-hotspot-explain',
   'css/next-gen-apm.css?v=20261102-pwa-dock-1mm',
   'css/next-gen-apm.css?v=20261101-dock-lower-1mm',
   'css/map-window-layers.css?v=20261101-window-stacking',
@@ -1078,10 +1080,14 @@ const PRECACHE_URLS = [
   'js/apm-next/apm-hoard-provider.js?v=20261105-hoards-gated',
   'js/apm-next/apm-hoard-scale.js?v=20261105-hoards-gated',
   'js/apm-next/apm-romania-sites.js?v=20261105-hoards-gated',
+  'js/apm-next/apm-i18n.js?v=20261105-apm-hotspot-explain',
   'js/apm-next/apm-i18n.js?v=20261105-hoards-gated',
   'js/apm-next/apm-train-cache.js?v=20261105-apm-mobile-train',
   'js/apm-next/apm-pipeline.js?v=20261105-apm-mobile-train',
+  'js/apm-next/apm-ui.js?v=20261105-apm-hotspot-explain',
   'js/apm-next/apm-ui.js?v=20261105-apm-mobile-train',
+  'js/apm-next/apm-explain.js?v=20261105-apm-hotspot-explain',
+  'js/apm-next/apm-worker.js?v=20261105-apm-hotspot-explain',
   'js/apm-next/apm-worker.js?v=20261105-apm-mobile-train',
   'js/apm-next/apm-core.js?v=20261101-robust-train',
   'js/apm-next/apm-raster.js?v=20261101-robust-train',
