@@ -10,7 +10,7 @@ Date: 2026-11-05. This is **not a completed, activated hoard prediction feature*
 - New positive/count and comparison-set RPCs enforce the existing signed-in, premium, future-expiry predicate on every request. The shared guard itself has no browser EXECUTE grant. Anonymous RPC EXECUTE is revoked. No keys or service-role credentials were added to the frontend.
 - A production transaction-local role/JWT-claim smoke test denied missing identity on both RPCs and allowed an existing active-premium profile. Session changes were rolled back. **This is not signed-token/browser verification.**
 - Production auth, database and REST health are good. Source table row count stayed **51,674**; the existing settlement RPC definition hash stayed `0d203d569221a181edfd20c6fb28884e`. No source-table ALTER/INSERT/UPDATE/DELETE was performed by this work.
-- Frontend source is prepared with an explicit blocked hoard mode. Hosting/deployment status is recorded in the final handoff; neither a successful Git operation nor a local test proves that the public website has refreshed.
+- Frontend changes: [PR #7](https://github.com/andrei-roba29/DetectLab_2027/pull/7), an explicitly blocked hoard mode. Hosting/deployment status is recorded in the final handoff; neither a successful Git operation nor a local test proves that the public website has refreshed.
 
 Evidence: `test-results/hoards-production.json`.
 
