@@ -6,6 +6,8 @@
     else root.DetectLabRomaniaApmSites = api;
 })(typeof window !== 'undefined' ? window : (typeof self !== 'undefined' ? self : globalThis), function (root, config) {
     'use strict';
+    var hoards = typeof module === 'object' && module.exports ? require('./apm-hoards.js') : root.DetectLabApmHoards;
+    var hoardConfig = typeof module === 'object' && module.exports ? require('./hoards.config.js') : root.DetectLabHoardConfig;
     // Natural Earth Admin-0, 1:110m, public domain. Generalised national outline, not a legal boundary.
     // https://github.com/nvkelso/natural-earth-vector/blob/master/geojson/ne_110m_admin_0_countries.geojson
     var RO = [[28.233554, 45.488283], [28.679779, 45.304031], [29.149725, 45.464925], [29.603289, 45.293308], [29.626543, 45.035391], [29.141612, 44.82021], [28.837858, 44.913874], [28.558081, 43.707462], [27.970107, 43.812468], [27.2424, 44.175986], [26.065159, 43.943494], [25.569272, 43.688445], [24.100679, 43.741051], [23.332302, 43.897011], [22.944832, 43.823785], [22.65715, 44.234923], [22.474008, 44.409228], [22.705726, 44.578003], [22.459022, 44.702517], [22.145088, 44.478422], [21.562023, 44.768947], [21.483526, 45.18117], [20.874313, 45.416375], [20.762175, 45.734573], [20.220192, 46.127469], [21.021952, 46.316088], [21.626515, 46.994238], [22.099768, 47.672439], [22.710531, 47.882194], [23.142236, 48.096341], [23.760958, 47.985598], [24.402056, 47.981878], [24.866317, 47.737526], [25.207743, 47.891056], [25.945941, 47.987149], [26.19745, 48.220881], [26.619337, 48.220726], [26.924176, 48.123264], [27.233873, 47.826771], [27.551166, 47.405117], [28.12803, 46.810476], [28.160018, 46.371563], [28.054443, 45.944586], [28.233554, 45.488283]];
@@ -87,7 +89,7 @@
                     if (res.error) throw new Error(res.error.message || 'Romania database request failed');
                     var payload = res.data;
                     if (!payload || !Array.isArray(payload.rows)) throw new Error('Invalid Romania database response. Upload CSV or retry.');
-                    var excludedType = 0, excludedBorder = 0;
+                    var excludedType = 0, excludedBorder = 0, excludedHoard = 0;
                     var exact = payload.rows.filter(function (r) {
                         var flag = String(r.coord_flag || '').trim().toUpperCase();
                         return flag === 'DA' || (config.includeEmptyCoord && !flag);
@@ -95,6 +97,10 @@
                     var mapped = exact.map(function (r) {
                         var lat = Number(r.lat), lon = Number(r.lon);
                         if (!Number.isFinite(lat) || !Number.isFinite(lon) || (!insideRomania(lat, lon) || distanceM(center, {lat: lat, lon: lon}) > radius * 1000)) { excludedBorder++; return null; }
+                        if (hoards && hoardConfig && hoardConfig.excludeRomanianHoardSettlements) {
+                            var bucket = hoards.classifyRomanian(r.name).bucket;
+                            if (bucket === 'hoard-only' || bucket === 'mixed') { excludedHoard++; return null; }
+                        }
                         if (isExcludedType(r.name)) { excludedType++; return null; }
                         return Object.assign({ id: String(r.object_id), name: r.name || '', lat: lat, lon: lon, siruta: r.siruta,
                             coord_flag: r.coord_flag, type: 'settlement', positionAccuracy: null, positionAccepted: true,
@@ -106,7 +112,7 @@
                     mapped._meta = { outsideRomania: false, truncated: !!payload.truncated, total: payload.total_in_area == null ? null : payload.total_in_area,
                         excludedPosition: payload.excluded_approximate == null ? null : payload.excluded_approximate,
                         excludedUnknownPosition: payload.excluded_unknown_coord == null ? null : payload.excluded_unknown_coord,
-                        excludedGeometry: payload.excluded_geometry || 0, excludedType: excludedType, excludedBorder: excludedBorder,
+                        excludedGeometry: payload.excluded_geometry || 0, excludedType: excludedType, excludedBorder: excludedBorder, excludedHoard: excludedHoard,
                         duplicate: beforeDedupe - mapped.length, unknownPeriod: mapped.filter(function (r) { return r.periodSource === 'unknown'; }).length,
                         returned: mapped.length, includeEmptyCoord: !!config.includeEmptyCoord, areaCrossesBorder: areaCrossesBorder(center, radius) };
                     return mapped;

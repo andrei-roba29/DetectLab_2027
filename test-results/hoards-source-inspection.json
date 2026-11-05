@@ -1,0 +1,35 @@
+{
+  "retrieved": "2026-11-05",
+  "transport": "page-fetch tool; the sandbox CLI still cannot connect directly",
+  "base": "https://services1.arcgis.com/qN3V93cYGMKQCOxL/arcgis/rest/services/DARMC_Archaeological_Studies/FeatureServer",
+  "count_query": "/{layer}/query?where=1%3D1&returnCountOnly=true&f=json",
+  "counts": {"8":21,"9":28,"10":140,"11":90,"12":1776,"15":2047,"16":2047},
+  "count_sum_not_unique_finds": 6149,
+  "metadata": {
+    "9": {"point":true,"maxRecordCount":1000,"formats":["JSON","geoJSON","PBF"],"supportsPagination":true,"copyrightText":"","date_template":"Hoards deposited 815-840 (tpq)"},
+    "10": {"point":true,"maxRecordCount":1000,"formats":["JSON","geoJSON","PBF"],"copyrightText":"","date_template":"Hoards deposited 841-900 (tpq)"},
+    "11": {"point":true,"maxRecordCount":1000,"formats":["JSON","geoJSON","PBF"],"copyrightText":"","date_template":"Hoards deposited after 900 (tpq)"},
+    "16": {"point":true,"maxRecordCount":1000,"formats":["JSON","geoJSON","PBF"],"copyrightText":"","renderer_date_field":"D_TPQ"}
+  },
+  "grouped_quality_query": "where=1=1, groupByFieldsForStatistics=<listed fields>, outStatistics=[{statisticType:count,onStatisticField:OBJECTID,outStatisticFieldName:n}], returnGeometry=false, f=json",
+  "quality_counts": {
+    "8": [{"FINDSPOT_Q":null,"VERIFIED":null,"n":5},{"FINDSPOT_Q":null,"VERIFIED":"F","n":1},{"FINDSPOT_Q":null,"VERIFIED":"X","n":14},{"FINDSPOT_Q":"C","VERIFIED":"X","n":1}],
+    "9": [{"FINDSPOT_Q":null,"VERIFIED":null,"n":10},{"FINDSPOT_Q":null,"VERIFIED":"X","n":17},{"FINDSPOT_Q":"?","VERIFIED":"X","n":1}],
+    "10": [{"FINDSPOT_Q":null,"VERIFIED":null,"n":40},{"FINDSPOT_Q":null,"VERIFIED":"F","n":2},{"FINDSPOT_Q":null,"VERIFIED":"X","n":86},{"FINDSPOT_Q":"?","VERIFIED":"X","n":3},{"FINDSPOT_Q":"C","VERIFIED":"X","n":7},{"FINDSPOT_Q":"Ca.","VERIFIED":"X","n":2}],
+    "11": [{"FINDSPOT_Q":null,"VERIFIED":null,"n":19},{"FINDSPOT_Q":null,"VERIFIED":"F","n":4},{"FINDSPOT_Q":null,"VERIFIED":"X","n":55},{"FINDSPOT_Q":"?","VERIFIED":"X","n":3},{"FINDSPOT_Q":"C","VERIFIED":"X","n":8},{"FINDSPOT_Q":"Ca.","VERIFIED":"X","n":1}],
+    "15": [{"Q_LAT_LON":" ","CENTROID":" ","n":2016},{"Q_LAT_LON":" ","CENTROID":"T","n":1},{"Q_LAT_LON":"C","CENTROID":"T","n":9},{"Q_LAT_LON":"C","CENTROID":" ","n":21}],
+    "16": [{"Q_LAT_LON":" ","CENTROID":" ","n":2016},{"Q_LAT_LON":" ","CENTROID":"T","n":1},{"Q_LAT_LON":"C","CENTROID":"T","n":9},{"Q_LAT_LON":"C","CENTROID":" ","n":21}]
+  },
+  "quality_meanings": "NOT VERIFIED: aliases repeat field names and sampled domains are null. X, F, C, Ca., T and blanks have NOT been mapped to exact/approximate positions.",
+  "sample_findings": [
+    "Layer 12 aliases explicitly identify start_date and end_date as Deposit Start Date and Deposit End Date; Find_year is Find Year, hoardsize is Hoard Size (estimated), preserved is Coins Preserved.",
+    "Layer 8 first record DATE_COUP=755–769, DATE_E=755, DATE_L=769, FINDDATE=1972, COINS_MN=COINS_MX=25. Template evidence on 9–11 explicitly says tpq; precise DATE_E/L semantics still need review.",
+    "Layer 15 first record HOBBS_NO is a single space: it cannot be assumed a unique usable source ID. OBJECTID is the maintained source record ID.",
+    "Layer 15 first record START_D=337, D_TPQ=500, HOB_PD_ST=500, HOB_PD_EN=END_D=600: blindly treating START_D as a burial lower bound is unjustified.",
+    "The three sampled geometries agree with their decimal coordinate fields within one metre; the first layer-15 legacy formatted strings 15.00N/44.00E do NOT agree with its DEC_LAT/DEC_LONG or geometry. This is not a layer-wide agreement result."
+  ],
+  "not_verified": ["Full snapshot identity of layers 15/16 (equal counts and quality distributions are not proof)","Disjointness of 8–11","Overlap between 12 and 15","Whole-layer coordinate agreement","Quality code meanings","Pagination metadata for layers other than 9","Licence/terms of use"],
+  "licence": "OPEN QUESTION",
+  "sync_cli_dry_run": {"exit":1,"error":"fetch failed","records_fetched":null,"records_kept":null,"records_dropped":null},
+  "ingested_rows": 0
+}

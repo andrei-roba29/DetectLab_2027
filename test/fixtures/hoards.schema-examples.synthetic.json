@@ -1,0 +1,6 @@
+{
+  "notice": "SYNTHETIC values shaped after the user-supplied field lists for layers 8, 12 and 15. These are NOT downloaded real-service fixtures or evidence that date/quality codes mean what the test-only mappings assume.",
+  "8": {"attributes":{"COUP_ID":42,"NAME_COUP":"Example Carolingian hoard","DATE_E":800,"DATE_L":825,"FINDDATE":1963,"COINS_MN":1000,"COINS_MX":2000,"FINDSPOT_Q":"TEST_EXACT","VERIFIED":"TEST_YES","LATITUDE":46,"LONGITUDE":25},"geometry":{"x":25,"y":46}},
+  "12": {"attributes":{"id_no":7,"Name":"Example Gallic hoard","start_date":220,"end_date":250,"Find_year":1932,"hoardsize":425,"metal":"silver","Latitude":46,"Longitude":25},"geometry":{"x":25,"y":46}},
+  "15": {"attributes":{"HOBBS_NO":99,"PLACE":"Example precious deposit","START_D":300,"END_D":350,"YEAR_DISC":1905,"Q_LAT_LON":"TEST_APPROX","CENTROID":"TEST_REGION","DEC_LAT":46.004,"DEC_LONG":25},"geometry":{"x":25,"y":46.004}}
+}

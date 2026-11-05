@@ -9,7 +9,7 @@ const {createRequire} = require('node:module');
 const {JSDOM} = createRequire(path.join(__dirname,'tools/apm-test/package.json'))('jsdom');
 const read = p=>fs.readFileSync(path.join(__dirname,p),'utf8');
 const fixture = require('./test/fixtures/romania-sites.synthetic.json');
-const scripts=['apm-core','apm-raster','apm-heatmap','apm-sites','apm-providers','romania-periods.config','apm-romania-sites','apm-i18n','apm-pipeline','apm-ui'];
+const scripts=['apm-core','apm-raster','apm-heatmap','apm-sites','apm-providers','romania-periods.config','hoards.config','apm-hoards','apm-hoard-provider','apm-hoard-scale','apm-romania-sites','apm-i18n','apm-pipeline','apm-ui'];
 const wcs='<wcs:Capabilities><wcs:ServiceMetadata><wcs:formatSupported>image/tiff</wcs:formatSupported><wcs:Extension><wcs:crsSupported>http://www.opengis.net/def/crs/EPSG/0/4326</wcs:crsSupported></wcs:Extension><wcs:MaxPixels>4000000</wcs:MaxPixels></wcs:ServiceMetadata><wcs:Contents><wcs:CoverageSummary><wcs:CoverageId>DEM_v11</wcs:CoverageId></wcs:CoverageSummary></wcs:Contents></wcs:Capabilities>';
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn,label){for(let i=0;i<1000;i++){if(fn())return;await delay(10);}throw Error('Timeout: '+label);}
@@ -28,6 +28,7 @@ function harness(mode='ok') {
         requests.push(url);
         const u=new URL(url);
         if(u.host==='project.supabase.example') {
+            if(u.pathname.endsWith('apm_hoards_within')) return {data:{rows:Array.from({length:9},(_,i)=>({id:String(i),lat:46.75,lon:25,position_class:'exact',period_groups:[]})),usable:9,total_in_area:9,truncated:false,period_counts:{}}};
             if(mode==='error')return {data:null,error:{message:'not authorised'}};
             return {data:{rows,total_in_area:40,excluded_approximate:0,excluded_unknown_coord:0,excluded_geometry:0,truncated:false},error:null};
         }
@@ -44,7 +45,7 @@ function harness(mode='ok') {
     w.fetch=network;
     // This is the existing app client surface. Any table read is a hard failure.
     w.supabaseClient={rpc:(name,args)=>{
-        assert.equal(name,'apm_sites_within');assert(args.p_radius_km<=50);
+        assert(['apm_sites_within','apm_hoards_within'].includes(name));assert(args.p_radius_km<=(name==='apm_sites_within'?50:150));
         return network('https://project.supabase.example/rest/v1/rpc/'+name);
     },from(){throw Error('Direct table read forbidden');}};
     w.GeoTIFF={fromArrayBuffer:async buf=>({getImage:async()=>({getWidth:()=>buf.w,getHeight:()=>buf.h,getGDALNoData:()=>null,
@@ -88,7 +89,7 @@ function harness(mode='ok') {
     try {
         await h.pick(46.75,25);
         assert.equal(h.requests.length,1);
-        assert.equal(h.w.document.querySelector('.apm-select').value,'all','All periods default');
+        assert.equal(h.w.document.querySelector('.apm-period-picker').value,'all','All periods default');
         assert.match(h.w.document.querySelector('.apm-train').textContent,/Total records in the area: 40/);
         h.w.document.querySelector('.apm-primary').click();
         await until(()=>h.completed||h.runError,'real TRAIN completion');
@@ -124,6 +125,20 @@ function harness(mode='ok') {
         assert(out.requests.every(u=>['image.discomap.eea.europa.eu','overpass-api.de'].includes(new URL(u).host)));
         console.log('PASS outside Romania: zero site-data requests; explicit CSV upload; real CSV TRAIN completed with DEM/hydro only, no Romania background constraint.');
     } finally {out.dom.window.close();}
+    const hoard=harness();
+    try {
+        await hoard.pick(46.75,25);
+        const before=hoard.requests.length;
+        const selector=hoard.w.document.querySelector('.apm-category-picker');
+        selector.value='hoards';selector.dispatchEvent(new hoard.w.Event('change'));
+        await until(()=>hoard.w.document.querySelector('.apm-status').textContent.includes('Fewer than 10 usable hoards'),'hoard load');
+        assert.deepEqual(hoard.requests.slice(before),['https://project.supabase.example/rest/v1/rpc/apm_hoards_within']);
+        assert(!hoard.w.document.querySelector('input[type=file]').parentElement.hidden);
+        assert(hoard.w.document.querySelector('.apm-primary').disabled);
+        assert.equal(hoard.w.document.querySelector('.apm-period-picker').value,'all');
+        assert(!hoard.ops.includes('sampleTile'),'review gate prevents terrain requests');
+        console.log('PASS hoard UI: isolated hoard RPC only, <10 blocks and offers CSV, All periods default, release gate prevents terrain requests.');
+    } finally {hoard.dom.window.close();}
     const fail=harness('error');
     try {
         await fail.pick(46.75,25);

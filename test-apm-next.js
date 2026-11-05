@@ -1018,7 +1018,7 @@ test('APM off removes the selected point and radius; re-enabling restores them w
         renderSwitch() {}, updateGate() {}, loadBuiltinSites() { calls.push('loadSites'); }
     };
     vm.createContext(ctx);
-    for (const name of ['setEnabled', 'drawCentre', 'clearCentre']) {
+    for (const name of ['isHoard', 'trainingKm', 'setEnabled', 'drawCentre', 'clearCentre']) {
         const start = src.indexOf('    function ' + name + '(');
         const end = src.indexOf('\n    function ', start + 1);
         vm.runInContext(src.slice(start, end), ctx);

@@ -18,6 +18,11 @@
 })(typeof self !== 'undefined' ? self : this, function (core, raster, sites, prov, root) {
     'use strict';
 
+    var hoardConfig = typeof module === 'object' && module.exports ? require('./hoards.config.js') : root.DetectLabHoardConfig;
+    var hoards = typeof module === 'object' && module.exports ? require('./apm-hoards.js') : root.DetectLabApmHoards;
+    var hoardProvider = typeof module === 'object' && module.exports ? require('./apm-hoard-provider.js') : root.DetectLabHoardProvider;
+    var hoardScale = typeof module === 'object' && module.exports ? require('./apm-hoard-scale.js') : root.DetectLabHoardScale;
+
     var BUFFER_M = 3000;          // context beyond the search circle (water decay band, Horn edges)
     var TRAIN_AREA_KM = 50;
     var BG_EXCLUDE_M = 500;       // no background point within 500 m of a site
@@ -517,6 +522,9 @@
      *           onProgress, token, workerUrl, rnd }
      */
     function runTrain(session, params) {
+        var isHoard = params.category === 'hoards';
+        if (isHoard && !hoards.ready()) return Promise.reject(core.keyedError('hoard.pending', {}, 'Hoard source review and live performance validation are pending.'));
+        if (isHoard && !(params.radiusKm >= 1 && params.radiusKm <= 10)) return Promise.reject(new Error('Hoard prediction radius must be 1–10 km'));
         var warnings = [];
         var progress = params.onProgress || function () {};
         var centre = params.centre;
@@ -525,8 +533,8 @@
         if (siteMeta && siteMeta.truncated) warnings.push(M('train.truncated', {}, 'The server returned a truncated site subset.'));
         if (siteMeta && siteMeta.includeEmptyCoord) warnings.push(M('train.emptyIncluded', {}, 'Unknown-position records are opted in.'));
         var radiusM = params.radiusKm * 1000;
-        var areaM = TRAIN_AREA_KM * 1000;
-        var sel = sites.filterSites(params.records, { center: centre, radiusKm: TRAIN_AREA_KM, period: params.period, dedupeM: -1 });
+        var areaM = (isHoard ? hoardConfig.trainingRadiusKm : TRAIN_AREA_KM) * 1000;
+        var sel = isHoard ? hoardProvider.filter(params.records, centre, params.period) : sites.filterSites(params.records, { center: centre, radiusKm: TRAIN_AREA_KM, period: params.period, dedupeM: -1 });
         var nSites = sel.sites.length;
         var minSites = params.minSites || 10, warnSites = params.warnSites || 30;
         if (trainSiteStatus(nSites, minSites, warnSites).status === 'block') {
@@ -537,10 +545,15 @@
         }
         if (nSites < warnSites) warnings.push(M('warn.fewSites', { n: nSites, rec: warnSites }, 'Only ' + nSites + ' sites.'));
 
-        var bg = sampleBackground(centre, areaM, params.bgCount || 5000, sel.sites, BG_EXCLUDE_M, params.rnd, params.backgroundAllowed);
+        var bg;
+        if (isHoard && params.backgroundType === 'known-sites') {
+            if (!params.knownSites || params.knownSites.truncated || !params.knownSites.rows.length) return Promise.reject(core.keyedError('hoard.noBackground', {}, 'Complete known-site comparison data is unavailable. Choose random backgrounds.'));
+            var mp = core.metresPerDegree(centre.lat);
+            bg = params.knownSites.rows.filter(function(p){return core.haversineM(centre.lat,centre.lon,p.lat,p.lon)<=areaM && !sel.sites.some(function(q){return core.haversineM(p.lat,p.lon,q.lat,q.lon)<BG_EXCLUDE_M;});}).map(function(p){return {lat:p.lat,lon:p.lon,x:(p.lon-centre.lon)*mp.lon,y:(p.lat-centre.lat)*mp.lat};});
+        } else bg = sampleBackground(centre, areaM, params.bgCount || 5000, sel.sites, BG_EXCLUDE_M, params.rnd, params.backgroundAllowed);
         var pts = sel.sites.map(function (s) {
             var mpd = core.metresPerDegree(centre.lat);
-            return { id: s.id, name: s.name, lat: s.lat, lon: s.lon, x: (s.lon - centre.lon) * mpd.lon, y: (s.lat - centre.lat) * mpd.lat, isSite: true };
+            return { id: s.id, name: s.name, lat: s.lat, lon: s.lon, x: (s.lon - centre.lon) * mpd.lon, y: (s.lat - centre.lat) * mpd.lat, isSite: true, positionAccuracy: s.positionAccuracy };
         }).concat(bg.map(function (b) { return { lat: b.lat, lon: b.lon, x: b.x, y: b.y, isSite: false }; }));
 
         var bbox = core.circleBBox(centre.lat, centre.lon, areaM + 1000);
@@ -551,8 +564,8 @@
             // Site/background sampling stays close to the DEM resolution, but the
             // 50 km tile grid is bounded so it does not fan out into dozens of
             // full-size WCS tiles (one per 1000x1000 block).
-            grid = raster.boundedGridForBBox(bbox, dem.nominalResM, raster.MAX_SAMPLING_CELLS);
-            progress('prog.waterTrain', 8);
+            grid = isHoard ? hoardScale.grid(bbox, centre, hoardConfig.resolutionM) : raster.boundedGridForBBox(bbox, dem.nominalResM, raster.MAX_SAMPLING_CELLS);
+            progress(isHoard ? 'hoard.waterTrain' : 'prog.waterTrain', 8);
             return fetchWaterChain(centre, bbox, params.token, warnings, waterOptions(params));
         }).then(function (wr) {
             water = wr;
@@ -564,7 +577,7 @@
             return session.worker.call('setWater', { classes: segs });
         }).then(function () {
             // Map every point to its DEM tile (1000 px cores), then sample tile by tile.
-            var tilePx = dem.tilePx || 1000;
+            var tilePx = isHoard ? 128 : (dem.tilePx || 1000);
             var tileOf = new Map();
             pts.forEach(function (p, idx) {
                 var c = raster.cellOf(grid, p.lon, p.lat);
@@ -584,16 +597,22 @@
                     var parts = key.split(',').map(Number);
                     var j0 = parts[0] * tilePx, i0 = parts[1] * tilePx;
                     var cw = Math.min(grid.w - i0, tilePx), ch = Math.min(grid.h - j0, tilePx);
-                    var spacing = raster.gridSpacingM(grid), pad = Math.max(1, Math.ceil(TRAIN_ROBUST_CONFIG.positionRadiusM / Math.min(spacing.dx, spacing.dy)));
+                    var spacing = isHoard ? hoardScale.spacing(grid) : raster.gridSpacingM(grid);
+                    var ids = tileOf.get(key), radius = isHoard ? Math.max.apply(null, ids.map(function(pi){return hoardScale.pointRadius(pts[pi],60);}).concat([BUFFER_M])) : TRAIN_ROBUST_CONFIG.positionRadiusM;
+                    var pad = Math.max(1, Math.ceil(radius / Math.min(spacing.dx, spacing.dy))) + (isHoard ? 2 : 0);
                     var hg = prov.subGrid(grid, i0 - pad, j0 - pad, cw + 2 * pad, ch + 2 * pad);
-                    return dem.fetchBlock(hg).then(function (elev) {
+                    var cacheKey = 'hoard-dem-v1|' + dem.id + '|' + JSON.stringify(hg);
+                    var download = isHoard ? prov.cacheGet(cacheKey).then(function(cached){return cached ? new Float32Array(cached.value || cached) : dem.fetchBlock(hg).then(function(e){return prov.cacheSet(cacheKey,e.buffer.slice(0)).then(function(){return e;});});}) : dem.fetchBlock(hg);
+                    return download.then(function (elev) {
                         var idxs = tileOf.get(key);
                         var flat = new Float64Array(idxs.length * 2), siteMask = new Uint8Array(idxs.length);
                         idxs.forEach(function (pi, k) { flat[2 * k] = pts[pi].lon; flat[2 * k + 1] = pts[pi].lat; siteMask[k] = pts[pi].isSite ? 1 : 0; });
                         return session.worker.call('sampleTile', {
                             elev: elev, w: hg.w, h: hg.h, dxM: spacing.dx, dyM: spacing.dy, positionRadiusM: TRAIN_ROBUST_CONFIG.positionRadiusM, siteMask: siteMask,
                             tile: { west: hg.west, north: hg.north, dLon: hg.dLon, dLat: hg.dLat },
-                            smooth: !!params.smoothDem, nodata: undefined, points: flat
+                            smooth: !!params.smoothDem, nodata: undefined, points: flat,
+                            positionRadii: isHoard ? idxs.map(function(pi){return hoardScale.pointRadius(pts[pi],60);}) : null,
+                            waterMasks: isHoard ? rasteriseWater(water.water,hg) : null
                         }).then(function (r) {
                             idxs.forEach(function (pi, k) {
                                 var o = k * 5;
@@ -638,7 +657,8 @@
             // Prediction window (search circle + buffer) with the same DEM provider.
             progress('prog.window', 80);
             var wb = core.circleBBox(centre.lat, centre.lon, radiusM + BUFFER_M);
-            var wgrid = predictionGridFor(wb, dem, warnings);
+            var wgrid = isHoard ? hoardScale.grid(wb, centre, hoardConfig.resolutionM) : predictionGridFor(wb, dem, warnings);
+            if (isHoard) hoardScale.assertSame(grid,wgrid);
             // The prediction DEM raster and the UAT protection mask (often ~hundreds
             // of tiles for a 50 km TRAIN window) do not depend on each other: fetch
             // them together instead of the mask waiting for the DEM to finish first.
@@ -648,7 +668,7 @@
                 var elev = r[0], exclusionResult = r[1];
                 var masks = rasteriseWater(water.water, wgrid);
                 return setPredictionAnalysis(session, {
-                    grid: wgrid, elev: elev, smooth: !!params.smoothDem, nodata: undefined,
+                    grid: wgrid, spacing: isHoard ? hoardScale.spacing(wgrid) : null, elev: elev, smooth: !!params.smoothDem, nodata: undefined,
                     circle: { lat: centre.lat, lon: centre.lon, radiusM: radiusM },
                     waterMasks: masks,
                     altRef: t.built.altRef, soilRef: t.built.soilRef, _exclusionResult: exclusionResult
@@ -688,6 +708,7 @@
                     warnings: warnings.slice(),   // t.warnings is the same array; do not duplicate every note
                     diagnostics: {
                         siteData: siteMeta || null,
+                        category: isHoard ? 'hoards' : 'settlements', analysisResolutionM: isHoard ? hoardConfig.resolutionM : null, backgroundType: params.backgroundType || 'random',
                         sitesUsed: t.built.counts.sites,
                         sitesInAreaBeforeExclusions: periodCount,
                         hardExcluded: t.hardExcluded.excluded,
