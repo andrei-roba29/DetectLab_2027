@@ -654,6 +654,29 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     eq(gridTiles().length, 0, 'remove empties the grid');
     eq(pendingTimers.size, 0, '…and no stand-in timer is left behind');
 
+    /* ══ 6b. one opacity slider for every sheet ════════════════════════
+     * The layer slider is a master control.  It used to touch only the
+     * active sheet, so a second (often restored) Josephine scan stayed
+     * painted at its own saved opacity even after the user set 0%. */
+    const ovA = await mgr.add(Object.assign({}, rec, { id: 'TST/A' }));
+    const ovB = await mgr.add(Object.assign({}, rec, {
+        id: 'TST/B', lat: 47.95, lng: 23.91
+    }));
+    await new Promise((r) => setImmediate(r));
+    mgr.setActive('TST/A');
+    eq(mgr.setOpacityAll(0), 0, 'setOpacityAll clamps to 0');
+    eq(ovA.root.style.opacity, '0', 'the active sheet follows the master opacity');
+    eq(ovB.root.style.opacity, '0', 'a non-active sheet follows it too');
+    eq(mgr.snapshot().overlays.filter((o) => o.opacity === 0).length, 2,
+        'the snapshot records 0 for every sheet, so a restore cannot resurrect one');
+    mgr.setOpacityAll(0.55);
+    eq(ovA.root.style.opacity, '0.55', 'raising the master opacity reaches the active sheet');
+    eq(ovB.root.style.opacity, '0.55', '…and the inactive one');
+    mgr.remove('TST/A');
+    mgr.remove('TST/B');
+    flushTimers();
+    eq(gridTiles().length, 0, 'the opacity fixtures leave no tiles behind');
+
     /* ══ 7. zoom animation: dots and sheets stay locked to the tiles ════
      * The reported glitch: while Leaflet animates a zoom it leaves the map
      * pane stationary for 250 ms and CSS-scales ONLY the tile containers.
@@ -1313,12 +1336,33 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     OtherMaps.state.ctx.clearRect = originalClear;
     await fmgr.add(rec7);
 
+    /* The public layer slider must reach every sheet, including restored
+     * ones that are not active.  At 0% the dashed frame disappears with the
+     * tiles (both live inside the root), so nothing keeps painting over the
+     * basemap. */
+    const fresh7 = fmgr.get('TST/7');
+    const ov8 = await fmgr.add(Object.assign({}, rec7, {
+        id: 'TST/8', lat: 47.99, lng: 23.99
+    }));
+    OtherMaps.setOpacity(0);
+    eq(fresh7.root.style.opacity, '0', 'Other maps master opacity reaches the active sheet');
+    eq(ov8.root.style.opacity, '0', '…and an inactive added sheet');
+    ok(fresh7.frameEl.style.opacity !== '1' || fresh7.root.style.opacity === '0',
+        'the selection frame cannot stay visible at 0%');
+    OtherMaps.setOpacity(80);
+    eq(ov8.root.style.opacity, '0.8', 'raising the layer opacity restores every sheet');
+    fmgr.remove('TST/8');
+
     // A tap on the sheet hits the added map (container coordinates), so the
     // panel can be reopened by clicking the map that was added.
     fm.latLngToContainerPoint = (ll) => projectAt(ll, fm.getZoom())
         .subtract(originAt(fm.getZoom())).add(PANE_POS);
     const sheetPt = fm.latLngToContainerPoint({ lat: rec7.lat, lng: rec7.lng });
     eq(OtherMaps.overlayAtContainer(sheetPt).id, 'TST/7', 'a tap on the sheet lands on the added map');
+    OtherMaps.setOpacity(0);
+    eq(OtherMaps.overlayAtContainer(sheetPt), null,
+        'an invisible 0% sheet cannot steal taps from the catalogue dots');
+    OtherMaps.setOpacity(80);
     eq(OtherMaps.overlayAtContainer({ x: sheetPt.x + 100000, y: sheetPt.y + 100000 }), null,
         'a tap far from the sheet misses it');
     ok(OtherMaps.findAddedOverlay([{ id: 'TST/none' }, { id: 'TST/7' }]) === 'TST/7',
@@ -1411,11 +1455,19 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     OtherMaps.redraw();
     const radius14 = state.hits.find((h) => h.coverage).radius;
     ok(Math.abs(radius14 / radius13 - 2) < 0.001, 'coverage scales with geographic area on zoom');
+    // A sheet saved at 0% must come back at 0%.  The restored sheet used to
+    // keep its own saved opacity and stayed painted over the basemap.
+    OtherMaps.setOpacity(0);
     OtherMaps.setEnabled(false);
     eq(state.hits.length, 0, 'disabling Other maps removes the coverage hit targets');
     OtherMaps.setEnabled(true);
     await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
     ok(state.hits.some((h) => h.coverage), 're-enabling restores the Josephine coverage');
+    const restored7 = fmgr.get('TST/7');
+    ok(restored7, 'the saved sheet is restored with the layer');
+    eq(restored7.root.style.opacity, '0', 'a sheet restored at layer opacity 0% stays invisible');
+    OtherMaps.setOpacity(80);
 
     console.log('✓ other-maps: ' + checks + ' checks passed '+
         ('(' + catalog.maps.length + ' Hungaricana + ' + nlsCatalog.maps.length + ' NLS catalogue records, ' +

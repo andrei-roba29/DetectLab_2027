@@ -10137,14 +10137,18 @@
                         map.hasLayer(_jLayer) && map.removeLayer(_jLayer);
                     }
 
-                    // Harta Iosefină (iosfree overlay) — respectă sub-toggle
+                    // Harta Iosefină (legacy iosfree overlay) — only when its
+                    // own sub-toggle exists and is checked.  A missing toggle
+                    // means the feature is retired, never "default on": that
+                    // used to re-add a random sheet every time the historical
+                    // master layer was switched on.
                     var iosToggle = document.getElementById('iosfreeToggle');
-                    var iosOn = !iosToggle || iosToggle.checked;
-                    if (!on && _currentOverlay) {
-                        if (map.hasLayer(_currentOverlay)) {
+                    var iosOn = !!(iosToggle && iosToggle.checked);
+                    if (!on || !iosOn) {
+                        if (_currentOverlay && map.hasLayer(_currentOverlay)) {
                             map.removeLayer(_currentOverlay);
                         }
-                    } else if (on && iosOn && _currentOverlay) {
+                    } else if (iosOn && _currentOverlay) {
                         _currentOverlay.addTo(map);
                     }
 
@@ -16684,6 +16688,14 @@
             };
 
             window.toggleIosfreeLayer = function (on) {
+                var legacyToggle = document.getElementById('iosfreeToggle');
+                if (!legacyToggle) {
+                    // Retired layer: make sure no orphan canvas survives.
+                    _removeOverlay();
+                    return;
+                }
+                if (on && !legacyToggle.checked) on = false;
+
                 var histToggle = document.getElementById('histToggle');
                 var histOn = histToggle && histToggle.checked;
                 if (on && !histOn) {
@@ -17025,7 +17037,9 @@
                     map.createPane('iosfreePane');
                     var iosPane = map.getPane('iosfreePane');
                     iosPane.style.zIndex = 1000;
-                    iosPane.style.pointerEvents = 'auto';
+                    // Legacy overlay is display-only.  It must never become a
+                    // transparent click shield over the basemap.
+                    iosPane.style.pointerEvents = 'none';
                     console.log('[Iosefină] Pane dedicat creat cu zIndex 1000');
                 }
 
@@ -17039,7 +17053,12 @@
 
                 window._iosFreeActivateSearch = function (localityName, lat, lng) {
                     var toggle = document.getElementById('iosfreeToggle');
-                    if (toggle && !toggle.checked) return; // layer is off — don't fetch or display anything
+                    // The legacy Iosefină overlay only exists when its own
+                    // sub-toggle exists and is checked.  This app ships no such
+                    // toggle (Josephine Map + / Other maps replaced it), so a
+                    // search must not resurrect a stray sheet.  Clear anything
+                    // an older session left behind instead.
+                    if (!toggle || !toggle.checked) { _removeOverlay(); return; }
                     _currentLocality = null;
                     lookupLocality(localityName, lat, lng);
                 };
@@ -17252,12 +17271,22 @@
                     var maxY = Math.max.apply(null, allCorners.map(function(c){return c.y;})) + pad;
 
                     var MAX_CANVAS = 8192;
-                    var cW = Math.min(Math.ceil(maxX - minX), MAX_CANVAS);
-                    var cH = Math.min(Math.ceil(maxY - minY), MAX_CANVAS);
+                    // Logical size is what the map needs; the backing store may
+                    // be capped so a deep zoom cannot allocate a 20k-pixel
+                    // canvas.  Scale the drawing AND the CSS box together —
+                    // capping only canvas.width/height used to crop the sheet
+                    // and made its content look stretched inside a fixed box.
+                    var fullW = Math.max(1, Math.ceil(maxX - minX));
+                    var fullH = Math.max(1, Math.ceil(maxY - minY));
+                    var renderScale = Math.min(1, MAX_CANVAS / fullW, MAX_CANVAS / fullH);
+                    var cW = Math.max(1, Math.round(fullW * renderScale));
+                    var cH = Math.max(1, Math.round(fullH * renderScale));
 
                     var canvas = this._canvas;
                     canvas.width  = cW;
                     canvas.height = cH;
+                    canvas.style.width  = fullW + 'px';
+                    canvas.style.height = fullH + 'px';
                     canvas.style.opacity = this._opacity;
 
                     // Canvas ancorat față de initCenterPx (dreptunghiul nu se mișcă)
@@ -17265,7 +17294,8 @@
                     canvas.style.top  = (initCenterPx.y + minY) + 'px';
 
                     var ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, cW, cH);
+                    ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+                    ctx.clearRect(0, 0, fullW, fullH);
                     ctx.save();
 
                     // Origine = centrul FIX (initCenterPx) în coordonate canvas
@@ -17299,9 +17329,17 @@
 
                 var map = window._dlMap;
 
+                // No legacy toggle (or it is off) means no legacy overlay.
+                var legacyToggle = document.getElementById('iosfreeToggle');
+                if (!legacyToggle || !legacyToggle.checked) {
+                    _removeOverlay();
+                    return;
+                }
+
                 if (!map.getPane('iosfreePane')) {
                     map.createPane('iosfreePane');
                     map.getPane('iosfreePane').style.zIndex = 1000;
+                    map.getPane('iosfreePane').style.pointerEvents = 'none';
                     console.log('[Iosefină] Pane creat din _placeOnMap');
                 }
 

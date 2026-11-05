@@ -1008,7 +1008,8 @@
 // v407: bounded TRAIN inputs, mobile blocks, worker ownership and cancel/restart guards.
 // v408: per-polygon scored-cell explanations and interior hit targets.
 // v409: bounded real-site environmental loading preview, no extra data requests.
-const CACHE_NAME = 'detectlab-v409-apm-loading-preview';
+// v410: Other maps master opacity + retired legacy Iosefină canvas overlay.
+const CACHE_NAME = 'detectlab-v410-other-maps-legacy-fix';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1232,8 +1233,8 @@ const PRECACHE_URLS = [
   'css/hist-shift.css?v=20261014-hist-shift',
   'js/other-maps-tiles.js?v=20261031-other-maps-tile-span',
   'js/other-maps-nls.js?v=20261031-other-maps-tile-span',
-  'js/other-maps-overlay.js?v=20261031-other-maps-tile-span',
-  'js/other-maps.js?v=20261031-other-maps-white-outline',
+  'js/other-maps-overlay.js?v=20261105-other-maps-master-opacity',
+  'js/other-maps.js?v=20261105-other-maps-master-opacity',
   'css/other-maps.css?v=20261028-other-maps-fix',
   'data/other-maps-catalog.json?v=20261026-cluj-alba',
   'data/other-maps-nls-catalog.json?v=20261028-other-maps-fix',
@@ -2102,7 +2103,7 @@ const PRECACHE_URLS = [
   'js/lidar-photo-filter.js?v=20261101-lidar-deep-zoom',
   'js/lidar-photo-filter.js?v=20261101-desktop-3d-hint',
   // v401: restored globe/country wiring re-tags these two shell modules.
-  'js/map-app.js?v=20261103-apm-europe',
+  'js/map-app.js?v=20261105-iosfree-retired',
   'js/window-resize.js?v=20261103-globe-country-restore'
 ,
   // v402: every layer label now has an equivalent in all 25 menu languages.
