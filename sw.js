@@ -1005,7 +1005,8 @@
 //   the coordinate joins the persistent REMOVED_SCANNER_POINTS blacklist, so a
 //   stale cache or a regenerated CSV cannot bring it back. Re-tags
 //   lidar-scanner.js (shell + DATA_URL) and CACHE_NAME.
-const CACHE_NAME = 'detectlab-v406-hoards-gated';
+// v407: bounded TRAIN inputs, mobile blocks, worker ownership and cancel/restart guards.
+const CACHE_NAME = 'detectlab-v407-apm-mobile-train';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1078,9 +1079,10 @@ const PRECACHE_URLS = [
   'js/apm-next/apm-hoard-scale.js?v=20261105-hoards-gated',
   'js/apm-next/apm-romania-sites.js?v=20261105-hoards-gated',
   'js/apm-next/apm-i18n.js?v=20261105-hoards-gated',
-  'js/apm-next/apm-pipeline.js?v=20261105-hoards-gated',
-  'js/apm-next/apm-ui.js?v=20261105-hoards-gated',
-  'js/apm-next/apm-worker.js?v=20261105-hoards-gated',
+  'js/apm-next/apm-train-cache.js?v=20261105-apm-mobile-train',
+  'js/apm-next/apm-pipeline.js?v=20261105-apm-mobile-train',
+  'js/apm-next/apm-ui.js?v=20261105-apm-mobile-train',
+  'js/apm-next/apm-worker.js?v=20261105-apm-mobile-train',
   'js/apm-next/apm-core.js?v=20261101-robust-train',
   'js/apm-next/apm-raster.js?v=20261101-robust-train',
   'js/apm-next/apm-heatmap.js?v=20261101-train-source',

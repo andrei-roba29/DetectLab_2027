@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261105-hoards-gated';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261105-apm-mobile-train';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
@@ -588,26 +588,29 @@
             return;
         }
 
-        state.token = { cancelled: false };
-        params.token = state.token;
+        var runToken = { cancelled: false };
+        state.token = runToken;
+        params.token = runToken;
         state.busy = true;
         setBusyUi(true);
         setProgress(T('status.starting'), 2);
         params.onProgress = function (key, pct, vars) {
-            if (state.token && !state.token.cancelled) setProgress(T(key, vars), pct);
+            if (state.token === runToken && !runToken.cancelled) setProgress(T(key, vars), pct);
         };
         var session = mode === 'train' ? state.trainSession : state.manualSession;
         var job = mode === 'train' ? (isHoard() && state.backgroundType === 'known-sites' ? hoardRecords().createProvider().getKnownSites(state.centre).then(function(data){params.knownSites=data; return pipe().runTrain(session,params);}) : pipe().runTrain(session, params)) : pipe().runManual(session, params);
 
         job.then(function (res) {
-            if (!state.token || state.token.cancelled) return;
+            if (state.token !== runToken || runToken.cancelled) return;
             state.result = res;
             drawResult(res);
             setStatus(hasWarnings(res) ? T('status.doneWarn') : T('status.done'), 'ok');
         }).catch(function (err) {
+            if (state.token !== runToken) return;
             if (pipe().isCancelled(err)) { setStatus(T('status.cancelled')); return; }
             setStatus(T('status.error', { msg: errText(err) }), 'error');
         }).then(function () {
+            if (state.token !== runToken) return;
             state.token = null;
             state.busy = false;
             setBusyUi(false);

@@ -1,0 +1,29 @@
+{
+  "scope": "OFFLINE synthetic providers; not a live phone/browser benchmark",
+  "trainingRadiusKm": 50,
+  "predictionRadiusKm": 50,
+  "backgroundPoints": 100,
+  "cold": {
+    "ms": 8297,
+    "demRequests": 9,
+    "waterRequests": 1,
+    "mobile": true,
+    "demCacheHits": 0,
+    "demDownloads": 8,
+    "waterCacheHits": 0,
+    "maxSampleTileCells": 268324,
+    "sampleTilePx": 512
+  },
+  "desktopSampleTileCells": 1012036,
+  "periodSwitch": {
+    "ms": 7992,
+    "demRequests": 1,
+    "waterRequests": 0,
+    "mobile": true,
+    "demCacheHits": 8,
+    "demDownloads": 0,
+    "waterCacheHits": 1,
+    "maxSampleTileCells": 268324,
+    "sampleTilePx": 512
+  }
+}

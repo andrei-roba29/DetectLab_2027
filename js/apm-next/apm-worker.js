@@ -105,13 +105,20 @@ importScripts(
     function handleSetAnalysis(m) {
         var g = m.grid, w = g.w, h = g.h, n = w * h;
         if (m.exclusionMask && m.exclusionMask.length !== n) throw new Error('Invalid spatial exclusion mask');
+        // Drop the previous window and the TRAIN vector index before allocating the new raster.
+        state.analysis = null; state.water = null;
         var sp = m.spacing || R.gridSpacingM(g);
         var t = R.terrain(m.elev, w, h, sp.dx, sp.dy, { smooth: m.smooth, nodata: m.nodata });
         var inCircle = R.circleMask(g, m.circle.lat, m.circle.lon, m.circle.radiusM);
         // Reference distributions for percentiles: explicit (TRAIN background) or the search window itself.
-        var elevInCircle = [], curvInCircle = [];
-        for (var i = 0; i < n; i++) {
-            if (inCircle[i] && t.valid[i]) { elevInCircle.push(m.elev[i]); curvInCircle.push(t.curv[i]); }
+        var elevInCircle = m.altRef ? null : [], curvInCircle = m.soilRef ? null : [];
+        // TRAIN already supplies background references: do not collect two boxed
+        // arrays of ~a million values just to throw both away.
+        for (var i = 0; (elevInCircle || curvInCircle) && i < n; i++) {
+            if (inCircle[i] && t.valid[i]) {
+                if (elevInCircle) elevInCircle.push(m.elev[i]);
+                if (curvInCircle) curvInCircle.push(t.curv[i]);
+            }
         }
         var altRef = m.altRef ? Float64Array.from(m.altRef) : Float64Array.from(elevInCircle).sort();
         var soilRef = m.soilRef ? Float64Array.from(m.soilRef) : Float64Array.from(curvInCircle).sort();
@@ -144,12 +151,13 @@ importScripts(
             waterDist[c] = cnt ? R.edt(mask, w, h, sp.dx, sp.dy) : new Float32Array(n).fill(Infinity);
         });
         state.analysis = {
-            grid: g, spacing: sp, slope: t.slope, aspect: t.aspect, curv: t.curv, valid: valid,
+            grid: g, spacing: sp, slope: t.slope, aspect: t.aspect, valid: valid,
             display: display, displayOnly: displayOnly,
             exclusionMask: m.exclusionMask || null,
-            inCircle: inCircle, altPct: altPct, soilPct: soilPct, waterDist: waterDist
+            altPct: altPct, soilPct: soilPct, waterDist: waterDist
         };
         stats.spacingM = { dx: sp.dx, dy: sp.dy };
+        stats.referenceValuesCollected = (elevInCircle ? elevInCircle.length : 0) + (curvInCircle ? curvInCircle.length : 0);
         reply(m.id, { stats: stats });
     }
 
@@ -228,6 +236,7 @@ importScripts(
     }
 
     function handleTrain(m) {
+        if (m.releaseWater) state.water = null;
         var res = core.trainModelFromSamples(m.S, { waterClasses: m.waterClasses, minSlopeDeg: m.minSlopeDeg, folds: m.folds, robustConfig: m.robustConfig });
         reply(m.id, { result: res });
     }

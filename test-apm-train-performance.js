@@ -286,18 +286,18 @@ function redTileData(size, alpha = 255) {
         }
         // Later fixes re-tag the UI, worker and mask under the newer HEAT_TAG.
         const HEAT_TAG = '20261102-apm-continuous-heat';
-        const uiTag = 'js/apm-next/apm-ui.js?v=20261105-hoards-gated';
+        const uiTag = 'js/apm-next/apm-ui.js?v=20261105-apm-mobile-train';
         assert.ok(html.includes(uiTag) && sw.includes(uiTag), uiTag);
         assert.ok(sw.includes('js/apm-next/apm-ui.js?v=' + TAG), 'older UI tag stays precached for older shells');
         assert.ok(html.includes('js/archeo-potential.js?v=' + HEAT_TAG));
         assert.ok(sw.includes('js/archeo-potential.js?v=' + HEAT_TAG));
         assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + HEAT_TAG));
         // The worker URL follows the newest worker re-tag (band-based mask).
-        assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=20261105-hoards-gated'));
+        assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=20261105-apm-mobile-train'));
         assert.ok(sw.includes('js/apm-next/apm-worker.js?v=20261102-apm-mask-band'));
         // Latest fix: the pipeline's DEM/water/UAT-mask fetches run in parallel
         // instead of in sequence (TRAIN's "run" step no longer sums their times).
-        const PARALLEL_TAG = '20261105-hoards-gated';
+        const PARALLEL_TAG = '20261105-apm-mobile-train';
         const pipelineTag = 'js/apm-next/apm-pipeline.js?v=' + PARALLEL_TAG;
         assert.ok(html.includes(pipelineTag) && sw.includes(pipelineTag), pipelineTag);
         assert.ok(sw.includes('js/apm-next/apm-pipeline.js?v=' + TAG), 'older pipeline tag stays precached for older shells');
