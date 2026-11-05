@@ -23,6 +23,16 @@
     var hoardProvider = typeof module === 'object' && module.exports ? require('./apm-hoard-provider.js') : root.DetectLabHoardProvider;
     var hoardScale = typeof module === 'object' && module.exports ? require('./apm-hoard-scale.js') : root.DetectLabHoardScale;
 
+    var cacheModule = typeof module === 'object' && module.exports ? require('./apm-train-cache.js') : root.DetectLabTrainCache;
+    var trainInputs = cacheModule ? cacheModule.create(root.indexedDB ? { indexedDB: root.indexedDB } : {}) : null;
+
+    // Preserve pixel grids/model; only the streaming block size changes.
+    function mobileTrainProfile() {
+        var nav = root.navigator || {};
+        return !!((nav.userAgentData && nav.userAgentData.mobile) || (nav.deviceMemory && nav.deviceMemory <= 4) ||
+            (root.matchMedia && root.matchMedia('(pointer: coarse)').matches));
+    }
+
     var BUFFER_M = 3000;          // context beyond the search circle (water decay band, Horn edges)
     var TRAIN_AREA_KM = 50;
     var BG_EXCLUDE_M = 500;       // no background point within 500 m of a site
@@ -61,7 +71,11 @@
                 session.exclusionStats = result.stats;
                 if (result.stats.unknown) warnings.push(core.msg('warn.exclusionUnknown', { n: result.stats.unknown },
                     'Cells with unavailable UAT exclusion data were left unscored.'));
-                return session.worker.call('setAnalysis', analysis).then(function (prepared) {
+                var transfer = [];
+                [analysis.elev,analysis.exclusionMask].concat(Object.keys(analysis.waterMasks || {}).map(function(c){return analysis.waterMasks[c];})).forEach(function(values){
+                    if(values && values.buffer && transfer.indexOf(values.buffer)<0)transfer.push(values.buffer);
+                });
+                return session.worker.call('setAnalysis', analysis, transfer).then(function (prepared) {
                     if (prepared.stats && prepared.stats.valid === 0) {
                         var unknown = result.stats.unknown > 0;
                         throw core.keyedError(unknown ? 'err.noPredictionUat' : 'err.noPredictionCells', {},
@@ -237,6 +251,19 @@
         return { strahlerMap: params.strahlerMap || prov.defaultStrahlerMap(), includeDrainage: !!params.includeDrainage };
     }
 
+    // Conservative payload estimate without allocating a second, huge JSON string.
+    function waterCacheBytes(value) {
+        var bytes=0,limit=32*1024*1024;
+        function count(v) {
+            if(bytes>limit)return;
+            if(v===null||typeof v!=='object'){bytes+=typeof v==='string'?24+v.length*2:8;return;}
+            bytes+=32;
+            if(Array.isArray(v)){bytes+=v.length*8;for(var i=0;i<v.length&&bytes<=limit;i++)count(v[i]);return;}
+            Object.keys(v).some(function(k){bytes+=16+k.length*2;count(v[k]);return bytes>limit;});
+        }
+        count(value);return bytes;
+    }
+
     /**
      * Water for a bbox: first available provider in the plan. A failure is non-fatal: the next provider is
      * tried and the failures are reported as warnings. Resolves { water, provider, attempts }.
@@ -250,7 +277,20 @@
                 if (!item.use) { attempts.push(stepRecord('water', item, 'skipped', item.skipReason)); return null; }
                 checkToken(token);
                 var t0 = Date.now();
-                return item.provider.fetchWater(bbox, opts).then(function (res) {
+                var cache = opts && opts.trainInputCache;
+                var waterOpts = Object.assign({},opts || {});
+                delete waterOpts.trainInputCache; delete waterOpts.cacheMetrics;
+                var cacheKey = 'water-mobile-v1|' + JSON.stringify([item.provider.id,item.provider.endpoint,prov.CONFIG.euHydro,prov.CONFIG.overpass,bbox,waterOpts]);
+                var request = (cache ? cache.get(cacheKey) : Promise.resolve()).then(function(cached){
+                    checkToken(token);
+                    if (cached) { if(opts.cacheMetrics)opts.cacheMetrics.waterCacheHits++; return cached; }
+                    return item.provider.fetchWater(bbox,waterOpts).then(function(res){
+                        checkToken(token);
+                        if (!cache || (res.meta && res.meta.incompleteTiles)) return res;
+                        return cache.put(cacheKey,res,waterCacheBytes(res)).then(function(){return res;});
+                    });
+                });
+                return request.then(function (res) {
                     attempts.push(stepRecord('water', item, 'used', null, Date.now() - t0));
                     return { water: res, provider: item.provider };
                 }).catch(function (e) {
@@ -544,6 +584,13 @@
             return Promise.reject(err);
         }
         if (nSites < warnSites) warnings.push(M('warn.fewSites', { n: nSites, rec: warnSites }, 'Only ' + nSites + ' sites.'));
+        checkToken(params.token);
+        if (session.worker) { session.worker.terminate(); session.worker = null; }
+        session.analysisKey = null; session.trainCache = null;
+        var trainWorker;
+        var mobile = params.mobileProfile == null ? mobileTrainProfile() : !!params.mobileProfile;
+        var metrics = { mobile: mobile, demCacheHits: 0, demDownloads: 0, waterCacheHits: 0, maxSampleTileCells: 0, sampleTilePx: 0 };
+        var inputCache = !isHoard && params.cacheInputs !== false ? trainInputs : null;
 
         var bg;
         if (isHoard && params.backgroundType === 'known-sites') {
@@ -557,27 +604,48 @@
         }).concat(bg.map(function (b) { return { lat: b.lat, lon: b.lon, x: b.x, y: b.y, isSite: false }; }));
 
         var bbox = core.circleBBox(centre.lat, centre.lon, areaM + 1000);
-        var dem, demDecision = null, grid, water = { water: null, provider: null }, classes = [];
+        var dem, cachedDem, demCoverage = null, demDecision = null, grid, water = { water: null, provider: null }, classes = [];
+        function fetchTrainBlock(g) {
+            var key = 'dem-mobile-v1|' + JSON.stringify([dem.id,dem.version,dem.endpoint,demCoverage,dem.nominalResM,g]);
+            return (inputCache ? inputCache.get(key) : Promise.resolve()).then(function(buf){
+                checkToken(params.token);
+                if (buf && buf.byteLength === g.w*g.h*4) { metrics.demCacheHits++; return new Float32Array(buf); }
+                metrics.demDownloads++;
+                return dem.fetchBlock(g).then(function(elev){
+                    checkToken(params.token);
+                    return (inputCache ? inputCache.put(key,elev.buffer,elev.byteLength) : Promise.resolve()).then(function(){return elev;});
+                });
+            });
+        }
         return pickDemProvider(centre, params.token, warnings).then(function (pick) {
+            checkToken(params.token);
             dem = pick.provider;
+            cachedDem = {fetchBlock: fetchTrainBlock};
             demDecision = pick.decision;
             // Site/background sampling stays close to the DEM resolution, but the
             // 50 km tile grid is bounded so it does not fan out into dozens of
             // full-size WCS tiles (one per 1000x1000 block).
             grid = isHoard ? hoardScale.grid(bbox, centre, hoardConfig.resolutionM) : raster.boundedGridForBBox(bbox, dem.nominalResM, raster.MAX_SAMPLING_CELLS);
             progress(isHoard ? 'hoard.waterTrain' : 'prog.waterTrain', 8);
-            return fetchWaterChain(centre, bbox, params.token, warnings, waterOptions(params));
+            var options = waterOptions(params);
+            options.trainInputCache = inputCache; options.cacheMetrics = metrics;
+            return Promise.resolve(typeof dem.discover==='function'?dem.discover():null).then(function(coverage){
+                checkToken(params.token);demCoverage=coverage&&coverage.id;
+                return fetchWaterChain(centre, bbox, params.token, warnings, options);
+            });
         }).then(function (wr) {
+            checkToken(params.token);
             water = wr;
             var segs = waterSegments(wr.water);
             classes = Object.keys(segs);
             if (session.worker) session.worker.terminate();
-            session.worker = createWorkerClient(params.workerUrl);
+            session.worker = trainWorker = createWorkerClient(params.workerUrl);
             session.analysisKey = null;
-            return session.worker.call('setWater', { classes: segs });
+            return trainWorker.call('setWater', { classes: segs }, Object.keys(segs).map(function(c){return segs[c].buffer;}));
         }).then(function () {
             // Map every point to its DEM tile (1000 px cores), then sample tile by tile.
-            var tilePx = isHoard ? 128 : (dem.tilePx || 1000);
+            var tilePx = isHoard ? 128 : Math.min(dem.tilePx || 1000, mobile ? 512 : 1000);
+            metrics.sampleTilePx = tilePx;
             var tileOf = new Map();
             pts.forEach(function (p, idx) {
                 var c = raster.cellOf(grid, p.lon, p.lat);
@@ -599,21 +667,26 @@
                     var cw = Math.min(grid.w - i0, tilePx), ch = Math.min(grid.h - j0, tilePx);
                     var spacing = isHoard ? hoardScale.spacing(grid) : raster.gridSpacingM(grid);
                     var ids = tileOf.get(key), radius = isHoard ? Math.max.apply(null, ids.map(function(pi){return hoardScale.pointRadius(pts[pi],60);}).concat([BUFFER_M])) : TRAIN_ROBUST_CONFIG.positionRadiusM;
-                    var pad = Math.max(1, Math.ceil(radius / Math.min(spacing.dx, spacing.dy))) + (isHoard ? 2 : 0);
+                    var pad = Math.max(1, Math.ceil(radius / Math.min(spacing.dx, spacing.dy))) + (isHoard ? 2 : (params.smoothDem ? 2 : 1));
                     var hg = prov.subGrid(grid, i0 - pad, j0 - pad, cw + 2 * pad, ch + 2 * pad);
                     var cacheKey = 'hoard-dem-v1|' + dem.id + '|' + JSON.stringify(hg);
-                    var download = isHoard ? prov.cacheGet(cacheKey).then(function(cached){return cached ? new Float32Array(cached.value || cached) : dem.fetchBlock(hg).then(function(e){return prov.cacheSet(cacheKey,e.buffer.slice(0)).then(function(){return e;});});}) : dem.fetchBlock(hg);
+                    metrics.maxSampleTileCells = Math.max(metrics.maxSampleTileCells,hg.w*hg.h);
+                    var download = isHoard ? prov.cacheGet(cacheKey).then(function(cached){return cached ? new Float32Array(cached.value || cached) : dem.fetchBlock(hg).then(function(e){return prov.cacheSet(cacheKey,e.buffer.slice(0)).then(function(){return e;});});}) : fetchTrainBlock(hg);
                     return download.then(function (elev) {
+                        checkToken(params.token);
                         var idxs = tileOf.get(key);
                         var flat = new Float64Array(idxs.length * 2), siteMask = new Uint8Array(idxs.length);
                         idxs.forEach(function (pi, k) { flat[2 * k] = pts[pi].lon; flat[2 * k + 1] = pts[pi].lat; siteMask[k] = pts[pi].isSite ? 1 : 0; });
-                        return session.worker.call('sampleTile', {
+                        var tileWater = isHoard ? rasteriseWater(water.water,hg) : null;
+                        var transfer = [elev.buffer,flat.buffer,siteMask.buffer];
+                        Object.keys(tileWater || {}).forEach(function(c){transfer.push(tileWater[c].buffer);});
+                        return trainWorker.call('sampleTile', {
                             elev: elev, w: hg.w, h: hg.h, dxM: spacing.dx, dyM: spacing.dy, positionRadiusM: TRAIN_ROBUST_CONFIG.positionRadiusM, siteMask: siteMask,
                             tile: { west: hg.west, north: hg.north, dLon: hg.dLon, dLat: hg.dLat },
                             smooth: !!params.smoothDem, nodata: undefined, points: flat,
                             positionRadii: isHoard ? idxs.map(function(pi){return hoardScale.pointRadius(pts[pi],60);}) : null,
-                            waterMasks: isHoard ? rasteriseWater(water.water,hg) : null
-                        }).then(function (r) {
+                            waterMasks: tileWater
+                        }, transfer).then(function (r) {
                             idxs.forEach(function (pi, k) {
                                 var o = k * 5;
                                 var water = {};
@@ -645,8 +718,8 @@
                 }
                 checkToken(params.token);
                 progress('prog.train', 65);
-                return session.worker.call('train', {
-                    S: built.S, waterClasses: built.waterClasses,
+                return trainWorker.call('train', {
+                    releaseWater: true, S: built.S, waterClasses: built.waterClasses,
                     minSlopeDeg: params.minSlopeDeg, folds: 5, robustConfig: TRAIN_ROBUST_CONFIG
                 }).then(function (tr) {
                     return { train: tr.result, built: built, hardExcluded: hard, warnings: warnings };
@@ -662,7 +735,7 @@
             // The prediction DEM raster and the UAT protection mask (often ~hundreds
             // of tiles for a 50 km TRAIN window) do not depend on each other: fetch
             // them together instead of the mask waiting for the DEM to finish first.
-            var demP = prov.loadDemGrid(dem, wgrid, dem.tilePx || 1000);
+            var demP = prov.loadDemGrid(cachedDem, wgrid, Math.min(dem.tilePx || 1000, mobile ? 512 : 1000));
             var exclusionP = startExclusionMask(wgrid, centre.lat, centre.lon, radiusM, params);
             return Promise.all([demP, exclusionP]).then(function (r) {
                 var elev = r[0], exclusionResult = r[1];
@@ -690,7 +763,7 @@
                 if(tr.robust.possibleSecondPattern.length)warnings.push(M('warn.secondPattern',{n:tr.robust.possibleSecondPattern.length},'A coherent alternate site pattern was preserved, not down-weighted.'));
                 if(tr.robust.weightChange>=TRAIN_ROBUST_CONFIG.weightChangeWarning)warnings.push(M('warn.weightShift',{v:(100*tr.robust.weightChange).toFixed(0)},'Robust fitting materially changed the learned variable weights.'));
                 var robustSites=tr.robust.flagged.map(function(x){var p=t.built.samples[x.index]||{};return {id:p.id||null,sampleIndex:x.index,lat:p.lat,lon:p.lon,weight:x.weight,reason:x.reason};});
-            return session.worker.call('score', {
+            return trainWorker.call('score', {
                 mode: 'train', model: tr.model, waterClasses: t.built.waterClasses,
                 thresholds: thr, minAreaM2: params.minAreaM2, smoothIters: 1
             }).then(function (res) {
@@ -708,6 +781,7 @@
                     warnings: warnings.slice(),   // t.warnings is the same array; do not duplicate every note
                     diagnostics: {
                         siteData: siteMeta || null,
+                        performance: metrics,
                         category: isHoard ? 'hoards' : 'settlements', analysisResolutionM: isHoard ? hoardConfig.resolutionM : null, backgroundType: params.backgroundType || 'random',
                         sitesUsed: t.built.counts.sites,
                         sitesInAreaBeforeExclusions: periodCount,
@@ -739,6 +813,12 @@
                 if(session.trainCache)session.trainCache.output=output;
                 return output;
             });
+        }).catch(function(error){
+            if(trainWorker){
+                trainWorker.terminate();
+                if(session.worker===trainWorker){session.worker=null;session.analysisKey=null;}
+            }
+            throw error;
         });
     }
 
@@ -766,6 +846,7 @@
         BUFFER_M: BUFFER_M,
         TRAIN_AREA_KM: TRAIN_AREA_KM,
         createWorkerClient: createWorkerClient,
+        mobileTrainProfile: mobileTrainProfile,
         isCancelled: isCancelled,
         cancelledError: cancelledError,
         rasteriseWater: rasteriseWater,

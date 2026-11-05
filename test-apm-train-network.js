@@ -9,7 +9,7 @@ const {createRequire} = require('node:module');
 const {JSDOM} = createRequire(path.join(__dirname,'tools/apm-test/package.json'))('jsdom');
 const read = p=>fs.readFileSync(path.join(__dirname,p),'utf8');
 const fixture = require('./test/fixtures/romania-sites.synthetic.json');
-const scripts=['apm-core','apm-raster','apm-heatmap','apm-sites','apm-providers','romania-periods.config','hoards.config','apm-hoards','apm-hoard-provider','apm-hoard-scale','apm-romania-sites','apm-i18n','apm-pipeline','apm-ui'];
+const scripts=['apm-core','apm-raster','apm-heatmap','apm-sites','apm-providers','romania-periods.config','hoards.config','apm-hoards','apm-hoard-provider','apm-hoard-scale','apm-romania-sites','apm-i18n','apm-train-cache','apm-pipeline','apm-ui'];
 const wcs='<wcs:Capabilities><wcs:ServiceMetadata><wcs:formatSupported>image/tiff</wcs:formatSupported><wcs:Extension><wcs:crsSupported>http://www.opengis.net/def/crs/EPSG/0/4326</wcs:crsSupported></wcs:Extension><wcs:MaxPixels>4000000</wcs:MaxPixels></wcs:ServiceMetadata><wcs:Contents><wcs:CoverageSummary><wcs:CoverageId>DEM_v11</wcs:CoverageId></wcs:CoverageSummary></wcs:Contents></wcs:Capabilities>';
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn,label){for(let i=0;i<1000;i++){if(fn())return;await delay(10);}throw Error('Timeout: '+label);}
@@ -139,6 +139,28 @@ function harness(mode='ok') {
         assert(!hoard.ops.includes('sampleTile'),'review gate prevents terrain requests');
         console.log('PASS hoard UI: isolated hoard RPC only, <10 blocks and offers CSV, All periods default, release gate prevents terrain requests.');
     } finally {hoard.dom.window.close();}
+    const race=harness();
+    try {
+        await race.pick(46.75,25);
+        const jobs=[];
+        race.w.DetectLabApmPipeline.runTrain=(session,params)=>new Promise((resolve,reject)=>jobs.push({resolve,reject,params}));
+        const run=race.w.document.querySelector('.apm-primary');
+        run.click();assert.equal(jobs.length,1);
+        race.clickText('Cancel');assert.equal(jobs[0].params.token.cancelled,true);
+        run.click();assert.equal(jobs.length,2);
+        jobs[1].params.onProgress('prog.train',65);
+        const progress=race.w.document.querySelector('.apm-status').textContent;
+        jobs[0].params.onProgress('prog.done',100);
+        jobs[0].reject(Error('late error from cancelled run'));
+        await delay(10);
+        assert.equal(race.w.document.querySelector('.apm-status').textContent,progress,'stale error/progress cannot replace new status');
+        assert(run.disabled,'stale cleanup cannot release the new busy gate');
+        assert(race.w.document.querySelector('.apm-period-picker').disabled,'new period chooser stays locked while running');
+        race.clickText('Cancel');assert.equal(jobs[1].params.token.cancelled,true,'new cancellation token survived old cleanup');
+        jobs[1].resolve({});await delay(10);
+        assert(!run.disabled);
+        console.log('PASS cancel/restart race: old progress, errors and cleanup cannot overwrite the new run or its cancellation token.');
+    } finally {race.dom.window.close();}
     const fail=harness('error');
     try {
         await fail.pick(46.75,25);

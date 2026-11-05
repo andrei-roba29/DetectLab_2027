@@ -1,0 +1,72 @@
+{
+  "baseline": {
+    "scripts": 191,
+    "passed": 145,
+    "failed": 46
+  },
+  "release": {
+    "scripts": 192,
+    "passed": 149,
+    "failed": 43
+  },
+  "new_failures": [],
+  "remaining_baseline_failures": [
+    "backend",
+    "test-3d-analysis-dock.js",
+    "test-3d-analysis-points.js",
+    "test-3d-basemap-button.js",
+    "test-3d-basemap-picker-lidar.js",
+    "test-3d-lidar-gray-backing.js",
+    "test-3d-lidar-tile-heal.js",
+    "test-3d-switch-base-layer-column.js",
+    "test-analysis-layers-3d.js",
+    "test-arcgis-primary-atlas.js",
+    "test-archeo-3d-projection.js",
+    "test-archeo-info-toggle-off.js",
+    "test-asig-production-probe.mjs",
+    "test-basemap-restore-and-picker.js",
+    "test-battles-and-report-3d.js",
+    "test-danish-lidar-chevron.js",
+    "test-desktop-3d-basemap-row.js",
+    "test-hist-premium-pwa-accordion.js",
+    "test-historical-eu-maps.js",
+    "test-lidar-area-first.js",
+    "test-lidar-hillshade-derivate.js",
+    "test-lidar-sublayer-controls.js",
+    "test-map-control-spacing.js",
+    "test-map3d-cesium.js",
+    "test-map3d-mobile.js",
+    "test-map3d-slider-layout.js",
+    "test-map3d-terrain.js",
+    "test-mobile-fullscreen-controls.js",
+    "test-netherlands-ahn.js",
+    "test-offline-maps-panel.js",
+    "test-pastel-orange-sliders.js",
+    "test-premium-subscription.js",
+    "test-premium-uk-historical-maps.js",
+    "test-pwa-3d-button-size-centre.js",
+    "test-roman-reference-layer.js",
+    "test-romania-5m-lidar.js",
+    "test-search-exit-3d.js",
+    "test-social-notify.js",
+    "test-spain-mapa-lidar-wms.js",
+    "test-switzerland-swisstopo-relief.js",
+    "test-uk-ea-lidar-wmts.js",
+    "test-vertical-slider-layer-auto-toggle.js",
+    "test-walachia-footprint.js"
+  ],
+  "baseline_failures_now_passing": [
+    "test-apm-hoards-server.js",
+    "test-apm-server-rpc.js",
+    "test-apm-train-network.js"
+  ],
+  "new_passing_scripts": [
+    "test-apm-train-mobile.js"
+  ],
+  "environment_note": "Installing the existing pinned tools/apm-test dependencies restored jsdom/PGlite availability; those three baseline failures are not application fixes. fake-indexeddb 6.2.4 was added only to local test tooling.",
+  "intermediate_runs": {
+    "mobile-train-after.json": "Caught new transfer-fixture/tag expectation regressions and an overly heavy new test timeout; corrected.",
+    "mobile-train-final.json": "Tag/transfer regressions fixed; new test still exceeded the parallel runner 90-second cap. Split optional full-output benchmark from bounded default test.",
+    "mobile-train-release.json": "Final code snapshot: no new failing script identities."
+  }
+}
