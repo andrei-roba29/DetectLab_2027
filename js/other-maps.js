@@ -927,6 +927,10 @@
         for (var i = list.length - 1; i >= 0; i--) {
             var ov = list[i];
             if (!ov || !ov.geom || !ov.state) continue;
+            /* A sheet painted at 0% is not a tap target: the frame is inside
+             * the same faded root, so there is nothing to select visually and
+             * an invisible rectangle must not steal taps from the dots. */
+            if (!(Number(ov.state.opacity) > 0)) continue;
             var dW = ov.geom.dW, dH = ov.geom.dH;
             if (!(dW > 0) || !(dH > 0)) continue;
             var center = map.latLngToContainerPoint(L.latLng(ov.state.lat, ov.state.lng));
@@ -1460,13 +1464,22 @@
         if (!state.manager) return;
         var stored = readStore();
         if (!stored || !Array.isArray(stored.overlays) || !stored.overlays.length) return;
+        var restored = [];
         stored.overlays.forEach(function (saved) {
             var record = findRecord(saved.id);
             if (!record) return;
-            state.manager.add(record, saved).then(function (ov) {
+            restored.push(state.manager.add(record, saved).then(function (ov) {
                 if (ov && saved.id === stored.activeId) state.manager.setActive(saved.id);
-                writeStore();
-            }).catch(function () { /* a sheet that no longer resolves is skipped */ });
+            }).catch(function () { /* a sheet that no longer resolves is skipped */ }));
+        });
+        Promise.all(restored).then(function () {
+            if (!state.manager) return;
+            // A saved sheet may carry an older per-sheet opacity; the layer
+            // slider is authoritative, so bring every restored sheet to it.
+            if (typeof state.manager.setOpacityAll === 'function') {
+                state.manager.setOpacityAll(state.opacity);
+            }
+            writeStore();
         });
     }
 
@@ -1478,8 +1491,15 @@
         // The dots follow the slider; every overlay added from here on starts
         // at the same opacity.
         redraw();
-        if (state.manager && state.manager.getActiveId()) {
-            state.manager.setOpacity(state.manager.getActiveId(), state.opacity);
+        if (state.manager) {
+            // Master opacity for the whole layer: every sheet, not just the
+            // active one.  At 0% this hides the tiles and the selection frame
+            // together, so nothing keeps painting over the basemap.
+            if (typeof state.manager.setOpacityAll === 'function') {
+                state.manager.setOpacityAll(state.opacity);
+            } else {
+                state.manager.setOpacity(state.manager.getActiveId(), state.opacity);
+            }
             paintValues();
         }
         writeStore();

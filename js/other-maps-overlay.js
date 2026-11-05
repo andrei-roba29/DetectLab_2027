@@ -823,6 +823,26 @@
             return setState(id, { opacity: value });
         }
 
+        /* The layer slider is a single master opacity: it must reach every
+         * added sheet, not only the active one.  Without this a sheet restored
+         * from the previous session kept its saved opacity and stayed visible
+         * when the user dragged the layer to 0%. */
+        function setOpacityAll(value) {
+            var v = clamp(Number(value), 0, 1);
+            if (!isFinite(v)) return null;
+            order.forEach(function (id) {
+                var ov = overlays[id];
+                if (!ov) return;
+                ov.state.opacity = v;
+                // Opacity is painted once on the root: tiles, frame, handles
+                // and georeference square all fade together.  No geometry or
+                // tile work is needed for a slider move.
+                if (ov.root) ov.root.style.opacity = String(v);
+            });
+            emitChange(activeId ? overlays[activeId] : null);
+            return v;
+        }
+
         /* Change the georeference square side for one sheet and keep the
          * anchor inside it: enlarging leaves the anchor where it is, shrinking
          * pulls it back to the nearest edge of the new square. */
@@ -1234,6 +1254,7 @@
             setAlignMode: setAlignMode,
             isAlignMode: function () { return alignMode; },
             setOpacity: setOpacity,
+            setOpacityAll: setOpacityAll,
             setState: setState,
             setBoundsKm: setBoundsKm,
             getBoundsKm: getBoundsKm,

@@ -283,9 +283,10 @@ Alinierea supraviețuiește reîncărcării paginii și repornirii stratului. C�
 | `data/other-maps-nls-catalog.json` | sămînța NLS (262 de foi → 73 de locuri, planuri OS ale Angliei; se regenerază cu tool-ul de mai jos) |
 | `tools/build-hungaricana-catalog.mjs` | re-generează/extinde catalogul Hungaricana de pe portal |
 | `tools/build-nls-catalog.mjs` | construiește catalogul NLS din WFS (live sau `--json-dir` offline); `--self-test` |
-| `test-other-maps.js` | regresia (rulează fără rețea) |
+| `test-other-maps.js` | regresia stratului (rulează fără rețea) |
+| `test-iosfree-retired.js` | regresia overlay-ului legacy Iosefină + opacitatea master |
 | `index.html` | rîndul din panoul „Hărți istorice” + tagurile de asset |
-| `sw.js` | cache `detectlab-v338-other-maps-tile-span` |
+| `sw.js` | cache `detectlab-v410-other-maps-legacy-fix` |
 
 ## 7. Cum extinzi catalogul
 
@@ -423,13 +424,48 @@ Versiunea: `js/other-maps-tiles.js`, `js/other-maps-nls.js`,
 `js/other-maps-overlay.js` și `js/other-maps.js` sînt versionate
 `20261031-other-maps-tile-span`, cache `detectlab-v338-other-maps-tile-span`.
 
+## 8.3 Opacitatea este a stratului, nu a foii active (v410)
+
+Sliderul de opacitate din cardul „Alte hărți” este un control **master**: la 0 %
+nu trebuie să rămînă nimic pictat peste harta de bază. Codul vechi schimba opacitatea
+doar pe foaia activă, iar foile restaurate la pornire își păstrau opacitatea salvată
+per foaie — o scanare Josephine restaurată rămînea vizibilă la 0 %, cu tot cu chenarul
+de selecție (chenarul stă în același `root`, deci opacitatea de pe `root` îl acoperă).
+
+Acum `OtherMaps.setOpacity()` apelează `manager.setOpacityAll()`: fiecare foaie
+adăugată primește aceeași valoare, iar după `restoreOverlays()` opacitatea stratului
+este reaplicată peste starea salvată. `snapshot()` salvează 0 pentru fiecare foaie,
+deci o restaurare ulterioară nu poate readuce una la 80 %. O foaie pictată la 0 %
+nu mai este nici țintă de atingere (`overlayAtContainer`), ca un dreptunghi invizibil
+să nu fure tap-urile destinate punctelor verzi.
+
+Tot aici a fost retras overlay-ul legacy **Harta Iosefină** (`RotatedImageOverlay`):
+`index.html` nu mai are `#iosfreeToggle`, dar căutarea îl activa, iar
+`toggleHistLayer()` trata lipsa sub-toggle-ului ca „ON” și re-adauga foaia la fiecare
+activare a stratului istoric. Canvasul era `pointer-events:none` (nu putea fi apăsat)
+și nu era legat la sliderul de opacitate. Acum:
+
+* `_iosFreeActivateSearch()` și `_placeOnMap()` refuză să creeze foaia fără un
+  `#iosfreeToggle` existent și bifat (și curăță orice foaie rămasă);
+* `toggleHistLayer()` nu mai presupune „ON” cînd sub-toggle-ul lipsește;
+* pane-ul legacy este `pointer-events:none`, deci nu mai poate înghiți click-uri;
+* dacă totuși e activat dintr-o sesiune veche, canvasul își scalează **desenul și
+  cutia CSS împreună** cînd depășește 8192 px (înainte doar `canvas.width/height`
+  era plafonat, iar foia era tăiată/întinsă la zoom mare).
+
+Versiunea: `js/map-app.js` este `20261105-iosfree-retired`, iar
+`js/other-maps.js` + `js/other-maps-overlay.js` sînt
+`20261105-other-maps-master-opacity`; cache `detectlab-v410-other-maps-legacy-fix`.
+
 ## 8. Regresie
 
 ```bash
 node test-other-maps.js
+node test-iosfree-retired.js
+node test-search-exit-3d.js
 ```
 
-peste 3 100 de verificări, fără rețea:
+peste 5 900 de verificări, fără rețea:
 
 * hash-ul tile-ului Hungaricana reproduce vectorul publicat de dezoomify (ambele ordini),
   iar stringurile de cale și recordurile fără `source` rămîn rutate pe același drum;
@@ -487,10 +523,11 @@ peste 3 100 de verificări, fără rețea:
   `combineCatalogMaps` etichetează corect cele două surse și îmbinarea live
   (`mergeLiveRecords`/`rebuildRecords`) crește indexul comun fără dubluri.
 
-`js/other-maps.js`, `js/other-maps-tiles.js`, `js/other-maps-nls.js` și
-`js/other-maps-overlay.js` sînt versionate `20261031-other-maps-tile-span` (vezi
-§8.2), iar `css/other-maps.css` rămîne la `20261028-other-maps-fix`; catalogul
+`js/other-maps-tiles.js` și `js/other-maps-nls.js` rămîn la
+`20261031-other-maps-tile-span` (vezi §8.2), `js/other-maps.js` și
+`js/other-maps-overlay.js` sînt la `20261105-other-maps-master-opacity` (vezi
+§8.3), iar `css/other-maps.css` rămîne la `20261028-other-maps-fix`; catalogul
 Hungaricana
 (`data/other-maps-catalog.json`) rămîne la `20261026-cluj-alba`, iar catalogul NLS
 (`data/other-maps-nls-catalog.json`) e la `20261028-other-maps-fix`; cache-ul
-service-worker-ului e `detectlab-v338-other-maps-tile-span`.
+service-worker-ului e `detectlab-v410-other-maps-legacy-fix`.
