@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261105-apm-mobile-train';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261105-apm-hotspot-explain';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
@@ -236,6 +236,7 @@
         if (!map) { setStatus(T('status.noMap'), 'error'); return; }
         state.picking = true;
         root.dlApmPicking = true;
+        if (typeof map.closePopup === 'function') map.closePopup();
         map.on('click', onMapPick);
         if (map.getContainer) map.getContainer().style.cursor = 'crosshair';
         renderPickButton();
@@ -647,11 +648,59 @@
         els.clearBtn.disabled = true;
     }
 
+    /** Built lazily on tap: no DOM node/table retained for every contour. */
+    function hotspotPopup(feature,res) {
+        var p=feature.properties||{},e=p.explanation;
+        var box=h('div',{class:'apm-popup apm-hotspot-explanation'},[
+            h('strong',{text:T('explain.title')}),
+            h('div',{text:T('potential.'+(p.class||'veryhigh'))}),
+            h('div',{text:p.areaM2!=null?T('result.area',{v:fmtKm2(p.areaM2/1e6)}):''})
+        ]);
+        function note(key,vars,cls){box.appendChild(h('p',{class:cls||'apm-explain-note',text:T(key,vars)}));}
+        function num(n,d){return Number.isFinite(n)?n.toLocaleString(lang()==='ro'?'ro-RO':'en-GB',
+            {minimumFractionDigits:d||0,maximumFractionDigits:d||0}):'—';}
+        if(!e||e.status!=='available')note('explain.unavailable');
+        else {
+            note('explain.score',{mean:num(e.score.mean*100,1),min:num(e.score.min*100,1),max:num(e.score.max*100,1),threshold:num(e.threshold*100,1)});
+            note(e.mode==='train'?'explain.train':'explain.manual');
+            var period=res&&res.provenance&&res.provenance.sites&&res.provenance.sites.selectedPeriod;
+            if(!period&&res)period=res.period;
+            if(e.mode==='train'&&period)note('explain.period',{period:period==='all'?T('train.allPeriods'):
+                (typeof period==='object'?period.label||T('explain.selectedPeriod'):String(period))});
+            note('explain.scope',{n:num(e.cells)});
+            var active=e.variables.filter(function(v){return v.weight>0&&v.contribution>0;});
+            if(active.length)note('explain.leading',{variables:active.slice(0,2).map(function(v){return T('explain.var.'+v.id);}).join(', ')});
+            var list=h('ul',{class:'apm-explain-variables'}),o=e.observations;
+            e.variables.forEach(function(v){
+                var row=h('li',{},[h('strong',{text:T('explain.var.'+v.id)})]);
+                if(!v.weight)row.appendChild(h('div',{text:T('explain.unused')}));
+                else {
+                    row.appendChild(h('div',{text:T('explain.term',{fit:num(v.suitability*100,1),weight:num(v.weight*100,1),points:num(v.contribution*100,1)})}));
+                    if(v.id==='altitude')row.appendChild(h('div',{text:T('explain.percentile',{v:num(o.altitudePercentile*100,1)})}));
+                    if(v.id==='soil')row.appendChild(h('div',{text:T('explain.percentile',{v:num(o.soilPercentile*100,1)})}));
+                    if(v.id==='slope')row.appendChild(h('div',{text:T('explain.slope',{v:num(o.slopeDeg,1)})}));
+                    if(v.id==='aspect'){
+                        row.appendChild(h('div',{text:o.aspectDeg==null?T('explain.mixedAspect'):T('explain.aspect',{v:num(o.aspectDeg,1)})}));
+                        if(o.neutralAspectCells)row.appendChild(h('div',{text:T('explain.neutralAspect',{n:num(o.neutralAspectCells)})}));
+                    }
+                    if(v.id==='water'){
+                        row.appendChild(h('div',{text:T('explain.bestWater')}));
+                        if(!o.water.length)row.appendChild(h('div',{text:T('explain.noWater')}));
+                        o.water.forEach(function(w){row.appendChild(h('div',{text:T('explain.waterDistance',
+                            {class:T('water.'+w.class),v:num(w.meanM),n:num(w.cells)})}));});
+                    }
+                }
+                list.appendChild(row);
+            });
+            box.appendChild(list);note('explain.terms');
+        }
+        note('explain.caution',{},'apm-explain-caution');
+        return box;
+    }
+
     function drawResult(res) {
         var m = getMap();
         if (layer && m) m.removeLayer(layer);
-        var classById = {};
-        core().CLASSES.forEach(function (c) { classById[c.id] = c; });
         // Separate panes keep outlines above the heat texture without blocking map gestures.
         if (m && !m.getPane('apmHeat')) {
             m.createPane('apmHeat').style.zIndex = 410;
@@ -665,13 +714,12 @@
             // Simplify the contour per zoom level: fewer path vertices to
             // re-project after every zoom on phones, visually identical.
             smoothFactor: 1.5,
-            style: function () { return { color: '#d9f5ff', weight: 2, fill: false, opacity: 0.95, className: 'apm-hotspot-outline' }; },
+            style: function () { return { color: '#d9f5ff', weight: 2, fill: true, fillColor: '#d9f5ff', fillOpacity: 0.001, fillRule: 'evenodd', opacity: 0.95, className: 'apm-hotspot-outline' }; },
             onEachFeature: function (f, l) {
-                var p = f.properties;
-                var cls = p.class && classById[p.class];
-                var title = cls ? T('potential.' + p.class) : (p.label || p.class);
-                var area = p.areaM2 != null ? T('result.area', { v: fmtKm2(p.areaM2 / 1e6) }) : '';
-                l.bindPopup(h('div', { class: 'apm-popup' }, [h('strong', { text: title }), h('div', { text: area })]));
+                l.bindPopup(function(){return hotspotPopup(f,res);}, {
+                    className:'apm-explanation-popup',minWidth:200,maxWidth:320,maxHeight:320,
+                    autoPanPadding:[16,16]
+                });
             }
         });
         var layers = [];
@@ -1338,6 +1386,7 @@
     root.DetectLabApmUi = {
         tm: tm,
         diagnosticsBundle: diagnosticsBundle,
+        hotspotPopup: hotspotPopup,
         init: init,
         open: function () { togglePanel(true); },
         close: function () { togglePanel(false); },

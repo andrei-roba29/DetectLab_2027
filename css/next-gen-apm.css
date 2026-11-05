@@ -280,3 +280,17 @@ body.is-pwa .apm-dock {
     transform: translate(-50%, 2mm);
 }
 .apm-dock-list { overscroll-behavior: contain; touch-action: pan-x; -webkit-overflow-scrolling: touch; }
+
+/* Highest-class polygons are filled with a virtually transparent hit surface;
+   Leaflet's even/odd fill preserves protection holes. Popups are created on tap. */
+.apm-explanation-popup .leaflet-popup-content { max-width: calc(100vw - 72px); overflow-wrap: anywhere; }
+.apm-hotspot-explanation { font-variant-numeric: tabular-nums; }
+.apm-hotspot-explanation p { margin: 7px 0; }
+.apm-explain-variables { margin: 8px 0; padding: 0 0 0 16px; }
+.apm-explain-variables li { margin: 0 0 8px; }
+.apm-explain-note { font-size: 11px; }
+.apm-explain-caution { font-size: 11px; font-weight: 600; border-top: 1px solid currentColor; padding-top: 7px; }
+/* Picking a new search point must still work inside an existing hotspot.
+   Disable descendants too: Leaflet SVG paths normally opt back into events. */
+body.apm-picking .leaflet-apmHotspots-pane,
+body.apm-picking .leaflet-apmHotspots-pane * { pointer-events: none !important; }
