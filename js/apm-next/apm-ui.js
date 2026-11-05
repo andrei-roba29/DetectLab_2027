@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261102-apm-mask-band';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261105-hoards-gated';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
@@ -27,6 +27,7 @@
 
     var state = {
         mode: 'manual',
+        category: 'settlements', includeApproximate: false, backgroundType: 'random',
         enabled: false,
         opacity: 1,
         centre: null,               // { lat, lon } picked on the map
@@ -49,6 +50,17 @@
         manualSession: { worker: null, analysisKey: null, provenance: null, stats: null, waterClasses: [] },
         trainSession: { worker: null, analysisKey: null, provenance: null, stats: null, waterClasses: [] }
     };
+
+    function isHoard() { return state.category === 'hoards'; }
+    function trainingKm() { return isHoard() ? 150 : TRAIN_AREA_KM; }
+    function hoardRecords() { return root.DetectLabHoardProvider; }
+    function changeCategory() {
+        if (state.busy) return;
+        cancelSiteLoad(); state.category = els.category.value; state.records = null; state.period = null; state.siteCount = null; state.periodChosen = false;
+        state.includeApproximate = false; els.approximate.checked = false; if (els.csvInput) els.csvInput.value = ''; state.backgroundType = 'random'; els.background.value = 'random';
+        state.csvAllowed = isHoard(); renderModeTabs(); drawCentre(); loadPeriods(); updateGate();
+        if (state.centre) loadBuiltinSites();
+    }
 
     var map = null, layer = null, centreMarker = null, radiusCircle = null, downweightedLayer = null;
     var els = {}, ui = { panel: null, btn: null };
@@ -191,7 +203,7 @@
         els.gate.hidden = premium && on;
         els.gate.textContent = !premium ? T('gate.premium') : T('gate.off');
         var canRunNow = premium && on && !state.busy;
-        var trainBlocked = state.mode === 'train' && (!state.periodChosen || !state.records || (state.siteCount != null && state.siteCount < 10));
+        var trainBlocked = state.mode === 'train' && (!state.periodChosen || !state.records || (state.siteCount != null && state.siteCount < 10) || (isHoard() && !root.DetectLabApmHoards.ready()));
         els.run.disabled = !canRunNow || !state.centre || trainBlocked;
         els.run.textContent = state.mode === 'train' ? T('run.train') : T('run.manual');
         els.pickBtn.disabled = !premium || !on || state.busy;
@@ -266,7 +278,7 @@
         if (centreMarker) m.removeLayer(centreMarker);
         if (radiusCircle) m.removeLayer(radiusCircle);
         var ll = [state.centre.lat, state.centre.lon];
-        var r = state.mode === 'train' ? TRAIN_AREA_KM * 1000 : state.radiusKm * 1000;
+        var r = state.mode === 'train' ? trainingKm() * 1000 : state.radiusKm * 1000;
         centreMarker = root.L.circleMarker(ll, { radius: 5, color: '#ffffff', weight: 2, fillColor: '#89cff0', fillOpacity: 1, interactive: false }).addTo(m);
         radiusCircle = root.L.circle(ll, { radius: r, color: '#89cff0', weight: 2, fill: false, dashArray: '6 6', interactive: false }).addTo(m);
     }
@@ -282,8 +294,8 @@
         renderPoint();
         drawCentre();
         cancelSiteLoad();
-        state.siteInput = 'builtin'; state.csvAllowed = false;
-        if (els.csvRow) els.csvRow.hidden = true;
+        state.siteInput = 'builtin'; state.csvAllowed = isHoard();
+        if (els.csvRow) els.csvRow.hidden = !isHoard();
         state.records = null; state.periodChosen = false; state.period = null; state.siteCount = null;
         loadPeriods();
         if (state.mode === 'train') loadBuiltinSites();
@@ -382,8 +394,8 @@
     function renderSiteCount() {
         if (!els.countNote) return;
         if (!state.records || !state.centre) { els.countNote.textContent = ''; els.countNote.className = 'apm-note'; state.siteCount = null; return; }
-        var pool = sites().filterSites(state.records, { center: state.centre, radiusKm: 50, period: state.period, dedupeM: state.siteInput === 'csv' ? 50 : -1 });
-        var n = pool.sites.length;
+        var pool = isHoard() ? hoardRecords().filter(state.records,state.centre,state.period) : sites().filterSites(state.records, { center: state.centre, radiusKm: 50, period: state.period, dedupeM: state.siteInput === 'csv' ? 50 : -1 });
+        var n = isHoard() && state.records._meta && state.records._meta.insufficient ? state.records._meta.usable : pool.sites.length;
         state.siteCount = n;
         var st = pipe().trainSiteStatus(n, 10, 30);
         var cls = 'apm-note', text;
@@ -391,6 +403,7 @@
         else if (st.status === 'block') { text = T('train.countBlock', { n: n, min: st.min }); cls = 'apm-note apm-count-block'; }
         else if (st.status === 'warn') { text = T('train.countWarn', { n: n, rec: st.rec }); cls = 'apm-note apm-count-warn'; }
         else { text = T('train.countOk', { n: n }); cls = 'apm-note apm-count-ok'; }
+        if (isHoard()) text = T(n < 10 ? 'hoard.countBlock' : n < 30 ? 'hoard.countWarn' : 'hoard.countOk', { n:n });
         els.countNote.textContent = text;
         els.countNote.className = cls;
     }
@@ -408,14 +421,15 @@
         state.sitesToken = token;
         state.sitesLoading = true;
         state.records = null; state.siteCount = null; state.periodChosen = false; state.period = null; state.restoredRobustIndices = [];
-        state.siteInput = 'builtin'; state.csvAllowed = false;
-        if (els.csvRow) els.csvRow.hidden = true;
+        state.siteInput = 'builtin'; state.csvAllowed = isHoard();
+        if (els.csvRow) els.csvRow.hidden = !isHoard();
         loadPeriods();
         setStatus(T('train.loading'), 'busy');
         updateGate();
-        root.DetectLabRomaniaApmSites.createProvider().getSites(state.centre, TRAIN_AREA_KM, { token: token }).then(function (records) {
+        (isHoard() ? hoardRecords() : root.DetectLabRomaniaApmSites).createProvider().getSites(state.centre, trainingKm(), { token: token, filters: { include_approximate: state.includeApproximate } }).then(function (records) {
             if (token.cancelled) return;
             state.records = records;
+            if (isHoard() && records._meta && records._meta.offerCsv) { state.csvAllowed = true; els.csvRow.hidden = false; }
             state.sitesRetrievedAt = new Date().toISOString();
             state.periodChosen = true; // TRAIN defaults to All periods; narrower periods are optional.
             if (records._meta && records._meta.outsideRomania) {
@@ -424,7 +438,7 @@
                 setStatus(T('train.outsideRomania'), 'error');
             }
             loadPeriods();
-            if (!(records._meta && records._meta.outsideRomania)) setStatus(T('train.periodApplied'), 'ok');
+            if (!(records._meta && records._meta.outsideRomania)) setStatus(T(isHoard() && records._meta.insufficient ? 'hoard.countBlock' : 'train.periodApplied', { n: records._meta.usable || 0 }), isHoard() && records._meta.insufficient ? 'error' : 'ok');
         }).catch(function (err) {
             if (!token.cancelled) {
                 state.csvAllowed = true; els.csvRow.hidden = false;
@@ -447,10 +461,11 @@
         var token = { cancelled: false };
         state.sitesToken = token;
         try {
-            var parsed = sites().parseSitesCsv(await file.text(), 'csv');
+            var csvText = await file.text();
+            var parsed = sites().parseSitesCsv(csvText, 'csv');
             if (token.cancelled) return;
             if (parsed.report.errors.length) throw new Error(parsed.report.errors.join(' '));
-            var records = await prov().createCsvSiteProvider(parsed.records, file.name).getSites(state.centre, TRAIN_AREA_KM);
+            var records = isHoard() ? hoardRecords().fromCsv(csvText,state.centre,state.includeApproximate) : await prov().createCsvSiteProvider(parsed.records, file.name).getSites(state.centre, TRAIN_AREA_KM);
             if (token.cancelled) return;
             state.records = records; state.siteInput = 'csv'; state.period = null; state.periodChosen = true;
             state.sitesRetrievedAt = new Date().toISOString();
@@ -464,8 +479,8 @@
 
     function loadPeriods() {
         if (!state.records || !state.centre) { state.periods = []; renderPeriods(); renderSiteCount(); return; }
-        var pool = pipe().sitePool(state.records, state.centre);
-        state.periods = pool.periods;
+        var pool = isHoard() ? {periods:[]} : pipe().sitePool(state.records, state.centre);
+        state.periods = isHoard() ? hoardRecords().groups(state.records) : pool.periods;
         if (state.period) {
             var keep = state.periods.some(function (g) { return g.key === state.period.key && g.selectable; });
             if (!keep) { state.period = null; state.periodChosen = false; }
@@ -493,8 +508,14 @@
         els.period.disabled = !state.records || state.busy;
         els.periodHint.textContent = state.records ? T(state.periodChosen ? 'train.periodApplied' : 'train.periodHelp') : '';
         els.periodRow.hidden = !state.records;
-        els.sitesCount.textContent = state.records ? T('train.loaded', { n: state.records.length }) : '';
+        els.sitesCount.textContent = state.records ? T(isHoard() ? 'hoard.loaded' : 'train.loaded', { n: state.records.length }) : '';
         var meta = state.records && state.records._meta;
+        if (isHoard()) {
+            var unavailable = T('train.countUnavailable');
+            function count(key) { return meta && meta[key] != null ? meta[key] : unavailable; }
+            els.siteSummary.textContent = meta ? T('hoard.summary', { total:meta.total_in_area == null ? meta.returned : meta.total_in_area, approximate:count('excluded_approximate'), adds:count('approximate_available'), duplicates:count('excluded_duplicates'), unknown:count('excluded_unknown_position'), undated:count('unknown_period') }) + (meta.truncated ? ' ' + T('train.truncated') : '') : '';
+            return;
+        }
         if (els.siteSummary) {
             var unknown = T('train.countUnavailable');
             els.siteSummary.textContent = meta && !meta.outsideRomania ? T('train.summary', {
@@ -504,7 +525,8 @@
                 geometry: meta.excludedGeometry, type: meta.excludedType, unknown: meta.unknownPeriod
             }) + (meta.truncated ? ' ' + T('train.truncated') : '') +
                 (meta.areaCrossesBorder ? ' ' + T('warn.romaniaBorder') : '') +
-                (meta.includeEmptyCoord ? ' ' + T('train.emptyIncluded') : '') : '';
+                (meta.includeEmptyCoord ? ' ' + T('train.emptyIncluded') : '') +
+                (meta.excludedHoard ? ' ' + T('hoard.settlementExcluded',{n:meta.excludedHoard}) : '') : '';
         }
     }
 
@@ -518,7 +540,7 @@
         if (v !== 'all' && v !== '') {
             var g = state.periods[Number(v)];
             if (g && g.selectable) {
-                state.period = { key: g.key, label: g.label, start: g.start, end: g.end };
+                state.period = { key: g.key, group: g.group, label: g.label, start: g.start, end: g.end };
                 state.periodChosen = true;
             }
         }
@@ -536,6 +558,7 @@
         var params;
         try {
             if (mode === 'train') {
+                if (isHoard() && !root.DetectLabApmHoards.ready()) throw new Error(T('hoard.pending'));
                 if (!state.centre) throw new Error(T('status.noPoint'));
                 if (!state.records) throw new Error(T('train.loading'));
                 if (!state.periodChosen) throw new Error(T('train.choosePeriod'));
@@ -543,12 +566,13 @@
                 params = {
                     centre: state.centre,
                     records: state.records,
-                    siteSource: { id: state.siteInput === 'csv' ? 'csv' : 'romania-repertory', label: state.siteInput === 'csv' ? 'Uploaded CSV' : 'Romanian National Archaeological Repertory',
-                        selectedPeriod: state.period || 'all', url: state.siteInput === 'csv' ? null : 'Supabase archaeological_sites_a RPC',
+                    siteSource: { id: state.siteInput === 'csv' ? 'csv' : isHoard() ? 'hoards' : 'romania-repertory', label: state.siteInput === 'csv' ? 'Uploaded CSV' : isHoard() ? 'DARMC / RAN hoards' : 'Romanian National Archaeological Repertory',
+                        selectedPeriod: state.period || 'all', url: state.siteInput === 'csv' ? null : isHoard() ? 'Supabase apm_hoards_within RPC' : 'Supabase archaeological_sites_a RPC',
                         retrievedAt: state.sitesRetrievedAt, positionAccuracy: state.siteInput === 'csv' ? 'CSV supplied accuracy' : 'COORD=DA; empty opt-in=' + !!root.DetectLabRomaniaApmConfig.includeEmptyCoord },
-                    backgroundAllowed: state.siteInput === 'csv' ? null : function (lat, lon) { return root.DetectLabRomaniaApmSites.insideRomania(lat, lon); },
+                    backgroundAllowed: state.siteInput === 'csv' || isHoard() ? null : function (lat, lon) { return root.DetectLabRomaniaApmSites.insideRomania(lat, lon); },
                     period: state.period,
-                    radiusKm: TRAIN_AREA_KM,
+                    radiusKm: isHoard() ? readRadius() : TRAIN_AREA_KM,
+                    category: isHoard() ? 'hoards' : 'settlements', backgroundType: state.backgroundType,
                     minSlopeDeg: parseFloat(els.minSlope.value),
                     smoothDem: !!els.smooth.checked,
                     includeDrainage: !!els.drainage.checked,
@@ -573,7 +597,7 @@
             if (state.token && !state.token.cancelled) setProgress(T(key, vars), pct);
         };
         var session = mode === 'train' ? state.trainSession : state.manualSession;
-        var job = mode === 'train' ? pipe().runTrain(session, params) : pipe().runManual(session, params);
+        var job = mode === 'train' ? (isHoard() && state.backgroundType === 'known-sites' ? hoardRecords().createProvider().getKnownSites(state.centre).then(function(data){params.knownSites=data; return pipe().runTrain(session,params);}) : pipe().runTrain(session, params)) : pipe().runManual(session, params);
 
         job.then(function (res) {
             if (!state.token || state.token.cancelled) return;
@@ -602,6 +626,7 @@
     function setBusyUi(busy) {
         els.cancel.hidden = !busy;
         els.period.disabled = busy || !state.records;
+        [els.category,els.approximate,els.background].forEach(function(el){if(el)el.disabled=busy;});
         if (!busy) els.progress.hidden = true;
         updateGate();
     }
@@ -783,7 +808,7 @@
             mode: res.mode || state.mode,
             generated: new Date().toISOString(),
             centre: state.centre,
-            radiusKm: state.mode === 'train' ? TRAIN_AREA_KM : state.radiusKm,
+            radiusKm: state.mode === 'train' && !isHoard() ? TRAIN_AREA_KM : state.radiusKm,
             provenance: res.provenance,
             warnings: res.warnings,
             diagnostics: res.diagnostics || null,
@@ -866,7 +891,7 @@
             userAgent: root.navigator ? root.navigator.userAgent : null,
             page: root.location ? root.location.pathname : null,
             point: state.centre,
-            radiusKm: state.mode === 'train' ? TRAIN_AREA_KM : state.radiusKm,
+            radiusKm: state.mode === 'train' && !isHoard() ? TRAIN_AREA_KM : state.radiusKm,
             settings: collectSettings(),
             lastResult: res ? { mode: res.mode, provenance: res.provenance, warnings: res.warnings } : null,
             log: prov().getDebugLog()
@@ -999,20 +1024,26 @@
         els.curvesBox = h('div', { class: 'apm-curves' }, [h('div', { class: 'apm-note', key: 'curves.help' })].concat(curveBlocks, [els.curveNote]));
 
         // TRAIN inputs
+        els.category = h('select',{class:'apm-select apm-category-picker',onchange:changeCategory},[h('option',{value:'settlements',key:'hoard.settlements'}),h('option',{value:'hoards',key:'hoard.category'})]);
+        els.approximate = h('input',{type:'checkbox',onchange:function(){state.includeApproximate=els.approximate.checked; if(state.siteInput==='csv'){ els.csvInput.value=''; state.records=null; state.periodChosen=false; loadPeriods(); updateGate(); setStatus(T('hoard.reupload'),'warn'); } else loadBuiltinSites();}});
+        els.approximateRow = h('label',{class:'apm-field'},[els.approximate,h('span',{key:'hoard.approximate'})]);
+        els.background = h('select',{class:'apm-select',onchange:function(){state.backgroundType=els.background.value;}},[h('option',{value:'random',key:'hoard.random'}),h('option',{value:'known-sites',key:'hoard.known'})]);
+        els.hoardOptions = h('div',{},[els.approximateRow,h('label',{class:'apm-field'},[h('span',{key:'hoard.background'}),els.background]),h('div',{class:'apm-note',key:'hoard.area'}),h('div',{class:'apm-note',key:'hoard.notice'}),h('div',{class:'apm-note',key:'hoard.attribution'}),h('div',{class:'apm-note',key:'hoard.objectDates'}),h('div',{class:'apm-note',key:'hoard.pending'})]);
         els.loadSites = bind(h('button', { type: 'button', class: 'apm-btn apm-small', onclick: loadBuiltinSites }), 'train.reload');
         els.sitesCount = h('span', { class: 'apm-note' });
         els.csvInput = h('input', { type: 'file', accept: '.csv,text/csv', onchange: onCsvUpload });
         els.csvRow = h('label', { class: 'apm-field', hidden: true }, [h('span', { key: 'train.csvUpload' }), els.csvInput]);
         els.siteSummary = h('div', { class: 'apm-note', role: 'status' });
-        els.period = h('select', { class: 'apm-select', onchange: function () { onPeriodChanged(); updateGate(); } });
+        els.period = h('select', { class: 'apm-select apm-period-picker', onchange: function () { onPeriodChanged(); updateGate(); } });
         els.periodRow = h('label', { class: 'apm-field' }, [h('span', { key: 'train.period' }), els.period]);
         els.periodRow.hidden = true;
         els.periodHint = h('div', { class: 'apm-note apm-period-hint', role: 'status' });
         els.countNote = h('div', { class: 'apm-note', role: 'status' });
         els.trainBox = h('div', { class: 'apm-train' }, [
-            h('div', { class: 'apm-note', key: 'train.sourceNote' }),
+            h('label',{class:'apm-field'},[h('span',{key:'hoard.selector'}),els.category]),els.hoardOptions,
+            (els.settlementSourceNote = h('div', { class: 'apm-note', key: 'train.sourceNote' })),
             els.loadSites, els.csvRow, els.sitesCount, els.siteSummary, els.periodRow, els.periodHint, els.countNote,
-            h('div', { class: 'apm-note', key: 'train.area' })
+            (els.settlementAreaNote = h('div', { class: 'apm-note', key: 'train.area' }))
         ]);
 
         // Actions and status
@@ -1121,10 +1152,13 @@
         els.trainOnly.hidden = manual;
         els.curveNote.hidden = manual;
         els.curvesBox.querySelectorAll('textarea').forEach(function (ta) { ta.disabled = !manual; });
-        els.radiusRow.hidden = !manual;
-        els.trainNote.hidden = manual;
+        els.radiusRow.hidden = !manual && !isHoard();
+        if (els.hoardOptions) els.hoardOptions.hidden = !isHoard();
+        if (els.settlementSourceNote) els.settlementSourceNote.hidden = isHoard();
+        if (els.settlementAreaNote) els.settlementAreaNote.hidden = isHoard();
+        els.trainNote.hidden = manual || isHoard();
         els.introManual.hidden = !manual;
-        els.introTrain.hidden = manual;
+        els.introTrain.hidden = manual || isHoard();
         els.controls.classList.toggle('apm-mode-train', !manual);
     }
 

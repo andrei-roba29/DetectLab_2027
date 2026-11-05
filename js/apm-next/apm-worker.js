@@ -64,6 +64,8 @@ importScripts(
         var waterOut = {};
         classes.forEach(function (c) { waterOut[c] = new Float64Array(n); });
         var inside = new Uint8Array(n);
+        var distanceGrids = {};
+        if (m.waterMasks) Object.keys(m.waterMasks).forEach(function(c){distanceGrids[c]=R.edt(m.waterMasks[c],m.w,m.h,m.dxM,m.dyM);});
         for (var p = 0; p < n; p++) {
             var lon = pts[2 * p], lat = pts[2 * p + 1];
             var cell = R.cellOf(grid, lon, lat);
@@ -71,7 +73,7 @@ importScripts(
             if (cell < 0) { out[o + 4] = 0; inside[p] = 0; }
             else {
                 inside[p] = 1;
-                var dx=m.dxM,dy=m.dyM,radius=Math.max(m.positionRadiusM||0,dx,dy);
+                var dx=m.dxM,dy=m.dyM,radius=Math.max(m.positionRadii ? m.positionRadii[p] : (m.positionRadiusM||0),dx,dy);
                 if(m.siteMask&&m.siteMask[p]){
                     out[o]=neighborhoodMedian(m.elev,cell,m.w,m.h,dx,dy,radius,t.valid,false);
                     out[o+1]=neighborhoodMedian(t.slope,cell,m.w,m.h,dx,dy,radius,t.valid,false);
@@ -81,7 +83,7 @@ importScripts(
                 out[o + 4] = t.valid[cell];
             }
             classes.forEach(function (c) {
-                waterOut[c][p] = inside[p] ? R.nearestWaterM(state.water[c], lon, lat) : NaN;
+                waterOut[c][p] = inside[p] ? (m.waterMasks ? (distanceGrids[c] ? distanceGrids[c][cell] : Infinity) : R.nearestWaterM(state.water[c], lon, lat)) : NaN;
             });
         }
         var transfer = [out.buffer, inside.buffer];
@@ -103,7 +105,7 @@ importScripts(
     function handleSetAnalysis(m) {
         var g = m.grid, w = g.w, h = g.h, n = w * h;
         if (m.exclusionMask && m.exclusionMask.length !== n) throw new Error('Invalid spatial exclusion mask');
-        var sp = R.gridSpacingM(g);
+        var sp = m.spacing || R.gridSpacingM(g);
         var t = R.terrain(m.elev, w, h, sp.dx, sp.dy, { smooth: m.smooth, nodata: m.nodata });
         var inCircle = R.circleMask(g, m.circle.lat, m.circle.lon, m.circle.radiusM);
         // Reference distributions for percentiles: explicit (TRAIN background) or the search window itself.

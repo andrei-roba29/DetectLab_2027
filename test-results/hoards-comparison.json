@@ -1,0 +1,20 @@
+{
+  "baseline": {
+    "invocations": 188,
+    "passed": 145,
+    "nonzero": 43
+  },
+  "after": {
+    "invocations": 191,
+    "passed": 148,
+    "nonzero": 43
+  },
+  "newly_failing_previously_passing": [],
+  "resolved_baseline_failures": [],
+  "new_invocations": {
+    "test-apm-hoards-server.js": 0,
+    "test-apm-hoards-sync.mjs": 0,
+    "test-apm-hoards.js": 0
+  },
+  "network_policy": "Node networking prohibited with equivalent preloaded guards in baseline and after; mocks/local PostgreSQL only for feature tests."
+}

@@ -1,0 +1,105 @@
+{
+  "date": "2026-11-05",
+  "project_ref": "dacboefvooxgsngxkavx",
+  "deployment": "backend schema and premium RPC foundation ONLY; no ingestion or model activation",
+  "migration": {
+    "version": "20261105114223",
+    "name": "apm_hoards_foundation",
+    "local_file": "backend/migrations/manual/017_apm_hoards.sql"
+  },
+  "preflight": {
+    "authenticated_can_update_plan": false,
+    "authenticated_can_update_expiry": false,
+    "authenticated_can_insert_plan": false,
+    "hoard_table_existed": false
+  },
+  "postflight": {
+    "hoard_rows": 0,
+    "hoard_rls_enabled": true,
+    "authenticated_direct_select": false,
+    "authenticated_direct_insert": false,
+    "anonymous_rpc_execute": false,
+    "authenticated_rpc_execute": true,
+    "indexes": [
+      "archaeological_hoards_pkey",
+      "archaeological_hoards_source_source_layer_source_id_key",
+      "archaeological_hoards_geog_gist",
+      "archaeological_hoards_period_groups"
+    ],
+    "source_rows_before": 51674,
+    "source_rows_after": 51674,
+    "settlement_rpc_hash_before": "0d203d569221a181edfd20c6fb28884e",
+    "settlement_rpc_hash_after": "0d203d569221a181edfd20c6fb28884e",
+    "smoke": "Transaction-local authenticated role/JWT-claim checks: missing identity denied on both RPCs; existing active-premium profile allowed; empty hoard counts and comparison-set envelope verified. Session changes rolled back. NOT signed-token/browser testing.",
+    "health": {
+      "db": true,
+      "auth": true,
+      "rest": true
+    }
+  },
+  "romanian_readonly_audit": {
+    "method": "Read-only SQL mirror of normalised descriptive-part/bucket/period rules. Aggregate candidates before geometry-boundary, name/5m deduplication and any 50/150km area selection. These are NOT imported hoard rows or live TRAIN results.",
+    "examined_points": 34951,
+    "derived_candidates": 253,
+    "buckets": {
+      "hoard-only": 246,
+      "mixed": 5,
+      "uncertain": 2,
+      "not-a-find": 34698
+    },
+    "position_classes": {
+      "exact": 65,
+      "approximate": 188,
+      "unknown": 0
+    },
+    "period_counts": {
+      "eneolitic": 1,
+      "neolitic": 3,
+      "bronz": 3,
+      "hallstatt": 8,
+      "latene": 2,
+      "carpic": 1,
+      "dacic": 15,
+      "roman-republican": 3,
+      "roman": 34,
+      "bizantin": 1,
+      "medieval": 16,
+      "otoman": 1
+    },
+    "multiple_periods": 1,
+    "unknown_period": 166,
+    "exact_settlement_exclusion_candidates": 65,
+    "already_excluded_by_existing_nonsettlement_words": 0
+  },
+  "darmc": {
+    "full_sync_verified": false,
+    "partial_page_fetch_inspection": true,
+    "cli_dry_run_exit": 1,
+    "cli_dry_run_error": "fetch failed",
+    "count_queries": {
+      "8": 21,
+      "9": 28,
+      "10": 140,
+      "11": 90,
+      "12": 1776,
+      "15": 2047,
+      "16": 2047
+    },
+    "quality_value_counts_verified": true,
+    "quality_code_meanings_verified": false,
+    "layer_overlap_verified": false,
+    "evidence": "test-results/hoards-source-inspection.json",
+    "real_fixture_projections": "test/fixtures/hoards.real-projections.json"
+  },
+  "live_150km_performance": {
+    "measured": false,
+    "requests": null,
+    "milliseconds": null
+  },
+  "activation_gates": {
+    "sourceReviewed": false,
+    "licenceApproved": false,
+    "chronologyReviewed": false,
+    "performancePassed": false
+  }
+}
