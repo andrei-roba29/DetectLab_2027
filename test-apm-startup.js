@@ -49,6 +49,8 @@ function boot(saved, { pwa = false, row = true, dock = true, storageError = fals
         renderSwitch() { toggle.checked = state.enabled; },
         updateGate() {}, renderDebugLog() {}, refreshI18n() {}, applyOpacity() {},
         stopPick() { state.picking = false; },
+        // Optional loading preview: the shipped module owns this; the extracted fixture only needs a no-op.
+        stopLoadingPreview() {},
         cancelRun() {}, cancelSiteLoad() {}, clearResult() {}, clearCentre() {}, drawCentre() {}, loadBuiltinSites() {}
     };
     vm.createContext(context);

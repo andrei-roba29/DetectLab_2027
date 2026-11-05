@@ -1007,7 +1007,8 @@
 //   lidar-scanner.js (shell + DATA_URL) and CACHE_NAME.
 // v407: bounded TRAIN inputs, mobile blocks, worker ownership and cancel/restart guards.
 // v408: per-polygon scored-cell explanations and interior hit targets.
-const CACHE_NAME = 'detectlab-v408-apm-hotspot-explain';
+// v409: bounded real-site environmental loading preview, no extra data requests.
+const CACHE_NAME = 'detectlab-v409-apm-loading-preview';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1049,6 +1050,14 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 //   and js/map3d-terrain.js.
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
+  'css/next-gen-apm.css?v=20261105-apm-loading-preview',
+  'js/apm-next/apm-raster.js?v=20261105-apm-loading-preview',
+  'js/apm-next/apm-i18n.js?v=20261105-apm-loading-preview',
+  'js/apm-next/apm-pipeline.js?v=20261105-apm-loading-preview',
+  'js/apm-next/apm-ui.js?v=20261105-apm-loading-preview',
+  'js/apm-next/apm-worker.js?v=20261105-apm-loading-preview',
+  'js/apm-next/apm-loading-preview.js?v=20261105-apm-loading-preview',
+
   // v399: Romanian Heritage sublayers (reader dependencies are local).
   'js/map-app.js?v=20261102-ro-heritage',
   'css/romania-heritage.css?v=20261102-ro-heritage',
