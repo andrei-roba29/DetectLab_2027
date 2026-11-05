@@ -285,6 +285,7 @@ Alinierea supraviețuiește reîncărcării paginii și repornirii stratului. C�
 | `tools/build-nls-catalog.mjs` | construiește catalogul NLS din WFS (live sau `--json-dir` offline); `--self-test` |
 | `test-other-maps.js` | regresia stratului (rulează fără rețea) |
 | `test-iosfree-retired.js` | regresia overlay-ului legacy Iosefină + opacitatea master |
+| `test-other-maps-browser.js` | regresia opțională în Chromium: forma foii z12–z15 + opacitatea master (necesită `PUPPETEER_MODULE_DIR` / `CHROMIUM_EXECUTABLE_PATH`) |
 | `index.html` | rîndul din panoul „Hărți istorice” + tagurile de asset |
 | `sw.js` | cache `detectlab-v410-other-maps-legacy-fix` |
 
@@ -463,6 +464,11 @@ Versiunea: `js/map-app.js` este `20261105-iosfree-retired`, iar
 node test-other-maps.js
 node test-iosfree-retired.js
 node test-search-exit-3d.js
+
+# optional, real Leaflet in Chromium (skip without a browser toolchain):
+PUPPETEER_MODULE_DIR=/path/to/node_modules \
+CHROMIUM_EXECUTABLE_PATH=/path/to/chromium \
+node test-other-maps-browser.js
 ```
 
 peste 5 900 de verificări, fără rețea:
