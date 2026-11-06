@@ -390,3 +390,35 @@ offline catalogues: **`OTHER_MAPS.md`**.
 NLS needs no key or proxy: the browser calls the WFS and IIIF endpoints directly.
 Live WFS queries are zoom-gated (≥ z9), coverage-gated (GB/Ireland box),
 debounced and failure-silent; the static seed keeps the layer useful offline.
+
+## „Hoards / Tezaure" — DARMC coin hoards & precious-metal deposits (PREMIUM, every country)
+
+A premium group available in **every** country view (and in the global view): the
+seven DARMC (Harvard) ArcGIS FeatureServer layers of the
+`DARMC_Archaeological_Studies` service, each one its own row with its own
+switch, opacity slider, status line and ⓘ. Records are queried live from the
+visible map area only; nothing is bulk-imported. Full behaviour, field handling
+and the popup contract: **`HOARDS_LAYERS.md`**.
+
+| provider | catalogue (panel row) | service layer | licence / terms | attribution as shown | min zoom |
+|---|---|---|---|---|---|
+| DARMC, Harvard University | Carolingian coin hoards, 769–814 CE | ArcGIS FeatureServer `DARMC_Archaeological_Studies/FeatureServer/8` | © DARMC; series after Coupland (2011), *A Checklist of Carolingian Coin Hoards 751–987* | “© DARMC (Digital Atlas of Roman and Medieval Civilizations), Harvard University · Coupland (2011) …” | 4 |
+| DARMC | Carolingian coin hoards, 815–840 CE | `…/FeatureServer/9` | as above | as above | 4 |
+| DARMC | Carolingian coin hoards, 841–900 CE | `…/FeatureServer/10` | as above | as above | 4 |
+| DARMC | Carolingian coin hoards, after 900 CE | `…/FeatureServer/11` | as above | as above | 4 |
+| DARMC | Gallic coin hoards, 200–300 CE | `…/FeatureServer/12` | © DARMC; after Haupt (2001) | “© DARMC … · Haupt (2001)” | 4 |
+| DARMC | Late Roman precious-metal deposits, 200–700 CE (equivalent gold weight) | `…/FeatureServer/15` | © DARMC; after Hobbs (2006) | “© DARMC … · Hobbs (2006), Late Roman precious metal deposits” | 4 |
+| DARMC | Late Roman precious-metal deposits, 200–700 CE (deposit date) | `…/FeatureServer/16` | as above | as above | 4 |
+
+Base URL: `https://services1.arcgis.com/qN3V93cYGMKQCOxL/arcgis/rest/services/DARMC_Archaeological_Studies/FeatureServer`.
+
+No key, token or proxy: the FeatureServer is public and CORS-enabled, so the
+browser queries it directly (the host is in the service worker's
+`PASSTHROUGH_HOSTS`, so it is never shell-cached). Every request is a viewport
+envelope (`f=geojson`, fallback `f=json`, `esriGeometryEnvelope`,
+`esriSpatialRelIntersects`, `outSR=4326`, max 6 000 records), the in-flight
+request is aborted when a row is switched off, `moveend`/`zoomend` re-query is
+debounced (220 ms) and each catalogue stays silent below zoom 4. A row that
+cannot reach its service says “Temporarily unavailable”; a partial answer
+(`exceededTransferLimit`) says “partial — zoom in for the rest”. The group has
+no country attribution: it stays visible for every ISO and in the global view.

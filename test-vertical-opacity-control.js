@@ -19,7 +19,7 @@ const opacityIds = rangeTags.filter(function (tag) {
 }).map(function (tag) {
     return (tag.match(/id="([^"]+)"/) || [])[1];
 });
-assert.strictEqual(opacityIds.length, 57, 'all 57 shipped opacity ranges are discoverable (including Romania 5 m LiDAR and natural protected sites)');
+assert.strictEqual(opacityIds.length, 58, 'all 58 shipped opacity ranges are discoverable (including the Hoards group and Romania 5 m LiDAR)');
 assert(!opacityIds.includes('lidarScannerDistance'), 'scanner distance is not an opacity range');
 assert(indexHtml.includes('id="battlesPeriodSlider"'), 'battles period slider should be part of the panel');
 assert(indexHtml.includes('id="battlesPeriodValue"'), 'battles century bubble should exist in the panel');

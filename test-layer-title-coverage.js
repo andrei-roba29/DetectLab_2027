@@ -7,7 +7,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ROOT = __dirname;
 const UI_LANGS = ['en','ro','de','fr','it','es','pl','uk','hu','cs','sk','nl','bg','el','pt','da','sv','no','fi','et','lv','lt','hr','sr','sl'];
-const FILES = ['js/layer-registry.js','js/danish-layers.config.js','js/finland-layers.config.js','js/asig-albania-layers.config.js','js/uk-heritage-layers.js'];
+const FILES = ['js/layer-registry.js','js/danish-layers.config.js','js/finland-layers.config.js','js/asig-albania-layers.config.js','js/uk-heritage-layers.js','js/hoards-layers.js'];
 
 function findLanguageObjects(src, prop) {
     const out = [];

@@ -1148,7 +1148,7 @@ function testWiring() {
         'reduced motion disables the dynamic chevron transition');
     assert.ok(css.indexOf('layer-group-arrow-highlight') === -1,
         'the forbidden arrow highlight class is absent from CSS');
-    const cssUrl = 'css/styles.css?v=20261103-danish-lidar-chevron';
+    const cssUrl = 'css/styles.css?v=20261106-hoards';
     const jsUrl = 'js/danish-layers.js?v=20261103-danish-lidar-chevron';
     assert.ok(html.indexOf('href="' + cssUrl + '"') !== -1, 'index.html loads the restyled stylesheet');
     assert.ok(html.indexOf('src="' + jsUrl + '"') !== -1, 'index.html loads the restyled renderer');
