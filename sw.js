@@ -1009,7 +1009,14 @@
 // v408: per-polygon scored-cell explanations and interior hit targets.
 // v409: bounded real-site environmental loading preview, no extra data requests.
 // v410: Other maps master opacity + retired legacy Iosefină canvas overlay.
-const CACHE_NAME = 'detectlab-v411-hoards';
+// v412: „Mută harta istorică" se aplică acum și în 3D. Deplasarea (metri
+//   proiectați, per pane) e anunțată de js/hist-shift.js prin
+//   `detectlab:histshiftchange`; rasterele istorice primesc offsetul în
+//   template-ul de tile (dl2d://…?hs=x,y) și fiecare tile cerut e compus
+//   din vecinii pe care îi acoperă fereastra mutată, iar image-overlay-urile
+//   își mută cele patru colțuri cu aceiași metri. O poziție aliniată o dată
+//   e aceeași în ambele vizualizări. Vezi HISTORICAL_MAP_SHIFT.md §5.
+const CACHE_NAME = 'detectlab-v412-hist-shift-3d';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -2126,7 +2133,15 @@ const PRECACHE_URLS = [
   // index.html and the rows + Leaflet layers are created lazily on switch-on.
   'js/hoards-layers.js?v=20261106-hoards',
   'css/styles.css?v=20261106-hoards',
-  'js/translations.js?v=20261106-hoards'
+  'js/translations.js?v=20261106-hoards',
+  // v412: a historical map moved in 2D (long-press → „Mută harta istorică") is
+  // now drawn at the SAME position in 3D. The offset is announced by
+  // js/hist-shift.js and applied by the mirror (shifted tile templates, moved
+  // image corners) and the viewer (tiles composed from the neighbours the
+  // offset covers). See HISTORICAL_MAP_SHIFT.md §5.
+  'js/hist-shift.js?v=20261106-hist-shift-3d',
+  'js/map3d-mirror.js?v=20261106-hist-shift-3d',
+  'js/map3d-terrain.js?v=20261106-hist-shift-3d'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

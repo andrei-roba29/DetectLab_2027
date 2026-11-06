@@ -306,6 +306,9 @@ never from the layer provider — a WMS only ever contributes flat imagery.
    property of the data, not of the viewer. The exaggeration is a fixed config
    constant (`CONFIG.terrain.exaggeration`); pitch and bearing change with the
    drag gesture so the draping can be judged from an angle.
+   *Georeferencing* is a different matter and it is fixable by the user: the
+   long-press “Move the historical map” offset (`js/hist-shift.js`, up to 3 km) is
+   applied in 3D too — see §5.1.
 2. **The two EPSG:2180 city plans are re-projected approximately** (Warsaw 1822, Prague
    1796). The proxy converts the Web-Mercator tile bbox into PL-1992 (GRS80 transverse
    Mercator, k0 = 0.9993, λ0 = 19° E) and requests the tile in `crs=EPSG:2180`; the
@@ -342,6 +345,34 @@ never from the layer provider — a WMS only ever contributes flat imagery.
    (Node without the sandbox) the 8 module-backed layers report `drape: false` with the
    module name; in the browser and in the proxy they are evaluated, so
    `/api/map3d/status` and `node test-map3d-terrain.js` show **91/91 draped**.
+
+## 5.1 The 2D “move the historical map” offset, in 3D
+
+A nineteenth-century sheet is often a few hundred metres off its true
+georeferencing, so `js/hist-shift.js` lets the user drag it into place (long-press →
+“Move the historical map” → drag; stored per Leaflet pane in projected metres,
+EPSG:3857, `localStorage['dlHistShift.v1']`, 3 km ceiling). In 2D that is a CSS
+transform on the layer's pane. MapLibre has no per-layer transform, so the offset is
+carried as data:
+
+* `js/hist-shift.js` dispatches `detectlab:histshiftchange` on `window`
+  (`{ pane, offset, offsets, maxOffsetM }`) whenever an offset is set or reset.
+* `js/map3d-mirror.js` reads the pane's offset (`shiftForPane`) and, for a moved
+  layer, appends `?hs=<x>,<y>` to the `dl2d://` tile template — or moves an image
+  overlay's four corners by the same metres (`shiftCoordinates`).
+* `js/map3d-terrain.js` composes each tile MapLibre asks for out of the upstream
+  tiles the shifted window covers (`shiftMosaic` + `composeShiftedTile`): a window
+  exactly one tile wide touches **at most two tiles per axis**, so a correction is
+  never more than four requests, however large. The composed tile is cached under
+  its offset-carrying URL. A layer with no offset keeps the single-request path
+  and the registry template it always used.
+* The viewer re-lays its deck on the event (and the 1.5 s poll's signature
+  includes the offsets, as a second net), so `DetectLabHistShift.reset(pane)` — or
+  a reset in the 2D panel before opening 3D — clears both views.
+  `DetectLabMap3D.status()` reports `historyShift` (the offsets applied) and
+  `shiftedTiles` (composed tiles), and every mirrored layer carries `pane` + `shift`.
+
+Regression: `node test-hist-shift-3d.js`. See `HISTORICAL_MAP_SHIFT.md` §5.
 
 ## 6. The Roman-roads crash, the blank LiDAR tiles, and what the deck budget does
 
