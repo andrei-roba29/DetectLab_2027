@@ -9824,3 +9824,156 @@ a.dl-gmaps-directions-btn {
         line-height: 1.25;
     }
 }
+
+/* ── Hoards (js/hoards-layers.js) — PREMIUM, every country ──────────────────
+   One Romania-style `.transp-layer-row` header (title, group ⓘ, expand chevron,
+   master switch, group opacity slider) over a left-bordered `#hoardsSubLayers`
+   column of one row per DARMC catalogue. Each row is the shared glass
+   `.dl-sublayer-row` box with the `.apm-toggle-switch` pill switch, the
+   `.transp-layer-label` opacity line (`.pct` badge + `.layer-info-btn`) and the
+   shared `.transp-slider` — the same material as the UK heritage rows, the
+   Danish rows and the Finnish rows.
+
+   The catalogues are premium layers, so the group and every row carry
+   data-category="premium". The tabs gate `.transp-layer-row[data-category]`,
+   which covers the group; the `[data-category]` rules below extend that same
+   gate to the catalogue rows, which are nested `.dl-sublayer-row`s rather than
+   top-level rows. Nothing in this family can be listed under Free.
+
+   No country gate here: DARMC publishes hoards for every country, so
+   js/hoards-layers.js filter() deliberately never sets
+   .country-layer-unavailable on this family. */
+.hoards-group {
+    --hoards-accent: #e8c15a;
+}
+
+.hoards-sublayers {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.hoards-sublayer[data-category] {
+    display: none !important;
+}
+
+.hoards-sublayer[data-category].active {
+    display: flex !important;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.hoards-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: rgba(245, 240, 235, 0.75);
+    margin-bottom: 5px;
+}
+
+.hoards-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1;
+    min-width: 0;
+}
+
+.hoards-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.hoards-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.hoards-provider {
+    flex-shrink: 0;
+    font-size: 0.62rem;
+    font-style: italic;
+    opacity: 0.5;
+    white-space: nowrap;
+}
+
+.hoards-sublayer.is-active .hoards-title {
+    color: rgba(245, 240, 235, 0.98);
+}
+
+.hoards-opacity-line {
+    margin-bottom: 5px;
+    margin-top: 2px;
+}
+
+.hoards-slider {
+    margin-top: 0;
+}
+
+.hoards-status {
+    display: none;
+    font-size: 0.66rem;
+    line-height: 1.3;
+    opacity: 0.7;
+    margin-top: 1px;
+}
+
+.hoards-status.is-count,
+.hoards-status.is-hint {
+    opacity: 0.6;
+}
+
+.hoards-status.is-error {
+    color: #ffb4a2;
+    opacity: 1;
+}
+
+/* The popup prints the record's own DARMC attributes, one per line. */
+.hoards-popup-source {
+    display: block;
+    font-size: 0.72rem;
+    font-style: italic;
+    opacity: 0.7;
+    margin: 2px 0 4px;
+}
+
+.hoards-popup-row {
+    display: block;
+    font-size: 0.78rem;
+    line-height: 1.35;
+}
+
+/* The shared pill switch hides its checkbox, so keyboard focus has to land on
+   the track that follows it; the ⓘ and the sliders keep their own ring. */
+#transpPanel .hoards-sublayer .apm-toggle-switch input:focus-visible + .apm-toggle-track,
+#transpPanel .hoards-group .apm-toggle-switch input:focus-visible + .apm-toggle-track,
+#transpPanel .hoards-group button:focus-visible {
+    outline: 2px solid var(--hoards-accent, #e8c15a);
+    outline-offset: 1px;
+}
+
+.hoards-sublayer .hoards-slider:focus-visible,
+.hoards-sublayer .layer-info-btn:focus-visible {
+    outline: 2px solid var(--hoards-accent, #e8c15a);
+    outline-offset: 1px;
+}
+
+/* 430 px: the catalogue names are long (dates + qualifier), so the provider tag
+   may wrap under the title instead of pushing the switch off the row. */
+@media (max-width: 430px) {
+    .hoards-title-wrap {
+        flex-wrap: wrap;
+        row-gap: 2px;
+    }
+
+    .hoards-title {
+        white-space: normal;
+        line-height: 1.25;
+    }
+}

@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="css/leaflet.photon.css">
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20261103-danish-lidar-chevron">
+    <link rel="stylesheet" href="css/styles.css?v=20261106-hoards">
     <!-- 3D TERRAIN VIEW (2D ⇄ 3D) — MapLibre GL JS, vendored like Leaflet.
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
@@ -3104,6 +3104,63 @@
 
                     </div><!-- /battles transp-layer-row -->
 
+                    <!-- Hoards (PREMIUM) — DARMC coin hoards + late-Roman precious-metal
+                         deposits. Unlike the national catalogues this group belongs to
+                         EVERY country: it carries no country attribution and no bounds
+                         record, so js/map-app.js filterLayersForCountry() leaves it
+                         alone and js/hoards-layers.js filter() keeps it visible for
+                         every ISO (and in the global view). It is premium, so both the
+                         group and every row it builds are data-category="premium".
+                         The seven rows (one per FeatureServer layer, each with its own
+                         switch, opacity slider, % badge, status line and ⓘ) are built
+                         by js/hoards-layers.js into #hoardsSubLayers. Layer 8 is listed
+                         once: the viewer asked for it twice, and one layer can only own
+                         one switch. See HOARDS_LAYERS.md. -->
+                    <div class="transp-layer-row hoards-group" data-category="premium" id="hoardsRow">
+                        <!-- Group header: title, group ⓘ, expand chevron, master switch -->
+                        <div class="transp-layer-label" style="margin-bottom:6px">
+                            <span style="display:flex;align-items:center;gap:7px;min-width:0">
+                                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style="flex-shrink:0" aria-hidden="true">
+                                    <ellipse cx="6.5" cy="4" rx="4.1" ry="1.9" fill="rgba(232,193,90,0.35)" stroke="#e8c15a" stroke-width="0.9" />
+                                    <path d="M2.4 4v2.2c0 1.05 1.84 1.9 4.1 1.9s4.1-.85 4.1-1.9V4" stroke="#e8c15a" stroke-width="0.9" fill="none" />
+                                    <path d="M2.4 6.4v2.2c0 1.05 1.84 1.9 4.1 1.9s4.1-.85 4.1-1.9V6.4" stroke="#e8c15a" stroke-width="0.9" fill="none" />
+                                </svg>
+                                <span class="t" data-key="layer_hoards" id="hoardsTitle">Hoards</span>
+                                <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showHoardsGroupInfo()" title="Hoards: the seven DARMC catalogues, their sources, licences and zoom limits"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
+                            </span>
+                            <span style="display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0">
+                                <button type="button" onclick="toggleHoardsSubLayers()" id="hoardsExpandBtn" aria-expanded="true" title="Expand/Collapse the hoard catalogues" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:rgba(232,193,90,0.85);display:flex;align-items:center;transition:color 0.2s;" onmouseover="this.style.color='#e8c15a'" onmouseout="this.style.color='rgba(232,193,90,0.85)'">
+                                    <svg id="hoardsExpandIcon" width="12" height="12" viewBox="0 0 12 12" fill="none" style="transition:transform 0.25s ease;transform:rotate(0deg)">
+                                        <polyline points="2,4 6,8 10,4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                                    </svg>
+                                </button>
+                                <label class="apm-toggle-switch" title="Toggle every hoard catalogue">
+                                    <input type="checkbox" id="hoardsToggle" onchange="toggleHoardsLayers(this.checked)">
+                                    <span class="apm-toggle-track"></span>
+                                </label>
+                            </span>
+                        </div>
+
+                        <!-- Group opacity (the per-catalogue sliders live in the rows) -->
+                        <div class="transp-layer-label" style="margin-bottom:6px;margin-top:2px">
+                            <span style="display:flex;align-items:center;gap:6px;min-width:0">
+                                <span style="font-size:0.72rem;opacity:0.6" class="t" data-key="layer_opacity_label">Opacity</span>
+                                <span style="font-size:0.55rem;background:rgba(255,200,50,0.15);color:#ffc832;border:1px solid rgba(255,200,50,0.4);border-radius:3px;padding:1px 4px;flex-shrink:0">PREMIUM</span>
+                            </span>
+                            <span style="display:flex;align-items:center;gap:5px">
+                                <span class="pct" id="hoardsPct">85%</span>
+                            </span>
+                        </div>
+                        <input type="range" class="transp-slider" id="hoardsOpacitySlider"
+                               min="0" max="100" value="85"
+                               aria-label="Opacity — every hoard catalogue"
+                               oninput="setHoardsOpacity(this.value)">
+
+                        <!-- One row per DARMC FeatureServer layer (switch + slider +
+                             % badge + status line + ⓘ), built by js/hoards-layers.js. -->
+                        <div id="hoardsSubLayers" class="hoards-sublayers" style="margin-top:8px;padding-left:6px;border-left:2px solid rgba(232,193,90,0.3);display:flex;flex-direction:column;gap:8px;overflow:hidden;transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;max-height:none;opacity:1;"></div>
+                    </div><!-- /hoards transp-layer-row -->
+
                     <div class="transp-divider" data-category="premium"></div>
 
                     <!-- Harti Istorice — Parent Group -->
@@ -5286,7 +5343,7 @@
     </footer>
 
     <script src="js/ios-input-focus.js?v=20261102-ios-viewport-settle"></script>
-    <script src="js/translations.js?v=20261103-layer-i18n"></script>
+    <script src="js/translations.js?v=20261106-hoards"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
     <script src="js/leaflet.js"></script>
@@ -5482,6 +5539,12 @@
     <script src="js/other-maps.js?v=20261105-other-maps-master-opacity"></script>
     <script src="js/offline-maps.js?v=20261024-uk-historical-maps"></script>
     <script src="js/battles-layer.js?v=20261020-3d-analysis-points"></script>
+    <!-- Hoards (PREMIUM, every country): the seven DARMC (Harvard) ArcGIS
+         FeatureServer catalogues — Carolingian and Gallic coin hoards plus the
+         late-Roman precious-metal deposits — as viewport-limited point
+         overlays. Builds its own rows into #hoardsSubLayers and attaches
+         itself to the live map once it exists. See HOARDS_LAYERS.md. -->
+    <script src="js/hoards-layers.js?v=20261106-hoards"></script>
     <script src="js/vertical-opacity-control.js?v=20261102-ro-heritage"></script>
     <!-- leaflet-heat rămâne în shell (pre-cache), dar nu mai e folosit de
          „Archeological Potential Sites": heatmap-ul de acolo e propriul raster de
@@ -6754,7 +6817,7 @@
     </div>
 
 <script src="js/account-legacy.js?v=20260814-promo"></script>
-<script src="js/subscriptions.js?v=20261101-ios-flow-keyboard"></script>
+<script src="js/subscriptions.js?v=20261106-hoards"></script>
 
 
 

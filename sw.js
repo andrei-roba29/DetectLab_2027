@@ -1009,7 +1009,7 @@
 // v408: per-polygon scored-cell explanations and interior hit targets.
 // v409: bounded real-site environmental loading preview, no extra data requests.
 // v410: Other maps master opacity + retired legacy Iosefină canvas overlay.
-const CACHE_NAME = 'detectlab-v410-other-maps-legacy-fix';
+const CACHE_NAME = 'detectlab-v411-hoards';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1379,7 +1379,7 @@ const PRECACHE_URLS = [
   'js/auth.js?v=20261101-ios-flow-keyboard',
   'js/friends.js?v=20261101-ios-flow-keyboard',
   'js/library-of-babel.js?v=20261101-ios-flow-keyboard',
-  'js/subscriptions.js?v=20261101-ios-flow-keyboard',
+  'js/subscriptions.js?v=20261106-hoards',
   // v183: the full-screen ArcGIS SceneView atlas (kept as an optional 3D
   // experience, opened in a new tab from the map header / top nav).
   'europe-roman-atlas.html?embed=1',
@@ -2119,7 +2119,14 @@ const PRECACHE_URLS = [
   // v403: Heritage, Historical maps and Ortophoto now use the LiDAR
   // accordion's blue SVG expand chevron, hover/focus and reduced-motion CSS.
   'css/styles.css?v=20261103-danish-lidar-chevron',
-  'js/danish-layers.js?v=20261103-danish-lidar-chevron'
+  'js/danish-layers.js?v=20261103-danish-lidar-chevron',
+  // v411: Hoards — a PREMIUM group for every country, built from the seven
+  // DARMC (Harvard) ArcGIS FeatureServer catalogues (Carolingian + Gallic coin
+  // hoards, late-Roman precious-metal deposits). The module is loaded by
+  // index.html and the rows + Leaflet layers are created lazily on switch-on.
+  'js/hoards-layers.js?v=20261106-hoards',
+  'css/styles.css?v=20261106-hoards',
+  'js/translations.js?v=20261106-hoards'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

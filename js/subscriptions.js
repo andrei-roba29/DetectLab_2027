@@ -689,6 +689,11 @@
         'toggleRomanSub',
         'toggleRomanDareCategories',
         'toggleBattlesLayer',
+        // Hoards (js/hoards-layers.js) — the DARMC coin-hoard catalogues. The
+        // per-catalogue switches inside #hoardsRow are already blocked by the
+        // capture-phase handler; this wraps the master switch for programmatic
+        // callers too (the module also guards itself).
+        'toggleHoardsLayers',
         'toggleArcheoPotentialLayer',
         'toggleLidarScannerLayer',
         'setLidarActive',
