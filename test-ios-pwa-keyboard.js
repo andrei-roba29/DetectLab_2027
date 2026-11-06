@@ -143,8 +143,13 @@ assert(!html.includes('dlKeyboardToggle'), 'no standalone keyboard toggle button
 assert(!html.includes('ios-fallback-keyboard'), 'native keyboard is not overlaid by app keys');
 assert(!sw.includes('js/ios-fallback-keyboard.js'), 'fallback keyboard is not precached');
 assert(!html.includes('dlIosKeyboard') && !html.includes('--dl-ios-keys-height'));
-for (const file of ['friends', 'library-of-babel', 'subscriptions']) {
-    const url = `js/${file}.js?v=20261101-ios-flow-keyboard`;
+for (const url of [
+    'js/friends.js?v=20261101-ios-flow-keyboard',
+    'js/library-of-babel.js?v=20261101-ios-flow-keyboard',
+    // Re-tagged by the Hoards release (the premium toggle list gained the
+    // hoards group); still the iOS-flow build of the module.
+    'js/subscriptions.js?v=20261106-hoards'
+]) {
     assert(html.includes(url) && sw.includes(url), `${url} must be loaded and precached`);
 }
 const helperUrl = 'js/ios-input-focus.js?v=20261102-ios-viewport-settle';
