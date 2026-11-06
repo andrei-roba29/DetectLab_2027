@@ -50,6 +50,12 @@
  *   .setExaggeration(v) .setPitch(v) .setBearing(v) .resetView()
  *   .status()  → per-layer 3D status (used by /api/map3d/status and the tests)
  *   .report()  → console table of what is drawn, how, and why
+ *
+ * HISTORICAL MAPS MOVED IN 2D
+ *   js/hist-shift.js remembers a per-pane offset in projected metres. The deck
+ *   applies it here: rasters through a shifted dl2d:// tile (composed from the
+ *   neighbours the offset covers) and image overlays through their four
+ *   corners, so “move the historical map” holds in both views.
  * ========================================================================== */
 (function (root, document) {
     'use strict';
@@ -104,6 +110,11 @@
         sourceTiles: {},                 /* sourceId → the tile template already loaded */
         blendCache: {},                  /* url → repainted tile bytes             */
         blendWarned: false,              /* the repaint failure was already reported */
+        /* Historical maps moved in 2D (js/hist-shift.js): a shifted tile is
+         * composed from its neighbours, and the result is kept here under the
+         * offset-carrying dl2d:// URL so a pan back costs no repaint. */
+        shiftCache: {},                  /* dl2d url (with ?hs=…) → composed bytes */
+        shiftedTiles: 0,                 /* tiles composed for a 2D offset         */
         cappedSeen: {},                  /* deck-budget lines already reported     */
         retintedTiles: 0,                /* tiles repainted for a CSS blend mode   */
         /* ── LiDAR focus (js/lidar-3d-focus.js) ──────────────────────────────
@@ -1399,6 +1410,22 @@
             var coords = { z: z, x: x, y: y };
             var layer = MIRROR.layerByKey(key);
             if (!layer) return Promise.reject(new Error('[Map3D] the 2D layer behind ' + key + ' is gone'));
+            /* A historical map the user aligned in 2D: this tile is not the
+             * upstream tile at (z,x,y), it is the window the offset covers.
+             * Composed from the neighbours, so the sheet lands in 3D on the
+             * exact same spot it has on the 2D map. Comes first: the prepared
+             * disc, the photo filter and the plain fetch are all unshifted. */
+            var tileShift = typeof MIRROR.parseShift === 'function' ? MIRROR.parseShift(templateUrl) : null;
+            /* Spelled out here (not through hasShiftOf) so this handler stays
+             * self-contained: the suite runs this block on its own. */
+            var tileShiftOn = !!(tileShift && (tileShift.x || tileShift.y));
+            if (tileShiftOn) {
+                return shiftedTile(layer, templateUrl, coords, tileShift, abortController)
+                    .then(function (bytes) {
+                        return clipFocusedTile(key, templateUrl, bytes, coords)
+                            .then(function (data) { return { data: data }; });
+                    });
+            }
             // Processed pixels must win over the raw prefetched 3D tiles.
             // The photo renderer already clips and applies the 2D opacity.
             if (photoInfoFor(layer, key)) {
@@ -2492,6 +2519,98 @@
      * ═══════════════════════════════════════════════════════════════════════ */
     function fadeDuration() { return (REGISTRY.config().perf || {}).fadeDuration || 120; }
 
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  THE HISTORICAL-MAP OFFSET (js/hist-shift.js) — the same spot in 3D
+     * -----------------------------------------------------------------------
+     *  In 2D the user drags a historical sheet off its true position and the
+     *  offset is a CSS transform on the layer's Leaflet pane. MapLibre has no
+     *  such transform, so the correction is carried as data:
+     *
+     *    • a raster gets its offset in the tile template
+     *      (`dl2d://…/{z}/{x}/{y}?hs=<x>,<y>`) and every requested tile is
+     *      composed from the neighbours the shifted window covers — the pixels
+     *      the user aligned, a few pixels to the side, on the terrain;
+     *    • an image overlay gets its four corners moved by the same metres.
+     *
+     *  One rule, both views: the offset lives on the PANE (js/hist-shift.js
+     *  keys it that way), so every historical layer of a pane moves together
+     *  here exactly as it does there. Nothing is hard-coded and a sheet with no
+     *  offset takes the old, single-request path.
+     * ═══════════════════════════════════════════════════════════════════════ */
+
+    /** The 2D offset that applies to a mirrored item (0,0 when there is none). */
+    function shiftOfItem(item) {
+        if (!item || !item.pane || typeof MIRROR.shiftForPane !== 'function') return { x: 0, y: 0 };
+        return MIRROR.shiftForPane(item.pane);
+    }
+
+    /** Is this an offset worth acting on? (A cached older mirror has no
+     *  hasShift — the comparison still has to work, so it is spelled out.) */
+    function hasShiftOf(shift) {
+        if (typeof MIRROR.hasShift === 'function') return MIRROR.hasShift(shift);
+        return !!(shift && (Math.abs(Number(shift.x) || 0) > 1e-3 || Math.abs(Number(shift.y) || 0) > 1e-3));
+    }
+
+    /** The transparent tile a protocol may hand back (an older mirror may not
+     *  expose the disc's own helper). */
+    function blankTileBytes() {
+        try {
+            if (MIRROR.disc && typeof MIRROR.disc.blankTile === 'function') return MIRROR.disc.blankTile();
+        } catch (e) { /* fall through */ }
+        return new ArrayBuffer(0);
+    }
+
+    function tileSizeOf(layer, fallback) {
+        var size = Number(fallback) || 256;
+        try { if (layer && layer.getTileSize) size = Number(layer.getTileSize().x) || size; } catch (e) { /* keep */ }
+        return size;
+    }
+
+    /** One upstream tile's pixels, through the same CORS/proxy/blend path. */
+    function tilePixelsFor(layer, z, x, y, abortController) {
+        var url = MIRROR.tileUrlFor(layer, z, x, y);
+        if (url) {
+            var isWms = !!((layer.options && (layer.options.layers || layer.options.layer)) ||
+                /[?&](service=wms|request=getmap)/i.test(url));
+            return fetchTile(url, abortController, { preferProxy: isWms }).then(function (tile) {
+                if (!tile || tile.blank) return null;
+                return blendedTile(layer, url, tile.data);
+            });
+        }
+        /* No URL: the 2D layer draws its own tiles — ask it for these pixels. */
+        if (typeof MIRROR.renderTile === 'function') return MIRROR.renderTile(layer, z, x, y);
+        return Promise.resolve(null);
+    }
+
+    /**
+     * One shifted tile: the neighbour block the offset covers, drawn into a
+     * single canvas at the positions the mirror worked out.
+     */
+    function shiftedTile(layer, templateUrl, tile, shift, abortController) {
+        var hit = state.shiftCache[templateUrl];
+        if (hit) return Promise.resolve(hit.slice(0));
+        var size = tileSizeOf(layer);
+        var px = MIRROR.shiftPixels(shift, tile.z, size);
+        var plan = MIRROR.shiftMosaic(px, tile.z, tile.x, tile.y, size);
+        var parts = plan.tiles.map(function (part) {
+            return tilePixelsFor(layer, part.z, part.x, part.y, abortController).then(function (bytes) {
+                if (!bytes) return null;
+                return { data: bytes, dx: part.dx, dy: part.dy, size: part.size, srcSize: size };
+            }, function () { return null; });
+        });
+        return Promise.all(parts).then(function (list) {
+            var usable = list.filter(Boolean);
+            if (!usable.length) return blankTileBytes();
+            return MIRROR.composeShiftedTile(usable, size).then(function (bytes) {
+                state.shiftedTiles += 1;
+                var keys = Object.keys(state.shiftCache);
+                if (keys.length >= BLEND_CACHE_MAX) delete state.shiftCache[keys[0]];
+                state.shiftCache[templateUrl] = bytes;
+                return bytes;
+            });
+        });
+    }
+
     function removeRendered(id) {
         var entry = state.rendered[id];
         if (!entry) return;
@@ -2695,6 +2814,13 @@
             defId: item.defId || null,
             label: item.label,
             paneZ: item.z,
+            pane: item.pane || null,
+            /* Non-null when this layer is drawn where the user aligned it in
+             * 2D, not where its service puts it. */
+            shift: (function () {
+                var o = shiftOfItem(item);
+                return hasShiftOf(o) ? { x: o.x, y: o.y } : null;
+            })(),
             /* One LiDAR layer at a time, inside one prepared disc. */
             lidarKey: item.lidarKey || null,
             focused: focused
@@ -2732,6 +2858,18 @@
      * are ready, and 3D shows only the base map”. One focused layer, one route.
      */
     function rasterTilesFor(item, focused) {
+        /* A historical map the user moved in 2D takes the live-2D-layer route
+         * whatever its definition says: the offset travels in the dl2d://
+         * template (`?hs=…`) and the handler composes the shifted tile. A
+         * registry template is a different renderer with no knowledge of the
+         * offset, so using it here would put the sheet back on its true
+         * position — the whole point of the correction is that it is NOT
+         * there. Layers with no per-tile route (`render: 'none'`) keep the
+         * registry template: a sheet in the wrong place beats no sheet. */
+        var itemShift = shiftOfItem(item);
+        if (hasShiftOf(itemShift) && item.template && item.render !== 'none' && item.layer) {
+            return [MIRROR.shiftTemplate(item.template, itemShift)];
+        }
         /* `render: 'none'` is the one mirrored raster with no per-tile route at
          * all (no getTileUrl, no createTile): the dl2d handler could not build
          * a single one of its tiles, so it keeps the registry's template. A
@@ -3387,7 +3525,13 @@
         var item = entry.item;
         var sourceId = entry.id + '-src';
         var layerId = entry.id;
-        var coordinates = item.coordinates;
+        /* A historical image overlay (the free Josephine sheet) is moved in 2D
+         * by the same pane transform as the tiled sheets; in 3D its four
+         * corners carry that offset. */
+        var imageShift = shiftOfItem(item);
+        var coordinates = MIRROR.shiftCoordinates
+            ? MIRROR.shiftCoordinates(item.coordinates, imageShift)
+            : item.coordinates;
         var existing = map.getSource(sourceId);
         var changed = true;
         try {
@@ -3408,7 +3552,11 @@
         } else if (map.getLayer(layerId)) {
             map.setPaintProperty(layerId, 'raster-opacity', item.opacity == null ? 1 : item.opacity);
         }
-        state.status[entry.id] = { state: 'on', mode: 'direct', kind: 'image-overlay', mirrored: true, label: item.label };
+        state.status[entry.id] = {
+            state: 'on', mode: 'direct', kind: 'image-overlay', mirrored: true, label: item.label,
+            pane: item.pane || null,
+            shift: hasShiftOf(imageShift) ? { x: imageShift.x, y: imageShift.y } : null
+        };
         return { sourceIds: [sourceId], layerIds: [layerId] };
     }
 
@@ -4666,6 +4814,13 @@
             if (!isMobile() && typeof root.getArcgisBasemap === 'function') {
                 signature += '|basemap:' + root.getArcgisBasemap();
             }
+            /* A historical map moved in 2D (js/hist-shift.js): the offset is in
+             * the tile template and in the image corners, so the deck has to be
+             * re-laid. The event below does this at once; the signature makes
+             * the 1.5 s poll a second, independent net. */
+            if (typeof MIRROR.historyShiftSignature === 'function') {
+                signature += '|hs:' + MIRROR.historyShiftSignature();
+            }
             if (signature !== state.signature) {
                 /* Commit the signature only after a pass that really ran: a
                  * failed pass must stay “pending” so the next tick retries,
@@ -4773,6 +4928,25 @@
             /* Blended (CSS-emulated) tiles repainted this session — a support
              * report should show the LiDAR hillshades actually being served. */
             retintedTiles: state.retintedTiles,
+            /* Historical maps moved in 2D: tiles composed for their offset, and
+             * the offsets themselves, so a support report can answer “is 3D
+             * really drawing the position the user aligned?”. */
+            shiftedTiles: state.shiftedTiles,
+            historyShift: (function () {
+                /* The 2D module owns the offsets: report them as they are, then
+                 * everything the deck draws is at one of these positions. */
+                var api = root.DetectLabHistShift;
+                if (api && typeof api.offsets === 'function') {
+                    try { return api.offsets() || {}; } catch (e) { /* fall through */ }
+                }
+                var out = {};
+                state.mirror.items.forEach(function (item) {
+                    if (!item.pane) return;
+                    var o = shiftOfItem(item);
+                    if (hasShiftOf(o)) out[item.pane] = { x: o.x, y: o.y };
+                });
+                return out;
+            })(),
             /* The LiDAR focus: which single layer may be draped, over which
              * disc, how many tiles of it are already in memory, and what the
              * one-layer rule had to leave out. */
@@ -4980,6 +5154,19 @@
          * the dialog” and “served in 3D” cannot drift apart unnoticed. */
         _registerProtocols: registerProtocols,
         _pipelineSig: function (key, url) { return pipelineSigFor(key, url); },
+        /* The historical-map offset (js/hist-shift.js): what applies to a
+         * mirrored item, the tiles one shifted tile is composed of, and the
+         * composed tile itself. Exposed so the suite can prove that a sheet
+         * aligned in 2D lands on the same spot in 3D. */
+        _shiftOf: shiftOfItem,
+        _rasterTilesFor: rasterTilesFor,
+        _shiftMosaic: function (item, z, x, y) {
+            var shift = shiftOfItem(item);
+            var size = tileSizeOf(item && item.layer, item && item.tileSize);
+            return MIRROR.shiftMosaic(MIRROR.shiftPixels(shift, z, size), z, x, y, size);
+        },
+        _shiftedTile: shiftedTile,
+        _tileSizeOf: tileSizeOf,
         _clipFocusedTile: clipFocusedTile,
         _focusExcludesTile: focusExcludesTile,
         _lidarFilter: lidarFilter,
@@ -5026,6 +5213,14 @@
     if (typeof root.addEventListener === 'function') {
         root.addEventListener('detectlab:authchange', syncPremiumAccess);
         root.addEventListener('pageshow', syncPremiumAccess);
+        /* “Move the historical map” happened in 2D: the sheet has to move in 3D
+         * too. The offset is already in the tile template / image corners, so
+         * one sync pass re-lays the deck on the position the user aligned. */
+        root.addEventListener('detectlab:histshiftchange', function (event) {
+            if (state.shiftCache) state.shiftCache = {};   /* the pixels moved */
+            if (!state.open) return;                       /* opened later: read on boot */
+            scheduleSync();
+        });
     }
     document.addEventListener('visibilitychange', function () {
         if (!document.hidden) syncPremiumAccess();

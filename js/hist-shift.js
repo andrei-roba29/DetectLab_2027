@@ -21,9 +21,19 @@
  * Deplasarea e păstrată în metri proiectați (EPSG:3857), nu în pixeli, ca să
  * rămână aceeași poziție geografică la orice zoom.
  *
+ * ACELEAȘI POZIȚII ÎN 3D
+ *   Deplasarea e anunțată prin evenimentul `detectlab:histshiftchange` pe
+ *   `window` (detaliu: {pane, offset, offsets}). Vizualizarea 3D nu vede un
+ *   transform CSS pe un pane Leaflet, deci js/map3d-terrain.js ascultă
+ *   evenimentul și își reface deck-ul: stratul istoric apare mutat în 3D exact
+ *   cu aceiași metri proiectați (rasterele prin mozaicul de tile-uri din
+ *   dl2d://, image-overlay-urile prin cele patru colțuri deplasate). „Mută
+ *   harta istorică” o dată, o vezi aliniată în ambele vizualizări.
+ *
  * Expune window.DetectLabHistShift:
  *   .attach(map) .activeTargets() .setEnabled(on) .isEnabled()
- *   .getOffset(pane) .setOffset(pane, dxM, dyM) .reset(pane) .showPanel()
+ *   .getOffset(pane) .offsets() .setOffset(pane, dxM, dyM) .reset(pane)
+ *   .showPanel() .CHANGE_EVENT
  * ========================================================================== */
 (function (root, document) {
     'use strict';
@@ -33,6 +43,9 @@
     var MOVE_TOLERANCE_PX = 10;
     var MAX_OFFSET_M = 3000;               /* 3 km projected: room for larger alignment corrections */
     var STORAGE_KEY = 'dlHistShift.v1';
+    /* A position the user aligned in 2D must place the SAME sheet in the same
+     * spot in 3D: js/map3d-terrain.js listens for this and re-lays its deck. */
+    var CHANGE_EVENT = 'detectlab:histshiftchange';
     var HIST_GROUPS = { 'hist-free': true, 'hist-premium': true, 'hist-sat': true };
     /* Layers that are historical but whose live URL is not the registry URL
      * (Josephine switches Cloudflare ⇄ Supabase tiles; the free Josephine
@@ -180,6 +193,40 @@
         var o = state.offsets[pane];
         return o ? { x: Number(o.x) || 0, y: Number(o.y) || 0 } : { x: 0, y: 0 };
     }
+    /** Every saved offset, pane by pane — the 3D view reads this to know which
+     *  of the layers it mirrors are not on their true position. */
+    function offsets() {
+        var out = {};
+        Object.keys(state.offsets).forEach(function (pane) {
+            var o = getOffset(pane);
+            if (o.x || o.y) out[pane] = o;
+        });
+        return out;
+    }
+    /**
+     * Tell the rest of the app that a historical map moved.
+     *
+     * The 3D view is a different renderer (MapLibre over the DEM) and it has no
+     * way to see a CSS transform on a Leaflet pane, so the offset has to travel
+     * as an event: a position locked in 2D must be the position 3D drapes.
+     * Listeners are on `window` (the 2D map and its API live there), and a
+     * missing CustomEvent never blocks the gesture.
+     */
+    function notify(pane) {
+        try {
+            var Ctor = root.CustomEvent || (typeof CustomEvent === 'function' ? CustomEvent : null);
+            if (!Ctor || typeof root.dispatchEvent !== 'function') return;
+            root.dispatchEvent(new Ctor(CHANGE_EVENT, {
+                detail: {
+                    source: '2d',
+                    pane: pane || null,
+                    offset: getOffset(pane),
+                    offsets: offsets(),
+                    maxOffsetM: MAX_OFFSET_M
+                }
+            }));
+        } catch (e) { /* a listener cannot break the gesture */ }
+    }
     function metersPerPixel() {
         var map = state.map;
         var z = map && typeof map.getZoom === 'function' ? map.getZoom() : 0;
@@ -202,11 +249,13 @@
     }
     function setOffset(pane, dxM, dyM) {
         if (!pane) return null;
+        var before = getOffset(pane);
         var clamped = clampOffset(Number(dxM) || 0, Number(dyM) || 0);
         state.offsets[pane] = clamped;
         saveOffsets();
         applyPane(pane);
         paintPanel();
+        if (clamped.x !== before.x || clamped.y !== before.y) notify(pane);
         return clamped;
     }
     function reset(pane) { return setOffset(pane || state.selectedPane, 0, 0); }
@@ -425,14 +474,17 @@
     }
 
     var api = {
-        VERSION: '2026-10-31-hist-shift-v3',
+        VERSION: '2026-11-06-hist-shift-v4',
         MAX_OFFSET_M: MAX_OFFSET_M,
         LONG_PRESS_MS: LONG_PRESS_MS,
+        CHANGE_EVENT: CHANGE_EVENT,
         attach: attach,
         activeTargets: activeTargets,
         setEnabled: setEnabled,
         isEnabled: isEnabled,
         getOffset: getOffset,
+        offsets: offsets,
+        notify: notify,
         setOffset: setOffset,
         reset: reset,
         showPanel: showPanel,

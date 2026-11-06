@@ -50,3 +50,46 @@ Vezi `HIST_SHIFT_DOCKED_SLIDER.md` (asset
 proiectați EPSG:3857), în orice direcție. Pozițiile deja salvate rămân
 valabile; lock-ul și resetarea nu se schimbă. Asset JS
 `20261031-hist-shift-range`, cache SW `v344-hist-shift-range`.
+
+## §5. Aceeași poziție în 3D (2026-11-06)
+
+**Cerere:** „când schimbi poziția unei hărți istorice, să fie ajustată la fel
+și în vizualizarea 3D".
+
+Vizualizarea 3D e alt renderer (MapLibre peste DEM) și nu poate vedea un
+`transform` CSS pus pe un pane Leaflet. Deplasarea circulă deci ca **date**:
+
+1. `js/hist-shift.js` anunță fiecare schimbare prin evenimentul
+   `detectlab:histshiftchange` pe `window`, cu `{ pane, offset, offsets,
+   maxOffsetM }` (la `setOffset`, la `reset` și la fiecare pas de drag).
+   Sursa de adevăr rămâne una singură: offsetul per pane, în metri proiectați
+   EPSG:3857, salvat în `localStorage['dlHistShift.v1']`.
+2. `js/map3d-mirror.js` citește offsetul panoului (`shiftForPane`) și îl pune
+   în template-ul de tile: `dl2d://<cheie>/{z}/{x}/{y}?hs=<x>,<y>`; pentru
+   image-overlay-uri mută cele patru colțuri cu aceiași metri (longitudinea
+   direct, latitudinea în mercator-y, ca să rămână aceeași proiecție).
+3. `js/map3d-terrain.js` compune fiecare tile cerut de MapLibre din vecinii
+   pe care îi acoperă fereastra mutată (`shiftMosaic`): o fereastră de exact
+   un tile atinge cel mult **două tile-uri per axă** (deci maximum 4 cereri),
+   oricât de mare ar fi corecția — un offset de 3 km nu înseamnă 400 de
+   tile-uri, ci aceleași patru, cu 20 de indici mai încolo. Tile-ul compus e
+   ținut în cache sub URL-ul cu offset, deci o repanare nu costă nimic.
+   Straturile fără offset merg pe drumul de dinainte (o cerere per tile,
+   template-ul din registru).
+
+Rezultatul: o poziție aliniată o dată e aceeași în ambele vizualizări, la
+orice zoom, pentru hărți gratuite și premium. `reset` în 2D (sau
+`DetectLabHistShift.reset(pane)` prin API, cu 3D deschis) readuce stratul pe
+poziția reală și în 3D, imediat — viewer-ul ascultă evenimentul și își reface
+deck-ul; în plus, semnătura polling-ului de 1,5 s include offseturile, deci
+schimbarea e prinsă și fără eveniment.
+
+Diagnostic: `DetectLabMap3D.status()` → `historyShift` (offseturile aplicate)
+și `shiftedTiles` (câte tile-uri au fost compuse); fiecare strat are `pane` și
+`shift` în status.
+
+Regresie: `node test-hist-shift-3d.js` (evenimentul, metri→pixeli la 256 și
+512, mozaicul și limita lui, colțurile, tile-ul compus pixel cu pixel, cache,
+protocolul `dl2d://` cu și fără offset, status). Asset-uri versionate
+`20261106-hist-shift-3d` (hist-shift, mirror, terrain), cache SW
+`v412-hist-shift-3d`.

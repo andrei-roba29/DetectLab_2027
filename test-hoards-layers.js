@@ -653,7 +653,9 @@ function finish() {
     check(/css\/styles\.css\?v=20261106-hoards/.test(sw) &&
           /css\/styles\.css\?v=20261106-hoards/.test(html),
         'index.html and sw.js agree on the stylesheet version');
-    check(/detectlab-v411-hoards/.test(sw), 'the app-shell cache is bumped for the release');
+    check(/const CACHE_NAME = 'detectlab-v\d+-/.test(sw) &&
+        Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]) >= 411,
+        'the app-shell cache is bumped for the release (v411 or newer)');
     check(/js\/subscriptions\.js\?v=20261106-hoards/.test(html) &&
           /js\/subscriptions\.js\?v=20261106-hoards/.test(sw),
         'index.html and sw.js agree on the versioned subscription module');

@@ -138,7 +138,7 @@ assert.ok(HS, 'DetectLabHistShift exported');
     assert.ok(Math.abs(diagonal.x + 1800) < 1e-9 && Math.abs(diagonal.y - 2400) < 1e-9,
         'diagonal clamp preserves direction and caps magnitude, not individual axes');
     for (const file of ['index.html', 'sw.js']) {
-        assert.ok(read(file).includes('js/hist-shift.js?v=20261031-hist-shift-range'),
+        assert.ok(read(file).includes('js/hist-shift.js?v=20261106-hist-shift-3d'),
             file + ' loads the extended-range module');
     }
 
@@ -246,9 +246,9 @@ assert.ok(HS, 'DetectLabHistShift exported');
 
     // Static wiring
     const index = read('index.html'), sw = read('sw.js'), css = read('css/hist-shift.css');
-    assert.ok(index.includes('js/hist-shift.js?v=20261031-hist-shift-range'), 'index loads hist-shift');
+    assert.ok(index.includes('js/hist-shift.js?v=20261106-hist-shift-3d'), 'index loads hist-shift');
     assert.ok(index.includes('css/hist-shift.css?v=20261014-hist-shift'), 'index loads hist-shift css');
-    assert.ok(sw.includes("'js/hist-shift.js?v=20261031-hist-shift-range'"), 'sw precaches hist-shift');
+    assert.ok(sw.includes("'js/hist-shift.js?v=20261106-hist-shift-3d'"), 'sw precaches hist-shift');
     assert.ok(css.includes('.hist-shift-panel'), 'panel styles present');
     console.log('  ✓ wiring (index / service worker / css)');
     console.log('✅ test-hist-shift.js passed');

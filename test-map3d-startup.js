@@ -95,8 +95,8 @@ function testOpeningSettle() {
     frames[0]();
     assert.strictEqual(calls.length, 6, 'replacement map is not touched');
     assert(source.includes('settleOpeningView(map, generation);'));
-    assert(fs.readFileSync('index.html', 'utf8').includes('js/map3d-terrain.js?v=20261102-lidar-gray-backing'));
-    assert(fs.readFileSync('sw.js', 'utf8').includes('js/map3d-terrain.js?v=20261102-lidar-gray-backing'));
+    assert(fs.readFileSync('index.html', 'utf8').includes('js/map3d-terrain.js?v=20261106-hist-shift-3d'));
+    assert(fs.readFileSync('sw.js', 'utf8').includes('js/map3d-terrain.js?v=20261106-hist-shift-3d'));
 }
 (async () => {
     await testLoader(0);

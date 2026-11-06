@@ -54,7 +54,7 @@
      * importing the module must never be fatal. */
     if (!root) return;
 
-    var VERSION = '2026-10-21-lidar-canvas-tiles-v1';
+    var VERSION = '2026-11-06-hist-shift-3d-v1';
 
     /* Leaflet's own pane z-index defaults — used when a layer has no pane. */
     var PANE_Z = {
@@ -1853,6 +1853,207 @@
         };
     }
 
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  THE HISTORICAL-MAP OFFSET — the same position in 2D and in 3D
+     * -----------------------------------------------------------------------
+     *  js/hist-shift.js lets the user drag a historical sheet off its true
+     *  position (a 19th-century survey is rarely georeferenced on the modern
+     *  base map) and remembers the correction in PROJECTED METRES (EPSG:3857)
+     *  per Leaflet pane. In 2D that is a CSS transform on the pane; MapLibre
+     *  has no per-layer transform at all, so the correction has to travel as
+     *  data:
+     *
+     *    • rasters      → the tile template carries the offset
+     *                     (`dl2d://…/{z}/{x}/{y}?hs=<x>,<y>`), and the viewer
+     *                     composes each requested tile out of the neighbours
+     *                     that the shifted window actually covers (see
+     *                     shiftMosaic below, and shiftedTile in
+     *                     js/map3d-terrain.js);
+     *    • image overlays → the four corners move by the same metres.
+     *
+     *  Everything here is per-pane, exactly like the 2D side: the offset lives
+     *  on the pane, so every layer in that pane moves together in both views.
+     *  A pane with no offset costs nothing: the helpers are inert at {0,0}.
+     * ═══════════════════════════════════════════════════════════════════════ */
+    var EARTH_R = 6378137;
+    var M_PER_DEG_LNG = (2 * Math.PI * EARTH_R) / 360;   /* 111 319.4908 m */
+    /* The 2D module's own projection constant: metres per SCREEN pixel at z0
+     * (a 256 px world). The pane transform is pixel-exact at every zoom, so
+     * one pixel is this many projected metres. */
+    var M_PER_PX_Z0 = 156543.03392;
+    /* A shifted tile touches at most two upstream tiles per axis: the window
+     * is exactly one tile wide, it is only its position that moved. */
+    var SHIFT_TILES_MAX = 4;
+
+    /** The 2D owner of the offsets, when the page has it. */
+    function histShiftApi() { return root.DetectLabHistShift || null; }
+
+    /** The saved offset of one pane, in projected metres. {0,0} when none. */
+    function shiftForPane(pane) {
+        var api = histShiftApi();
+        if (!api || !pane || typeof api.getOffset !== 'function') return { x: 0, y: 0 };
+        try {
+            var o = api.getOffset(pane) || {};
+            return { x: Number(o.x) || 0, y: Number(o.y) || 0 };
+        } catch (e) { return { x: 0, y: 0 }; }
+    }
+
+    /** Is this offset big enough to matter (a sub-millimetre one does not)? */
+    function hasShift(shift) {
+        if (!shift) return false;
+        return Math.abs(Number(shift.x) || 0) > 1e-3 || Math.abs(Number(shift.y) || 0) > 1e-3;
+    }
+
+    /** One string for the whole offset state — the 3D viewer's poll compares
+     *  it, so a change is noticed even when no event arrives. */
+    function historyShiftSignature() {
+        var api = histShiftApi();
+        if (!api || typeof api.offsets !== 'function') return '';
+        var all = null;
+        try { all = api.offsets() || {}; } catch (e) { return ''; }
+        return Object.keys(all).sort().map(function (pane) {
+            var o = all[pane] || {};
+            return pane + '=' + (Math.round((Number(o.x) || 0) * 10) / 10) + ',' +
+                (Math.round((Number(o.y) || 0) * 10) / 10);
+        }).join(';');
+    }
+
+    function shiftNumber(v) { return String(Math.round((Number(v) || 0) * 10) / 10); }
+
+    /** `dl2d://…/{z}/{x}/{y}` → the same template carrying its offset. */
+    function shiftTemplate(template, shift) {
+        if (!template) return template;
+        if (!hasShift(shift)) return template;
+        var sep = String(template).indexOf('?') === -1 ? '?' : '&';
+        return String(template) + sep + 'hs=' + shiftNumber(shift.x) + ',' + shiftNumber(shift.y);
+    }
+
+    /** The offset a tile URL carries ('' / absent → {0,0}). */
+    function parseShift(templateUrl) {
+        var m = /[?&]hs=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/.exec(String(templateUrl || ''));
+        if (!m) return { x: 0, y: 0 };
+        return { x: Number(m[1]) || 0, y: Number(m[2]) || 0 };
+    }
+
+    /**
+     * An offset in metres → pixels of the tile canvas it has to be drawn in.
+     *
+     * A tile of `tileSize` at zoom z covers `2πR·256/(tileSize·2^z)` metres, so
+     * one canvas pixel is that divided by `tileSize`. (A 512 px tile covers
+     * twice the ground of a 256 px one at the same z — hence the square.)
+     */
+    function shiftPixels(shift, z, tileSize) {
+        var size = Number(tileSize) || 256;
+        var zoom = Number(z) || 0;
+        var mpp = (2 * Math.PI * EARTH_R * 256) / (size * size * Math.pow(2, zoom));
+        return {
+            x: (Number(shift && shift.x) || 0) / mpp,
+            y: (Number(shift && shift.y) || 0) / mpp
+        };
+    }
+
+    /**
+     * The tiles a shifted tile is made of.
+     *
+     * MapLibre places tile (z,x,y) at a fixed spot on the world; it cannot move
+     * one layer's pixels. So the tile the map asks for is REBUILT from the
+     * upstream tiles the shifted window actually covers — the same sheet, a few
+     * pixels to the side. `px` is the offset in this tile's own pixels (see
+     * shiftPixels); the result lists every source tile with the position it has
+     * to be drawn at in the output canvas.
+     *
+     * The window is exactly one tile wide and one tile tall, so it can only
+     * ever touch two tiles per axis — four requests at most, however large the
+     * correction. A 3 km offset at a deep zoom is not 400 tiles: it is the same
+     * four, twenty tile indices away (which is also what the 2D pane shows —
+     * the sheet moved, the world did not).
+     */
+    function shiftMosaic(px, z, x, y, tileSize) {
+        var size = Number(tileSize) || 256;
+        var zoom = Math.max(0, Math.round(Number(z) || 0));
+        var tx = Math.round(Number(x) || 0);
+        var ty = Math.round(Number(y) || 0);
+        var dx = Number(px && px.x) || 0;
+        var dy = Number(px && px.y) || 0;
+        var world = Math.pow(2, zoom);
+        var leftC = tx * size - dx;
+        var topC = ty * size - dy;
+        /* ceil(edge) - 1, not floor(edge - ε): a window that ends exactly on a
+         * tile boundary (an offset of a whole number of tiles, or none at all)
+         * must not drag the next tile in — 23040256 - 1e-9 IS 23040256 in
+         * doubles, which used to add a row of empty neighbours. */
+        var left = Math.floor(leftC / size);
+        var right = Math.ceil((leftC + size) / size) - 1;
+        var top = Math.floor(topC / size);
+        var bottom = Math.ceil((topC + size) / size) - 1;
+        var tiles = [];
+        for (var cx = left; cx <= right; cx += 1) {
+            for (var cy = top; cy <= bottom; cy += 1) {
+                if (cx < 0 || cy < 0 || cx >= world || cy >= world) continue;
+                tiles.push({
+                    z: zoom,
+                    x: cx,
+                    y: cy,
+                    /* Where this source tile goes in the output canvas. */
+                    dx: cx * size - leftC,
+                    dy: cy * size - topC,
+                    /* …and how big it is drawn (the tile's own pixels). */
+                    size: size
+                });
+            }
+        }
+        return { zoom: zoom, scale: 1, size: size, tiles: tiles, offset: { x: dx, y: dy } };
+    }
+
+    /** An image overlay's corners moved by an offset in projected metres. */
+    function shiftCoordinates(coordinates, shift) {
+        var list = Array.isArray(coordinates) ? coordinates : null;
+        if (!list || !list.length || !hasShift(shift)) return coordinates;
+        var east = (Number(shift.x) || 0) / M_PER_DEG_LNG;
+        var south = Number(shift.y) || 0;            /* +y is DOWN in the pane */
+        return list.map(function (corner) {
+            if (!corner) return corner;
+            var lng = Number(corner[0]);
+            var lat = Number(corner[1]);
+            if (!isFinite(lng) || !isFinite(lat)) return corner;
+            /* Web Mercator is the projection both views share: one metre of the
+             * pane transform is one projected metre, so latitude has to move in
+             * mercator-y (the inverse of what the 2D pixel grid does). */
+            var clamped = Math.max(-85.05112878, Math.min(85.05112878, lat));
+            var mercY = EARTH_R * Math.log(Math.tan(Math.PI / 4 + (clamped * Math.PI) / 360));
+            var movedLat = (2 * Math.atan(Math.exp((mercY - south) / EARTH_R)) - Math.PI / 2) * 180 / Math.PI;
+            return [lng + east, movedLat];
+        });
+    }
+
+    /**
+     * Draw a shifted tile out of its neighbours: one transparent canvas of the
+     * tile's size, every part drawn at the offset shiftMosaic() worked out.
+     * Resolves with PNG bytes, exactly what a tile protocol must return.
+     */
+    function composeShiftedTile(parts, size) {
+        var px = Math.max(1, Math.round(Number(size) || 256));
+        var canvas = newCanvas(px, px);
+        if (!canvas) return Promise.reject(new Error('cannot compose the shifted tile (no canvas)'));
+        var ctx = canvas.getContext('2d');
+        if (!ctx) return Promise.reject(new Error('cannot compose the shifted tile (no 2d context)'));
+        try { ctx.clearRect(0, 0, px, px); } catch (e) { /* a fresh canvas is already clear */ }
+        var list = (parts || []).slice();
+        function step(at) {
+            if (at >= list.length) return canvasToBytes(canvas);
+            var part = list[at] || {};
+            return toCanvas(part.data, part.srcSize || 256).then(function (source) {
+                var draw = Math.max(1, Math.round(part.size || px));
+                try {
+                    ctx.drawImage(source, Math.round(part.dx || 0), Math.round(part.dy || 0), draw, draw);
+                } catch (e) { /* a part that will not draw is a hole, not a failed tile */ }
+                return step(at + 1);
+            }, function () { return step(at + 1); });
+        }
+        return step(0);
+    }
+
     /* A cheap fingerprint: id · kind · order · opacity · content size. */
     function signatureOf(items) {
         return items.map(function (i) {
@@ -1913,6 +2114,17 @@
         paneZIndex: paneZIndex,
         paneNameOf: paneNameOf,
         signatureOf: signatureOf,
+        /* The historical-map offset (js/hist-shift.js), shared by both views. */
+        shiftForPane: shiftForPane,
+        hasShift: hasShift,
+        historyShiftSignature: historyShiftSignature,
+        shiftTemplate: shiftTemplate,
+        parseShift: parseShift,
+        shiftPixels: shiftPixels,
+        shiftMosaic: shiftMosaic,
+        shiftCoordinates: shiftCoordinates,
+        composeShiftedTile: composeShiftedTile,
+        SHIFT_TILES_MAX: SHIFT_TILES_MAX,
         isRotated: isRotated,
         errors: function () { return Object.assign({}, failures); },
         renderTile: renderTile,
