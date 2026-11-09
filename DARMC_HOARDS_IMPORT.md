@@ -35,18 +35,31 @@ node tools/darmc-hoards/import.mjs \
 node tools/darmc-hoards/import.mjs \
   --dump data/hoards/darmc_hoards_layers.json --emit-sql /tmp/hoards.sql
 
-# 4. Only after you have reviewed every layer and set reviewed:true in the mapping:
+# 4. Only after you have reviewed every layer and set reviewed:true in the mapping,
+#    either through psql:
 DATABASE_URL=postgres://… node tools/darmc-hoards/import.mjs \
-  --dump data/hoards/darmc_hoards_layers.json --mapping-in data/hoards/darmc-mapping.json --apply
+  --dump data/hoards/darmc_hoards_layers.json --mapping-in data/hoards/darmc-mapping.json --position proposed --apply
+
+#    …or through the Supabase REST API (no psql, no connection string):
+SUPABASE_URL=https://<ref>.supabase.co \
+SUPABASE_SERVICE_ROLE_KEY=… \
+node tools/darmc-hoards/import.mjs \
+  --dump data/hoards/darmc_hoards_layers.json \
+  --mapping-in data/hoards/darmc-mapping.proposed.json --position proposed --push
 ```
+
+`--push` posts the same rows to `/rest/v1/archaeological_hoards` in batches of 500
+(`Prefer: resolution=merge-duplicates`, so it is an upsert keyed on `id` and safe to
+re-run). It never sends the generated `geom` column. A non-2xx batch stops the run
+and prints the status and the PostgREST body.
 
 The dry run prints JSON: `fetched / kept / dropped` per layer, drop reasons,
 position classes, period groups, date basis, duplicate count and thresholds.
 `--report` writes the long version with the proposed mapping and the counts
 behind every decision.
 
-`--apply` refuses to run unless the mapping file has `reviewed: true` on every
-layer, and unless `DATABASE_URL` is set locally. It writes only
+`--apply` and `--push` refuse to run unless the mapping file has `reviewed: true`
+on every layer, and unless the credentials are set locally. It writes only
 `public.archaeological_hoards` (+ `hoard_import_runs` when 018 is applied).
 Nothing is ever deleted.
 
@@ -104,6 +117,72 @@ Duplicate evidence in the sample: 2 exact-coordinate groups inside a layer
 5 marked pairs. The proposed thresholds come from the p99 of the same-name pair
 distances, clamped to 250–5000 m — on the real file expect several kilometres.
 
+## The real capture (2026-11-09)
+
+> **Imported into production on 2026-11-09** with the operator's explicit
+> authorisation. Counts, verification and cleanup: `DARMC_IMPORT_RUN_2026-11-09.md`.
+
+
+`data/hoards/darmc_hoards_layers.json`, 5.5 MB, fetched from the FeatureServer at
+`2026-11-09T08:45Z`, content fingerprint `04988b33...c4fe82`. Every layer matches its
+published count:
+
+| Layer | Name | Published | Read | Kept | Dropped |
+|---|---|---|---|---|---|
+| 8 | Carolingian coin hoards, 769-814 | 21 | 21 | 21 | 0 |
+| 9 | Carolingian coin hoards, 815-840 | 28 | 28 | 28 | 0 |
+| 10 | Carolingian coin hoards, 841-900 | 140 | 140 | 139 | 1 |
+| 11 | Carolingian coin hoards, after 900 | 90 | 90 | 89 | 1 |
+| 12 | Gallic coin hoards, 200-300 | 1 776 | 1 776 | 1 776 | 0 |
+| 15 | Late Roman deposits (gold weight) | 2 047 | 2 047 | 2 046 | 1 |
+| 16 | Late Roman deposits (deposit date) | 2 047 | 2 047 | 2 046 | 1 |
+| | **Total** | **6 149** | **6 149** | **6 145** | **4** |
+
+The four drops are features with no finite point geometry (one each in 10, 11, 15,
+16). Nothing else is discarded. Duplicate marking proposes **2 427** rows across the
+15/16 overlap and within-layer repeats, leaving 3 718 usable after dedupe. Every row
+carries `date_basis='deposit'`.
+
+### The position policy decides whether the app sees any of this
+
+| Policy | exact | approximate | unknown |
+|---|---|---|---|
+| `strict` (the default proposal) | **0** | 1 862 | 4 283 |
+| `proposed` | **4 283** | 1 862 | - |
+
+The DARMC quality columns are mostly blank, so under strict nothing is exact. The
+panel asks `apm_hoards_within` for exact rows by default, and the RPC never returns
+`unknown` rows - **an import with strict leaves the panel showing 0 hoards even
+though 6 145 rows are in the table**. The tool therefore prints that as a warning at
+the end of every strict run.
+
+Spots at 150 km, counted from the usable rows:
+
+| Centre | usable in the catalogue | exact (= proposed) | approximate |
+|---|---|---|---|
+| Paris | 678 | 233 | 445 |
+| Vienna | 71 | 70 | 1 |
+| Cluj (inside Romania) | 68 | 68 | 0 |
+
+5 889 of the 6 145 rows are outside Romania; 256 are inside.
+
+### What to run
+
+```sh
+# 1. Review the proposed mapping (it is reviewed:false on purpose).
+node tools/darmc-hoards/import.mjs --dump data/hoards/darmc_hoards_layers.json \
+  --position proposed --mapping data/hoards/darmc-mapping.proposed.json \
+  --report data/hoards/darmc-review-proposed.md
+
+# 2. Flip reviewed:true on all seven layers once you accept it.
+node -e "const f='data/hoards/darmc-mapping.proposed.json',m=require('./'+f);Object.values(m.layers).forEach(l=>l.reviewed=true);require('fs').writeFileSync(f,JSON.stringify(m,null,2)+'\\n')"
+
+# 3. Push. 018 is optional: it only adds the audit row.
+SUPABASE_URL=https://<ref>.supabase.co SUPABASE_SERVICE_ROLE_KEY=... \
+node tools/darmc-hoards/import.mjs --dump data/hoards/darmc_hoards_layers.json \
+  --mapping-in data/hoards/darmc-mapping.proposed.json --position proposed --push
+```
+
 ## Files that changed
 
 - New: the six modules above, `018_apm_hoards_import.sql`, `test-apm-hoards-darmc.mjs`,
@@ -115,14 +194,17 @@ distances, clamped to 250–5000 m — on the real file expect several kilometre
 
 ## Tested / not tested
 
-**Tested on fixtures** (`node test-apm-hoards-darmc.mjs`, 177 checks): loader
+**Tested on fixtures** (`node test-apm-hoards-darmc.mjs`, 192 checks): loader
 validation and warnings, value-driven derivation, forbidden date fields, position
 proposals and both policies, deterministic uuids, the table contract, reversed
 dates, bad geometry, unreviewed mappings dropping closed, duplicate evidence,
-fixture trimming, data-only SQL, CLI dry-run and refusal to apply.
+fixture trimming, data-only SQL, the PostgREST push (batching, headers, host and key
+refusal), CLI dry-run and refusal to apply.
 
-**Not tested because it needs your file**: the real counts, the real field
-selection per layer, the real duplicate thresholds.
+**Tested on the real capture** (same suite, runs when the file is present): 6 149
+read / 6 145 kept / 4 dropped, strict `{unknown 4 283, approximate 1 862}`,
+proposed `{exact 4 283, approximate 1 862}`, 2 427 duplicate proposals, the
+zero-exact warning, and re-reading a supplied mapping under the other policy.
 
-**Not tested because it needs a database**: `--apply` and the 018 audit insert.
-No production statement was executed by this work.
+**Not verified because it needs your credentials**: the `--push` and `--apply`
+writes themselves. No production statement was executed by this work.

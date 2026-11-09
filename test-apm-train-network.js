@@ -9,7 +9,9 @@ const {createRequire} = require('node:module');
 const {JSDOM} = createRequire(path.join(__dirname,'tools/apm-test/package.json'))('jsdom');
 const read = p=>fs.readFileSync(path.join(__dirname,p),'utf8');
 const fixture = require('./test/fixtures/romania-sites.synthetic.json');
-const scripts=['apm-core','apm-raster','apm-heatmap','apm-sites','apm-providers','romania-periods.config','hoards.config','apm-hoards','apm-hoard-provider','apm-hoard-scale','apm-romania-sites','apm-i18n','apm-train-cache','apm-pipeline','apm-ui'];
+const scripts=['apm-core','apm-raster','apm-heatmap','apm-sites','apm-providers','romania-periods.config','hoards.config','apm-hoards','apm-hoard-provider','apm-hoard-scale','apm-romania-sites',
+    'ariadne/ariadne.config','ariadne/ariadne-tiles','ariadne/ariadne-parse','ariadne/ariadne-query','ariadne/ariadne-upstream','ariadne/ariadne-provider',
+    'apm-site-merge','apm-dare-sites','apm-outside-sites','apm-i18n','apm-train-cache','apm-pipeline','apm-ui'];
 const wcs='<wcs:Capabilities><wcs:ServiceMetadata><wcs:formatSupported>image/tiff</wcs:formatSupported><wcs:Extension><wcs:crsSupported>http://www.opengis.net/def/crs/EPSG/0/4326</wcs:crsSupported></wcs:Extension><wcs:MaxPixels>4000000</wcs:MaxPixels></wcs:ServiceMetadata><wcs:Contents><wcs:CoverageSummary><wcs:CoverageId>DEM_v11</wcs:CoverageId></wcs:CoverageSummary></wcs:Contents></wcs:Capabilities>';
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn,label){for(let i=0;i<1000;i++){if(fn())return;await delay(10);}throw Error('Timeout: '+label);}
@@ -28,9 +30,30 @@ function harness(mode='ok') {
         requests.push(url);
         const u=new URL(url);
         if(u.host==='project.supabase.example') {
-            if(u.pathname.endsWith('apm_hoards_within')) return {data:{rows:Array.from({length:9},(_,i)=>({id:String(i),lat:46.75,lon:25,position_class:'exact',period_groups:[]})),usable:9,total_in_area:9,truncated:false,period_counts:{}}};
+            if(u.pathname.endsWith('apm_hoards_within')) {
+                if(mode==='approximate') return {data:{rows:[],usable:3,total_in_area:3,truncated:false,period_counts:{},approximate_available:12,excluded_approximate:12}};
+                return {data:{rows:Array.from({length:9},(_,i)=>({id:String(i),lat:46.75,lon:25,position_class:'exact',period_groups:[]})),usable:9,total_in_area:9,truncated:false,period_counts:{}}};
+            }
             if(mode==='error')return {data:null,error:{message:'not authorised'}};
             return {data:{rows,total_in_area:40,excluded_approximate:0,excluded_unknown_coord:0,excluded_geometry:0,truncated:false},error:null};
+        }
+        if(u.host==='imperium.ahlfeldt.se') {
+            const features=[
+                {type:'Feature',id:'d1',geometry:{type:'Point',coordinates:[10.0,51.0]},properties:{name:'Gotinga',numType:12}},
+                {type:'Feature',id:'d2',geometry:{type:'Point',coordinates:[10.1,51.05]},properties:{name:'Settling',numType:11}},
+                {type:'Feature',id:'d3',geometry:{type:'Point',coordinates:[10.0,51.4]},properties:{name:'Far place',numType:13}},
+                {type:'Feature',id:'d4',geometry:{type:'Point',coordinates:[10.05,51.02]},properties:{name:'A fort',numType:18}}
+            ];
+            const body={type:'FeatureCollection',features};
+            return {ok:true,status:200,headers:{get:()=>'application/json'},text:async()=>JSON.stringify(body),json:async()=>body};
+        }
+        if(u.host==='portal.ariadne-infrastructure.eu') {
+            const hit=(id,name,lat,lon)=>({id,data:{title:{text:name},resourceType:'Site/monument',
+                ariadneSubject:[{prefLabel:'Site/monument'}],spatial:[{geopoint:{lat,lon}}]}});
+            return {ok:true,status:200,headers:{get:()=>'application/json'},text:async()=>JSON.stringify({hits:[
+                hit('a1','Gotinga',51.0005,10.0005),
+                hit('a2','Other place',51.02,9.98)
+            ],total:{value:2},aggregations:{}})};
         }
         if(u.host==='overpass-api.de') return {ok:true,status:200,headers:{get:()=> 'application/json'},json:async()=>({elements:[]})};
         assert.equal(u.host,'image.discomap.eea.europa.eu','unexpected host: '+url);
@@ -107,23 +130,30 @@ function harness(mode='ok') {
     const out=harness();
     try {
         await out.pick(51,10);
-        assert.equal(out.requests.length,0);
-        assert.match(out.w.document.querySelector('.apm-status').textContent,/covers Romania only.*CSV/);
+        await until(()=>/outside Romania/.test(out.w.document.querySelector('.apm-status').textContent),'outside load');
+        const status=out.w.document.querySelector('.apm-status').textContent;
+        assert(out.requests.some(u=>u.includes('imperium.ahlfeldt.se')),'DARE is asked');
+        assert(out.requests.some(u=>u.includes('portal.ariadne-infrastructure.eu')),'ARIADNE is asked');
+        assert.equal(out.requests.filter(u=>u.includes('supabase')).length,0,'no Romania database is touched');
+        assert.match(status,/4 site\)?\(s\)? outside Romania/,'both catalogues merged into one list: '+status);
+        assert.match(status,/DARE 3 \+ ARIADNE 2/,'each source is named with its own count: '+status);
+        assert.match(status,/1 place\(s\) are attested by both/,'the overlap is stated: '+status);
         const file=out.w.document.querySelector('input[type=file]');assert(!file.parentElement.hidden);
-        assert(out.w.document.querySelector('.apm-primary').disabled);
+        assert(!out.requests.some(u=>u.startsWith('https://project.supabase.example')),'no Romania RPC outside Romania');
         const csv='latitude,longitude,type,positionAccuracy\n'+Array.from({length:12},(_,i)=>`${51+i*.001},10,settlement,5`).join('\n');
         Object.defineProperty(file,'files',{value:[{name:'local.csv',text:async()=>csv}]});file.dispatchEvent(new out.w.Event('change'));
         await until(()=>out.w.document.querySelector('.apm-status').textContent.includes('CSV selected explicitly'),'CSV upload');
-        assert.equal(out.requests.length,0);
         assert(!out.w.document.querySelector('.apm-primary').disabled);
+        const beforeRun=out.requests.length;
         out.w.document.querySelector('.apm-primary').click();
         await until(()=>out.completed||out.runError,'outside CSV TRAIN completion');
         if(out.runError)throw out.runError;
         assert.equal(out.params.siteSource.id,'csv');
         assert.equal(out.params.backgroundAllowed,null,'CSV background is not constrained to Romania');
         assert.equal(out.requests.filter(u=>u.includes('supabase')||u.includes('/rpc/')).length,0);
-        assert(out.requests.every(u=>['image.discomap.eea.europa.eu','overpass-api.de'].includes(new URL(u).host)));
-        console.log('PASS outside Romania: zero site-data requests; explicit CSV upload; real CSV TRAIN completed with DEM/hydro only, no Romania background constraint.');
+        assert.equal(out.requests.filter(u=>u.includes('imperium.ahlfeldt.se')).length,1,'the CSV replaces the catalogues, it does not re-query them');
+        assert(out.requests.slice(beforeRun).every(u=>['image.discomap.eea.europa.eu','overpass-api.de'].includes(new URL(u).host)),'the run itself touches nothing but DEM and hydro');
+        console.log('PASS outside Romania: DARE and ARIADNE queried and merged (one place attested by both appears once), no Romania database call, explicit CSV upload completes as before.');
     } finally {out.dom.window.close();}
     const hoard=harness();
     try {
@@ -139,6 +169,18 @@ function harness(mode='ok') {
         assert(!hoard.ops.includes('sampleTile'),'review gate prevents terrain requests');
         console.log('PASS hoard UI: isolated hoard RPC only, <10 blocks and offers CSV, All periods default, release gate prevents terrain requests.');
     } finally {hoard.dom.window.close();}
+    const approx=harness('approximate');
+    try {
+        await approx.pick(46.75,25);
+        const selector2=approx.w.document.querySelector('.apm-category-picker');
+        selector2.value='hoards';selector2.dispatchEvent(new approx.w.Event('change'));
+        await until(()=>/excluded/i.test(approx.w.document.querySelector('.apm-status').textContent),'approximate hoard load');
+        const text=approx.w.document.querySelector('.apm-status').textContent;
+        assert.match(text,/12 .*approximate/,'the panel names the approximate hoards it is hiding');
+        assert.match(text,/include approximate/i,'and points at the switch that shows them');
+        assert(approx.w.document.querySelector('.apm-primary').disabled,'training still blocked at 3 usable');
+        console.log('PASS hoard approximate hint: a zero caused by the position filter is named, with the count and the switch, instead of a bare 0.');
+    } finally {approx.dom.window.close();}
     const race=harness();
     try {
         await race.pick(46.75,25);

@@ -41,6 +41,8 @@ const HELP = `DARMC hoards import — dry run by default.
   --limit <n>            cap records read per layer (for a quick look)
   --snapshot <label>     snapshot id written with each row (needs 018_apm_hoards_import.sql)
   --apply                write to the database (needs a reviewed mapping + DATABASE_URL)
+  --push                 write through the Supabase REST API instead (needs a reviewed
+                         mapping and SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in the env)
   --help
 
 Nothing is fetched. Nothing is deleted.`;
@@ -70,10 +72,15 @@ function applyPositionDefaults(derived, spec) {
 }
 
 function applyPositionPolicy(derived, policy) {
-    if (policy !== 'strict') return derived;
+    // Applies under --mapping-in too: the classes live in the supplied mapping, so
+    // the policy has to be able to reset them in either direction. Otherwise
+    // `--mapping-in strict.json --position proposed` would print "proposed" and
+    // import strict rows.
     for (const d of Object.values(derived.layers)) {
-        d.mapping.positionMapping = { ...d.evidence.strictMapping };
-        d.mapping.positionPolicy = 'strict';
+        const table = policy === 'strict' ? d.evidence.strictMapping : d.evidence.proposedMapping;
+        if (!table) continue;
+        d.mapping.positionMapping = { ...table };
+        d.mapping.positionPolicy = policy;
     }
     return derived;
 }
@@ -164,6 +171,11 @@ async function main() {
     counts.periodGroups = tally(rows, 'period_group');
     counts.dateBasis = tally(rows, 'date_basis');
     counts.duplicateMarking = Object.fromEntries(Object.entries(duplicateEvidence.withinLayerPairs).map(([k, v]) => [k, v]));
+    // A policy that leaves nothing "exact" is not wrong, but the panel filters on
+    // position_class: without a single exact row the catalogue is invisible there.
+    if (!counts.positions.exact) {
+        derived.warnings.push(`position policy "${policy}": 0 of ${rows.length} rows are exact — the app's default filter excludes approximate and unknown, so the panel will show 0 hoards until the policy changes or "include approximate" is ticked`);
+    }
 
     // ── outputs ──────────────────────────────────────────────────────────────
     if (arg('--report')) {
@@ -211,6 +223,20 @@ async function main() {
         } finally { await db.end(); }
     }
 
+    if (flag('--push')) {
+        const reviewed = Object.values(derived.layers).every(d => d.mapping.reviewed === true);
+        if (!reviewed) throw new Error('Refusing --push: the mapping is not reviewed. Pass --mapping-in with every layer reviewed:true.');
+        const snapshot = arg('--snapshot') || null;
+        if (snapshot) for (const row of rows) row.snapshot_id = snapshot;
+        const result = await pushRows(rows, {
+            url: process.env.SUPABASE_URL, key: process.env.SUPABASE_SERVICE_ROLE_KEY,
+            batchSize: arg('--batch-size') ? Number(arg('--batch-size')) : 500,
+            onProgress: (done, total) => console.error(`  pushed ${done}/${total}`)
+        });
+        applied = true;
+        console.error(`pushed ${result.sent} row(s) in ${result.batches} batch(es) to ${result.endpoint}`);
+    }
+
     const summaryCounts = () => ({
         fetched: counts.totals.fetched, kept: counts.totals.kept, dropped: counts.totals.dropped,
         duplicates: counts.duplicates.marked,
@@ -235,6 +261,45 @@ async function main() {
     };
     console.log(JSON.stringify(summary, null, 2));
     if (invalid.length) console.error(`\n${invalid.length} row(s) failed the table contract; first three:\n` + JSON.stringify(invalid.slice(0, 3), null, 2));
+}
+
+/** Supabase/PostgREST push. Same upsert semantics as --apply, no psql needed. */
+export async function pushRows(rows, options = {}) {
+    const url = String(options.url || '').trim().replace(/\/+$/, '');
+    const key = String(options.key || '').trim();
+    const fetchImpl = options.fetchImpl || fetch;
+    const batchSize = Math.max(1, Math.min(1000, Number(options.batchSize) || 500));
+    if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) throw new Error('push: SUPABASE_URL must be https://<ref>.supabase.co');
+    if (!key) throw new Error('push: SUPABASE_SERVICE_ROLE_KEY is empty');
+    if (typeof fetchImpl !== 'function') throw new Error('push: no fetch implementation');
+    const endpoint = `${url}/rest/v1/archaeological_hoards`;
+    const headers = {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=minimal'
+    };
+    let sent = 0, batches = 0;
+    for (let i = 0; i < rows.length; i += batchSize) {
+        const batch = rows.slice(i, i + batchSize).map(cleanRow);
+        const res = await fetchImpl(endpoint, { method: 'POST', headers, body: JSON.stringify(batch) });
+        batches++;
+        if (!res || !res.ok) {
+            const detail = res && typeof res.text === 'function' ? await res.text().catch(() => '') : '';
+            throw new Error(`push: batch ${batches} failed (${res ? res.status : 'no response'})${detail ? ': ' + String(detail).slice(0, 300) : ''}`);
+        }
+        sent += batch.length;
+        if (typeof options.onProgress === 'function') options.onProgress(sent, rows.length);
+    }
+    return { sent, batches, endpoint };
+}
+
+/** Only real columns travel; never send geom (generated) or column-less keys. */
+export function cleanRow(row) {
+    const out = {};
+    for (const key of COLUMNS) if (row[key] !== undefined) out[key] = row[key];
+    if (row.snapshot_id !== undefined) out.snapshot_id = row.snapshot_id;
+    return out;
 }
 
 async function upsert(db, row) {

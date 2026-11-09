@@ -6,6 +6,11 @@
  *   & sort=distance & order=asc
  * then the captured filter fragments, appended at the end.
  *
+ * Two kinds of fragment, both captured in the portal and neither guessed:
+ *   · a fixed one, e.g. the "What = Site/monument" slice;
+ *   · a period template containing {P}, e.g. "&when={P}", where the portal's own
+ *     period label is substituted (and URL-encoded) for each request of a sweep.
+ *
  * The browser sends only whitelisted values. The server rebuilds the URL from its
  * own configured base address and appends its own filter fragments, so a client
  * can never point the proxy at another host or smuggle extra parameters.
@@ -23,6 +28,24 @@
 
     function normaliseFragment(fragment) {
         return String(fragment || '').trim().replace(/^[?&]+/, '');
+    }
+
+    // A capture may arrive raw ("Site/monument") or already escaped ("Site%2Fmonument").
+    // Either way the value is decoded once here, because toQueryString escapes it once.
+    function decodeValue(value) {
+        try { return decodeURIComponent(String(value)); } catch (e) { return String(value); }
+    }
+
+    /** The period fragment is a template when it carries the {P} placeholder. */
+    function isPeriodTemplate(fragment) {
+        return normaliseFragment(fragment).indexOf('{P}') >= 0;
+    }
+
+    // The label is inserted raw: buildParams turns the fragment into a parameter and
+    // toQueryString encodes it exactly once. Encoding here as well would double-encode
+    // the spaces in labels such as "epoca bronzului".
+    function substitutePeriod(fragment, label) {
+        return normaliseFragment(fragment).split('{P}').join(String(label));
     }
 
     /** True only when every filter the positive role needs has been captured. */
@@ -54,10 +77,16 @@
         for (var j = 0; j < order.length; j++) {
             var fragment = normaliseFragment(source[order[j]]);
             if (!fragment) continue;
+            // A period template is only usable with a label; without one the request
+            // stays a baseline (all periods) rather than asking for the literal "{P}".
+            if (fragment.indexOf('{P}') >= 0) {
+                if (!opts.period) continue;
+                fragment = substitutePeriod(fragment, opts.period);
+            }
             // A fragment is a raw slice of query string, captured in the portal.
             var eq = fragment.indexOf('=');
-            if (eq > 0) params[fragment.slice(0, eq)] = fragment.slice(eq + 1);
-            else params[fragment] = '';
+            if (eq > 0) params[decodeValue(fragment.slice(0, eq))] = decodeValue(fragment.slice(eq + 1));
+            else params[decodeValue(fragment)] = '';
         }
         return params;
     }
@@ -82,5 +111,7 @@
         return { params: out, rejected: rejected };
     }
 
-    return { buildParams: buildParams, toQueryString: toQueryString, buildUrl: buildUrl, whitelist: whitelist, filtersConfigured: filtersConfigured, normaliseFragment: normaliseFragment, WHITELIST: WHITELIST, ORDER: ORDER };
+    return { buildParams: buildParams, toQueryString: toQueryString, buildUrl: buildUrl, whitelist: whitelist, filtersConfigured: filtersConfigured,
+        normaliseFragment: normaliseFragment, isPeriodTemplate: isPeriodTemplate, substitutePeriod: substitutePeriod, decodeValue: decodeValue,
+        WHITELIST: WHITELIST, ORDER: ORDER };
 });

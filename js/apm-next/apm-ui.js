@@ -416,6 +416,66 @@
         els.countNote.className = cls;
     }
 
+    // Outside Romania there is no national repertory: two catalogues answer, and
+    // apm-outside-sites merges them so a place attested by both appears once.
+    var outsideProviderCache;
+    function outsideProvider() {
+        if (outsideProviderCache !== undefined) return outsideProviderCache;
+        outsideProviderCache = null;
+        try {
+            var outside = root.DetectLabApmOutsideSites, dare = root.DetectLabApmDareSites;
+            if (!outside || !dare) return outsideProviderCache;
+            var ariadne = null;
+            if (root.DetectLabAriadneProvider && root.DetectLabAriadneConfig && root.DetectLabAriadneUpstream) {
+                // Subject-only: the parser keeps Site/monument, and the panel says the
+                // portal's period filters are still not configured.
+                // 300 ms between tile calls: this is the user's own browser, not the
+                // shared gateway (which keeps 1500 ms). Nine tiles ≈ 3 s.
+                // The closed gateway function is not deployed, so the browser talks to
+                // the portal directly; 300 ms between tile calls keeps that polite on the
+                // user's own connection (the server mode keeps 1500 ms).
+                var base = root.DetectLabAriadneConfig;
+                var cfg = Object.assign({}, base, {
+                    transport: base.transport === 'server' && base.functionsUrl ? 'server' : 'browser',
+                    subjectOnlyPositive: true,
+                    minSpacingMs: 300
+                });
+                ariadne = root.DetectLabAriadneProvider.createProvider({
+                    config: cfg,
+                    transport: root.DetectLabAriadneUpstream.create(cfg, {})
+                });
+            }
+            outsideProviderCache = outside.createProvider({ dare: dare.createProvider(), ariadne: ariadne });
+        } catch (error) {
+            outsideProviderCache = null;
+        }
+        return outsideProviderCache;
+    }
+
+    function settlementGetSites(centre, radiusKm, token) {
+        var provider = outsideProvider();
+        var inside = root.DetectLabRomaniaApmSites.insideRomania(centre.lat, centre.lon);
+        if (provider && !inside) return provider.getSites(centre, radiusKm, { token: token, signal: token.signal });
+        return root.DetectLabRomaniaApmSites.createProvider().getSites(centre, radiusKm, { token: token });
+    }
+
+    function outsideStatus(meta) {
+        var sources = (meta && meta.sources) || {};
+        var dare = sources.dare || {}, ariadne = sources.ariadne || {};
+        var parts = [];
+        if (dare.ok) parts.push('DARE ' + dare.records);
+        if (ariadne.ok && ariadne.records) parts.push('ARIADNE ' + ariadne.records);
+        var failed = [];
+        if (!dare.ok && dare.error) failed.push('DARE: ' + dare.error);
+        if (ariadne.error && (!ariadne.ok || !ariadne.records)) failed.push('ARIADNE: ' + ariadne.error);
+        return T('train.outsideLoaded', {
+            n: (meta && meta.returned) || 0,
+            parts: parts.join(' + ') || '—',
+            merged: (meta && meta.merged) || 0,
+            failed: failed.length ? ' ' + T('train.outsideFailed', { msg: failed.join('; ') }) : ''
+        });
+    }
+
     function cancelSiteLoad() {
         if (state.sitesToken) state.sitesToken.cancelled = true;
         state.sitesToken = null;
@@ -434,7 +494,9 @@
         loadPeriods();
         setStatus(T('train.loading'), 'busy');
         updateGate();
-        (isHoard() ? hoardRecords() : root.DetectLabRomaniaApmSites).createProvider().getSites(state.centre, trainingKm(), { token: token, filters: { include_approximate: state.includeApproximate } }).then(function (records) {
+        (isHoard()
+            ? hoardRecords().createProvider().getSites(state.centre, trainingKm(), { token: token, filters: { include_approximate: state.includeApproximate } })
+            : settlementGetSites(state.centre, trainingKm(), token)).then(function (records) {
             if (token.cancelled) return;
             state.records = records;
             if (isHoard() && records._meta && records._meta.offerCsv) { state.csvAllowed = true; els.csvRow.hidden = false; }
@@ -446,7 +508,21 @@
                 setStatus(T('train.outsideRomania'), 'error');
             }
             loadPeriods();
-            if (!(records._meta && records._meta.outsideRomania)) setStatus(T(isHoard() && records._meta.insufficient ? 'hoard.countBlock' : 'train.periodApplied', { n: records._meta.usable || 0 }), isHoard() && records._meta.insufficient ? 'error' : 'ok');
+            if (records._meta && records._meta.region === 'outside-romania') {
+                setStatus(outsideStatus(records._meta), records._meta.incomplete ? 'warn' : 'ok');
+                // Same rule as the hoards: below ten the run is blocked, and a CSV is the
+                // way out. Offer it instead of leaving a dead end.
+                if (records.length < 10) { state.csvAllowed = true; if (els.csvRow) els.csvRow.hidden = false; }
+            }
+            if (!(records._meta && records._meta.outsideRomania) && !(records._meta && records._meta.region === 'outside-romania')) {
+                var meta = records._meta || {};
+                setStatus(T(isHoard() && meta.insufficient ? 'hoard.countBlock' : 'train.periodApplied', { n: meta.usable || 0 }), isHoard() && meta.insufficient ? 'error' : 'ok');
+                // A zero because the toggle is off is not the same as a zero because
+                // there is nothing here: say which one it is.
+                if (isHoard() && meta.insufficient && !state.includeApproximate && Number(meta.approximate_available) > 0) {
+                    setStatus(T('hoard.approximateAvailable', { n: meta.approximate_available }), 'warn');
+                }
+            }
         }).catch(function (err) {
             if (!token.cancelled) {
                 state.csvAllowed = true; els.csvRow.hidden = false;

@@ -59,7 +59,18 @@
             if (!centre || !Number.isFinite(centre.lat) || !Number.isFinite(centre.lon)) return { role: 'disabled', reason: 'invalid-centre' };
             if (insideRomania(centre.lat, centre.lon)) return { role: 'disabled', reason: 'romania-excluded' };
             if (appMode === 'settlement') {
-                if (!query.filtersConfigured(config)) return { role: 'disabled', reason: 'filters-not-configured' };
+                // The site filter is what makes a hit a settlement. Periods do not need
+                // a URL fragment: the portal publishes a temporal facet in every response,
+                // so a period sweep can label the results afterwards.
+                if (query.filtersConfigured(config, ['siteType'])) return { role: config.roles.settlement };
+                if (!query.filtersConfigured(config)) {
+                    // The portal's own subject vocabulary still separates sites from
+                    // coins and inscriptions, so a subject-only reading is possible
+                    // without the captured URL fragments. It is opt-in and always
+                    // labelled: periods are NOT filtered in this mode.
+                    if (config.subjectOnlyPositive) return { role: config.roles.settlement, subjectOnly: true };
+                    return { role: 'disabled', reason: 'filters-not-configured' };
+                }
                 return { role: config.roles.settlement };
             }
             if (appMode === 'hoard') return { role: config.roles.hoard };
@@ -166,6 +177,10 @@
                 });
             }
 
+            var periodLabels = Object.keys(temporal).map(function (label) {
+                return { label: label, count: temporal[label] };
+            }).sort(function (a, b) { return b.count - a.count || a.label.localeCompare(b.label); });
+
             var result = {
                 records: records,
                 cells: cells,
@@ -183,6 +198,11 @@
                     rejected: rejected,
                     subjects: subjects,
                     temporal: temporal,
+                    // aggregations.temporal.temporal.buckets — the portal's own period
+                    // vocabulary for this box, largest first. Present even with no filter.
+                    periods: periodLabels,
+                    periodsPresent: periodLabels.length > 0,
+                    periodFilter: query.isPeriodTemplate((config.filters || {}).period),
                     cached: false
                 })
             };
@@ -227,6 +247,62 @@
             };
         }
 
+        /**
+         * One request per period label, each asking the portal for that period only.
+         * Mirrors the probe the operator validated: a label that comes back with the
+         * baseline total is not filtering anything and is reported as ignored.
+         */
+        async function sweepPeriods(centre, radiusKm, labels, opts) {
+            opts = opts || {};
+            var decision = roleFor(opts.appMode || 'settlement', centre);
+            if (decision.role === 'disabled') return { labels: [], cells: [], baseline: null, ignored: false, requests: 0, reason: decision.reason };
+            if (!query.isPeriodTemplate((config.filters || {}).period)) {
+                return { labels: [], cells: [], baseline: null, ignored: false, requests: 0, reason: 'period-template-missing' };
+            }
+            var maxLabels = (config.periodSweep && config.periodSweep.maxLabels) || 8;
+            labels = (labels || []).slice(0, maxLabels);
+            var box = tiles.boxAround(centre, Math.min(radiusKm, config.maxRadiusKm));
+            var boxTile = tiles.splitToMaxSide(box, config.maxSideKm)[0];
+            var requests = 0;
+
+            async function ask(period) {
+                var params = query.buildParams(config, { box: boxTile, period: period });
+                var res = await call(params, { signal: opts.signal });
+                requests++;
+                return parse.parseResponse(res.json);
+            }
+
+            var base = await ask(null);
+            var baseline = { total: base.total, cells: base.cells.length, records: base.gridDocCount, capped: parse.isCapped(base.cells.length, config.cellCap) };
+            var byKey = new Map(), rows = [];
+            for (var i = 0; i < labels.length; i++) {
+                if (opts.signal && opts.signal.aborted) break;
+                var parsed = await ask(labels[i]);
+                var shared = 0;
+                parsed.cells.forEach(function (cell) {
+                    if (base.cells.some(function (b) { return b.key === cell.key; })) shared++;
+                    if (!byKey.has(cell.key)) byKey.set(cell.key, []);
+                    byKey.get(cell.key).push(labels[i]);
+                });
+                rows.push({
+                    label: labels[i],
+                    total: parsed.total,
+                    cells: parsed.cells.length,
+                    records: parsed.gridDocCount,
+                    shareOfBaseline: base.cells.length ? Math.round(100 * shared / base.cells.length) : 0,
+                    effect: parsed.total == null || base.total == null ? 'unknown'
+                        : parsed.total < base.total ? 'narrows' : parsed.total === base.total ? 'none' : 'different'
+                });
+            }
+            var cells = [];
+            byKey.forEach(function (list, key) { cells.push({ key: key, periods: list }); });
+            return {
+                labels: rows, cells: cells, baseline: baseline, requests,
+                ignored: rows.length > 0 && rows.every(function (r) { return r.total === baseline.total; }),
+                reason: null
+            };
+        }
+
         return {
             id: 'ariadne',
             label: 'ARIADNE',
@@ -252,6 +328,12 @@
             getCounts: function (centre, radiusKm, opts) {
                 opts = opts || {};
                 return search(centre, radiusKm, opts.appMode, opts.signal).then(function (r) { return r.meta; });
+            },
+            sweepPeriods: sweepPeriods,
+            getPeriods: function (centre, radiusKm, opts) {
+                return search(centre, radiusKm, (opts || {}).appMode || 'settlement', (opts || {}).signal).then(function (r) {
+                    return { labels: r.meta.periods || [], counts: r.meta.temporal || {}, requests: r.meta.requests, role: r.meta.role };
+                });
             },
             estimate: estimate,
             clearCache: function () { if (cache.clear) cache.clear(); }

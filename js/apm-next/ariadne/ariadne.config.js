@@ -39,10 +39,17 @@
         },
         // Raw query fragments, appended in this order after the base parameters.
         // Empty = not captured yet = settlement mode stays blocked.
+        // The site fragment is what makes a hit a settlement, and it is the one the
+        // positive role requires. The period fragment is a TEMPLATE: it carries {P}
+        // where the portal's own period label goes, e.g. '&when={P}'. The label is
+        // URL-encoded once, never twice, and a template without a label is skipped
+        // (a baseline request asks for every period).
         filters: {
-            siteType: '',                    // e.g. '<fragment captured in the portal>'
-            period: ''                       // e.g. '<fragment captured in the portal>'
+            siteType: '',                    // e.g. '&<param>=<value>' captured in the portal
+            period: ''                       // e.g. '&<param>={P}'
         },
+        // One request per label, so the sweep is bounded by the label count.
+        periodSweep: { maxLabels: 8 },
 
         // ── geometry ─────────────────────────────────────────────────────────
         maxSideKm: 120,                      // server-side bbox limit (about 120 km per side)
@@ -57,7 +64,11 @@
         // settlement mode + centre outside Romania → positive training sites
         // hoard mode      + centre outside Romania → known-site comparison only
         // any mode        + centre inside Romania  → never used
-        roles: { settlement: 'positive', hoard: 'comparison' },
+        // Settlement outside Romania may run with the subject filter only (Site/monument)
+    // while the captured URL fragments are still missing. Off by default; the merged
+    // outside-Romania provider turns it on and says so in its meta.
+    subjectOnlyPositive: false,
+    roles: { settlement: 'positive', hoard: 'comparison' },
         positiveSubjects: ['Site/monument'],   // the only subject that can train the model
 
         // Natural Earth Admin-0 1:110m outline of Romania, lon/lat pairs.
