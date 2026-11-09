@@ -69,7 +69,11 @@ export function buildReport({ dump, derived, counts, duplicates, mappingStatus, 
             ['Name', m.nameField ? `\`${m.nameField}\`` : '**none**', e.name.candidates?.map(c => `${c.field} ${pct(c.coverage, 1)}`).join(', ') || e.name.reason],
             ['Deposit start', m.dateStartField ? `\`${m.dateStartField}\`` : '**none**', e.date.candidates?.length ? `${e.date.candidates[0].orderedCount} of ${e.date.candidates[0].paired} paired rows have start ≤ end` : (e.date.rejected || []).map(r => r.field).join(', ') || e.date.reason || '—'],
             ['Deposit end', m.dateEndField ? `\`${m.dateEndField}\`` : '**none**', ''],
-            ['Date basis', m.dateBasis ? `\`${m.dateBasis}\`` : '**none**', m.dateBasis === 'tpq' ? 'chosen field name carries TPQ' : 'ordered numeric pair, no TPQ field'],
+            ['Date basis', m.dateBasis ? `\`${m.dateBasis}\`` : '**none**', m.dateBasis === 'tpq'
+                ? 'a chosen field is a TPQ field'
+                : e.tpqField
+                    ? `ordered numeric pair; the layer's TPQ field \`${e.tpqField}\` was not chosen — decision required`
+                    : 'ordered numeric pair, no TPQ field in the layer'],
             ['Hoard type', `\`${m.hoardType}\``, `${e.hoardType.basis}${e.hoardType.needsReview ? ' — **needs review**' : ''}`],
             ['Metal', m.metalField ? `\`${m.metalField}\`` : '—', m.metalField ? 'field present in the capture' : 'no metal field'],
             ['Country', m.countryField ? `\`${m.countryField}\`` : '—', m.countryField ? 'field present in the capture' : 'no country field (layer is worldwide)'],
