@@ -1,0 +1,1145 @@
+{
+  "notice": "SYNTHETIC capture in the operator's real file shape. Field names and value vocabularies follow the real DARMC projections in test/fixtures/hoards.real-projections.json and the live quality-value tallies in HOARD_TRAIN_REPORT.md; the rows themselves are invented. It exists so the importer, the derivation and the fixture trimmer can be tested without network access. Replace it with the real capture for real counts.",
+  "source": "synthetic",
+  "fetchedAt": "2026-11-09T00:00:00.000Z",
+  "outSR": 4326,
+  "layers": {
+    "8": {
+      "name": "Carolingian coin hoards, 769-814 CE",
+      "expected": 6,
+      "fields": [
+        {
+          "name": "OBJECTID",
+          "type": "esriFieldTypeOID",
+          "alias": "OBJECTID"
+        },
+        {
+          "name": "COUP_ID",
+          "type": "esriFieldTypeInteger",
+          "alias": "Coupland id"
+        },
+        {
+          "name": "NAME_COUP",
+          "type": "esriFieldTypeString",
+          "alias": "Name"
+        },
+        {
+          "name": "FINDATE",
+          "type": "esriFieldTypeInteger",
+          "alias": "Find year"
+        },
+        {
+          "name": "FINDSPOT_Q",
+          "type": "esriFieldTypeString",
+          "alias": "Findspot quality"
+        },
+        {
+          "name": "VERIFIED",
+          "type": "esriFieldTypeString",
+          "alias": "Verified"
+        },
+        {
+          "name": "DATE_COUP",
+          "type": "esriFieldTypeString",
+          "alias": "Date"
+        },
+        {
+          "name": "DATE_E",
+          "type": "esriFieldTypeInteger",
+          "alias": "Earliest date"
+        },
+        {
+          "name": "DATE_L",
+          "type": "esriFieldTypeInteger",
+          "alias": "Latest date"
+        },
+        {
+          "name": "COINS_MN",
+          "type": "esriFieldTypeInteger",
+          "alias": "Coins minimum"
+        }
+      ],
+      "features": [
+        {
+          "attributes": {
+            "OBJECTID": 1,
+            "COUP_ID": 2,
+            "NAME_COUP": "Wijk bij Duurstede II",
+            "FINDATE": 1972,
+            "FINDSPOT_Q": null,
+            "VERIFIED": "X",
+            "DATE_COUP": "755-769",
+            "DATE_E": 755,
+            "DATE_L": 769,
+            "COINS_MN": 25
+          },
+          "geometry": {
+            "x": 5.34525,
+            "y": 51.97286
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 2,
+            "COUP_ID": 3,
+            "NAME_COUP": "Aarhus",
+            "FINDATE": 1955,
+            "FINDSPOT_Q": "C",
+            "VERIFIED": "X",
+            "DATE_COUP": "800-810",
+            "DATE_E": 800,
+            "DATE_L": 810,
+            "COINS_MN": 12
+          },
+          "geometry": {
+            "x": 10.2,
+            "y": 56.15
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 3,
+            "COUP_ID": 4,
+            "NAME_COUP": "Trier, Dom",
+            "FINDATE": 1990,
+            "FINDSPOT_Q": "Ca.",
+            "VERIFIED": "X",
+            "DATE_COUP": "790-805",
+            "DATE_E": 790,
+            "DATE_L": 805,
+            "COINS_MN": 3
+          },
+          "geometry": {
+            "x": 6.64,
+            "y": 49.75
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 4,
+            "COUP_ID": 5,
+            "NAME_COUP": "Săndulești",
+            "FINDATE": 1968,
+            "FINDSPOT_Q": null,
+            "VERIFIED": "F",
+            "DATE_COUP": null,
+            "DATE_E": null,
+            "DATE_L": 780,
+            "COINS_MN": null
+          },
+          "geometry": {
+            "x": 23.8044,
+            "y": 46.5861
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 5,
+            "COUP_ID": 6,
+            "NAME_COUP": "Rouen",
+            "FINDATE": null,
+            "FINDSPOT_Q": "?",
+            "VERIFIED": "X",
+            "DATE_COUP": "760-769",
+            "DATE_E": 760,
+            "DATE_L": 769,
+            "COINS_MN": 40
+          },
+          "geometry": {
+            "x": 1.0993,
+            "y": 49.4432
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 6,
+            "COUP_ID": 6,
+            "NAME_COUP": "Rouen",
+            "FINDATE": null,
+            "FINDSPOT_Q": "?",
+            "VERIFIED": "X",
+            "DATE_COUP": "761-770",
+            "DATE_E": 761,
+            "DATE_L": 770,
+            "COINS_MN": 40
+          },
+          "geometry": {
+            "x": 1.0993,
+            "y": 49.4432
+          }
+        }
+      ]
+    },
+    "9": {
+      "name": "Carolingian coin hoards, 815-840 CE",
+      "expected": 3,
+      "fields": [
+        {
+          "name": "OBJECTID",
+          "type": "esriFieldTypeOID",
+          "alias": "OBJECTID"
+        },
+        {
+          "name": "COUP_ID",
+          "type": "esriFieldTypeInteger",
+          "alias": "Coupland id"
+        },
+        {
+          "name": "NAME_COUP",
+          "type": "esriFieldTypeString",
+          "alias": "Name"
+        },
+        {
+          "name": "FINDATE",
+          "type": "esriFieldTypeInteger",
+          "alias": "Find year"
+        },
+        {
+          "name": "FINDSPOT_Q",
+          "type": "esriFieldTypeString",
+          "alias": "Findspot quality"
+        },
+        {
+          "name": "VERIFIED",
+          "type": "esriFieldTypeString",
+          "alias": "Verified"
+        },
+        {
+          "name": "DATE_E",
+          "type": "esriFieldTypeInteger",
+          "alias": "Earliest date"
+        },
+        {
+          "name": "DATE_L",
+          "type": "esriFieldTypeInteger",
+          "alias": "Latest date"
+        },
+        {
+          "name": "COINS_MN",
+          "type": "esriFieldTypeInteger",
+          "alias": "Coins minimum"
+        }
+      ],
+      "features": [
+        {
+          "attributes": {
+            "OBJECTID": 1,
+            "COUP_ID": 41,
+            "NAME_COUP": "Dorestad",
+            "FINDATE": 1848,
+            "FINDSPOT_Q": null,
+            "VERIFIED": "X",
+            "DATE_E": 820,
+            "DATE_L": 835,
+            "COINS_MN": 60
+          },
+          "geometry": {
+            "x": 5.34,
+            "y": 51.97
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 2,
+            "COUP_ID": 42,
+            "NAME_COUP": "Mainz",
+            "FINDATE": 1902,
+            "FINDSPOT_Q": "?",
+            "VERIFIED": "X",
+            "DATE_E": 815,
+            "DATE_L": 830,
+            "COINS_MN": 7
+          },
+          "geometry": {
+            "x": 8.27,
+            "y": 50.0
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 3,
+            "COUP_ID": 43,
+            "NAME_COUP": "Zelzate",
+            "FINDATE": 1931,
+            "FINDSPOT_Q": null,
+            "VERIFIED": "F",
+            "DATE_E": 825,
+            "DATE_L": 840,
+            "COINS_MN": 2
+          },
+          "geometry": {
+            "x": 3.81,
+            "y": 51.19
+          }
+        }
+      ]
+    },
+    "10": {
+      "name": "Carolingian coin hoards, 841-900 CE",
+      "expected": 3,
+      "fields": [
+        {
+          "name": "OBJECTID",
+          "type": "esriFieldTypeOID",
+          "alias": "OBJECTID"
+        },
+        {
+          "name": "COUP_ID",
+          "type": "esriFieldTypeInteger",
+          "alias": "Coupland id"
+        },
+        {
+          "name": "NAME_COUP",
+          "type": "esriFieldTypeString",
+          "alias": "Name"
+        },
+        {
+          "name": "FINDATE",
+          "type": "esriFieldTypeInteger",
+          "alias": "Find year"
+        },
+        {
+          "name": "FINDSPOT_Q",
+          "type": "esriFieldTypeString",
+          "alias": "Findspot quality"
+        },
+        {
+          "name": "VERIFIED",
+          "type": "esriFieldTypeString",
+          "alias": "Verified"
+        },
+        {
+          "name": "DATE_E",
+          "type": "esriFieldTypeInteger",
+          "alias": "Earliest date"
+        },
+        {
+          "name": "DATE_L",
+          "type": "esriFieldTypeInteger",
+          "alias": "Latest date"
+        },
+        {
+          "name": "COINS_MN",
+          "type": "esriFieldTypeInteger",
+          "alias": "Coins minimum"
+        }
+      ],
+      "features": [
+        {
+          "attributes": {
+            "OBJECTID": 1,
+            "COUP_ID": 101,
+            "NAME_COUP": "Bais",
+            "FINDATE": 1911,
+            "FINDSPOT_Q": "C",
+            "VERIFIED": "X",
+            "DATE_E": 850,
+            "DATE_L": 875,
+            "COINS_MN": 14
+          },
+          "geometry": {
+            "x": -1.29,
+            "y": 48.25
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 2,
+            "COUP_ID": 102,
+            "NAME_COUP": "Roermond",
+            "FINDATE": 1893,
+            "FINDSPOT_Q": null,
+            "VERIFIED": "X",
+            "DATE_E": 855,
+            "DATE_L": 880,
+            "COINS_MN": 31
+          },
+          "geometry": {
+            "x": 5.99,
+            "y": 51.19
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 3,
+            "COUP_ID": 103,
+            "NAME_COUP": "Vercelli",
+            "FINDATE": null,
+            "FINDSPOT_Q": "Ca.",
+            "VERIFIED": "X",
+            "DATE_E": 870,
+            "DATE_L": 900,
+            "COINS_MN": 9
+          },
+          "geometry": {
+            "x": 8.42,
+            "y": 45.32
+          }
+        }
+      ]
+    },
+    "11": {
+      "name": "Carolingian coin hoards, after 900 CE",
+      "expected": 3,
+      "fields": [
+        {
+          "name": "OBJECTID",
+          "type": "esriFieldTypeOID",
+          "alias": "OBJECTID"
+        },
+        {
+          "name": "COUP_ID",
+          "type": "esriFieldTypeInteger",
+          "alias": "Coupland id"
+        },
+        {
+          "name": "NAME_COUP",
+          "type": "esriFieldTypeString",
+          "alias": "Name"
+        },
+        {
+          "name": "FINDATE",
+          "type": "esriFieldTypeInteger",
+          "alias": "Find year"
+        },
+        {
+          "name": "FINDSPOT_Q",
+          "type": "esriFieldTypeString",
+          "alias": "Findspot quality"
+        },
+        {
+          "name": "VERIFIED",
+          "type": "esriFieldTypeString",
+          "alias": "Verified"
+        },
+        {
+          "name": "DATE_E",
+          "type": "esriFieldTypeInteger",
+          "alias": "Earliest date"
+        },
+        {
+          "name": "DATE_L",
+          "type": "esriFieldTypeInteger",
+          "alias": "Latest date"
+        },
+        {
+          "name": "COINS_MN",
+          "type": "esriFieldTypeInteger",
+          "alias": "Coins minimum"
+        }
+      ],
+      "features": [
+        {
+          "attributes": {
+            "OBJECTID": 1,
+            "COUP_ID": 201,
+            "NAME_COUP": "Huy",
+            "FINDATE": 1877,
+            "FINDSPOT_Q": null,
+            "VERIFIED": "X",
+            "DATE_E": 905,
+            "DATE_L": 925,
+            "COINS_MN": 18
+          },
+          "geometry": {
+            "x": 5.24,
+            "y": 50.52
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 2,
+            "COUP_ID": 202,
+            "NAME_COUP": "Unknown findspot",
+            "FINDATE": null,
+            "FINDSPOT_Q": "?",
+            "VERIFIED": null,
+            "DATE_E": null,
+            "DATE_L": null,
+            "COINS_MN": 4
+          },
+          "geometry": {
+            "x": 4.4,
+            "y": 50.8
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 3,
+            "COUP_ID": 203,
+            "NAME_COUP": "Dinant",
+            "FINDATE": 1905,
+            "FINDSPOT_Q": null,
+            "VERIFIED": "X",
+            "DATE_E": 930,
+            "DATE_L": 950,
+            "COINS_MN": 22
+          },
+          "geometry": {
+            "x": 4.91,
+            "y": 50.26
+          }
+        }
+      ]
+    },
+    "12": {
+      "name": "Gallic coin hoards, 200-300 CE",
+      "expected": 6,
+      "fields": [
+        {
+          "name": "OBJECTID",
+          "type": "esriFieldTypeOID",
+          "alias": "OBJECTID"
+        },
+        {
+          "name": "id_no",
+          "type": "esriFieldTypeInteger",
+          "alias": "id_no"
+        },
+        {
+          "name": "Name",
+          "type": "esriFieldTypeString",
+          "alias": "Name"
+        },
+        {
+          "name": "Latitude",
+          "type": "esriFieldTypeDouble",
+          "alias": "Latitude"
+        },
+        {
+          "name": "Longitude",
+          "type": "esriFieldTypeDouble",
+          "alias": "Longitude"
+        },
+        {
+          "name": "Find_year",
+          "type": "esriFieldTypeString",
+          "alias": "Find year"
+        },
+        {
+          "name": "start_date",
+          "type": "esriFieldTypeInteger",
+          "alias": "start_date"
+        },
+        {
+          "name": "end_date",
+          "type": "esriFieldTypeInteger",
+          "alias": "end_date"
+        },
+        {
+          "name": "hoardsize",
+          "type": "esriFieldTypeInteger",
+          "alias": "hoardsize"
+        },
+        {
+          "name": "preserved",
+          "type": "esriFieldTypeInteger",
+          "alias": "preserved"
+        },
+        {
+          "name": "non_coin",
+          "type": "esriFieldTypeString",
+          "alias": "non_coin"
+        },
+        {
+          "name": "weight_kg",
+          "type": "esriFieldTypeDouble",
+          "alias": "weight_kg"
+        },
+        {
+          "name": "metal",
+          "type": "esriFieldTypeString",
+          "alias": "metal"
+        }
+      ],
+      "features": [
+        {
+          "attributes": {
+            "OBJECTID": 1,
+            "id_no": 570,
+            "Name": "Kervian Camaret",
+            "Latitude": 48.266182,
+            "Longitude": -4.557389,
+            "Find_year": "1863, Januar",
+            "start_date": 218,
+            "end_date": 222,
+            "hoardsize": 1000,
+            "preserved": 101,
+            "non_coin": "keine",
+            "weight_kg": 3,
+            "metal": "AR"
+          },
+          "geometry": {
+            "x": -4.557389,
+            "y": 48.266182
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 2,
+            "id_no": 571,
+            "Name": "Kervian Camaret",
+            "Latitude": 48.266182,
+            "Longitude": -4.557389,
+            "Find_year": "1863, Januar",
+            "start_date": 219,
+            "end_date": 223,
+            "hoardsize": 998,
+            "preserved": 101,
+            "non_coin": "keine",
+            "weight_kg": 3,
+            "metal": "AR"
+          },
+          "geometry": {
+            "x": -4.557389,
+            "y": 48.266182
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 3,
+            "id_no": 572,
+            "Name": "Chitry-les-Mines",
+            "Latitude": 47.2167,
+            "Longitude": 3.65,
+            "Find_year": "1893",
+            "start_date": 260,
+            "end_date": 275,
+            "hoardsize": 340,
+            "preserved": 40,
+            "non_coin": "anneaux",
+            "weight_kg": 1.2,
+            "metal": "BI"
+          },
+          "geometry": {
+            "x": 3.65,
+            "y": 47.2167
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 4,
+            "id_no": 573,
+            "Name": "Saint-Germain-des-Prés",
+            "Latitude": 48.85,
+            "Longitude": 2.33,
+            "Find_year": null,
+            "start_date": null,
+            "end_date": null,
+            "hoardsize": 120,
+            "preserved": null,
+            "non_coin": "keine",
+            "weight_kg": null,
+            "metal": "AR"
+          },
+          "geometry": {
+            "x": 2.33,
+            "y": 48.85
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 5,
+            "id_no": 574,
+            "Name": "Évreux",
+            "Latitude": 49.024,
+            "Longitude": 1.1508,
+            "Find_year": "1855",
+            "start_date": 200,
+            "end_date": 210,
+            "hoardsize": 55,
+            "preserved": 12,
+            "non_coin": "keine",
+            "weight_kg": 0.4,
+            "metal": "AR"
+          },
+          "geometry": {
+            "x": 1.1508,
+            "y": 49.024
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 6,
+            "id_no": 575,
+            "Name": "Reims",
+            "Latitude": 49.2583,
+            "Longitude": 4.0317,
+            "Find_year": "1922",
+            "start_date": 290,
+            "end_date": 300,
+            "hoardsize": 210,
+            "preserved": 60,
+            "non_coin": "keine",
+            "weight_kg": 0.9,
+            "metal": "AR"
+          },
+          "geometry": {
+            "x": 4.0317,
+            "y": 49.2583
+          }
+        }
+      ]
+    },
+    "15": {
+      "name": "Late Roman precious-metal deposits, 200-700 CE (equivalent gold weight)",
+      "expected": 7,
+      "fields": [
+        {
+          "name": "OBJECTID",
+          "type": "esriFieldTypeOID",
+          "alias": "OBJECTID"
+        },
+        {
+          "name": "KNOWN",
+          "type": "esriFieldTypeString",
+          "alias": "Known as"
+        },
+        {
+          "name": "PLACE",
+          "type": "esriFieldTypeString",
+          "alias": "Place"
+        },
+        {
+          "name": "REGION",
+          "type": "esriFieldTypeString",
+          "alias": "Region"
+        },
+        {
+          "name": "COUNTRY",
+          "type": "esriFieldTypeString",
+          "alias": "Country"
+        },
+        {
+          "name": "CENTROID",
+          "type": "esriFieldTypeString",
+          "alias": "Centroid/region label"
+        },
+        {
+          "name": "YEAR_DISC",
+          "type": "esriFieldTypeString",
+          "alias": "Discovery year"
+        },
+        {
+          "name": "ITEM_ON",
+          "type": "esriFieldTypeInteger",
+          "alias": "Item count"
+        },
+        {
+          "name": "HOBBS_NO",
+          "type": "esriFieldTypeString",
+          "alias": "Hobbs number"
+        },
+        {
+          "name": "Received_O",
+          "type": "esriFieldTypeInteger",
+          "alias": "Received"
+        },
+        {
+          "name": "HOB_PD_ST",
+          "type": "esriFieldTypeInteger",
+          "alias": "Deposit start"
+        },
+        {
+          "name": "HOB_PD_EN",
+          "type": "esriFieldTypeInteger",
+          "alias": "Deposit end"
+        },
+        {
+          "name": "START_D",
+          "type": "esriFieldTypeInteger",
+          "alias": "Start date"
+        },
+        {
+          "name": "END_D",
+          "type": "esriFieldTypeInteger",
+          "alias": "End date"
+        },
+        {
+          "name": "D_TPQ",
+          "type": "esriFieldTypeInteger",
+          "alias": "Terminus post quem"
+        },
+        {
+          "name": "Q_LAT_LON",
+          "type": "esriFieldTypeString",
+          "alias": "Coordinate quality"
+        },
+        {
+          "name": "DEC_LAT",
+          "type": "esriFieldTypeDouble",
+          "alias": "Decimal latitude"
+        },
+        {
+          "name": "DEC_LONG",
+          "type": "esriFieldTypeDouble",
+          "alias": "Decimal longitude"
+        },
+        {
+          "name": "LATITUDE",
+          "type": "esriFieldTypeString",
+          "alias": "Latitude (degrees)"
+        }
+      ],
+      "features": [
+        {
+          "attributes": {
+            "OBJECTID": 1,
+            "KNOWN": "Al-Madhariba",
+            "PLACE": "Al-Madhariba",
+            "REGION": "Near Aden, Lahej Governorate",
+            "COUNTRY": "North Yemen",
+            "CENTROID": " ",
+            "YEAR_DISC": " ",
+            "ITEM_ON": 29,
+            "HOBBS_NO": " ",
+            "Received_O": 2028,
+            "HOB_PD_ST": 500,
+            "HOB_PD_EN": 600,
+            "START_D": 337,
+            "END_D": 600,
+            "D_TPQ": 500,
+            "Q_LAT_LON": " ",
+            "DEC_LAT": 12.790919,
+            "DEC_LONG": 44.993448,
+            "LATITUDE": "15.00N"
+          },
+          "geometry": {
+            "x": 44.993448,
+            "y": 12.790919
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 2,
+            "KNOWN": "Sully",
+            "PLACE": "Sully",
+            "REGION": "Vaud",
+            "COUNTRY": "Switzerland",
+            "CENTROID": "Lake Geneva region",
+            "YEAR_DISC": "1826",
+            "ITEM_ON": 12,
+            "HOBBS_NO": "H1982",
+            "Received_O": 2029,
+            "HOB_PD_ST": 400,
+            "HOB_PD_EN": 450,
+            "START_D": 400,
+            "END_D": 450,
+            "D_TPQ": 400,
+            "Q_LAT_LON": "c",
+            "DEC_LAT": 46.43,
+            "DEC_LONG": 6.48,
+            "LATITUDE": "46.43N"
+          },
+          "geometry": {
+            "x": 6.48,
+            "y": 46.43
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 3,
+            "KNOWN": "Kaiseraugst",
+            "PLACE": "Kaiseraugst",
+            "REGION": "Aargau",
+            "COUNTRY": "Switzerland",
+            "CENTROID": " ",
+            "YEAR_DISC": "1961",
+            "ITEM_ON": 270,
+            "HOBBS_NO": "H1975",
+            "Received_O": 2029,
+            "HOB_PD_ST": 350,
+            "HOB_PD_EN": 353,
+            "START_D": 350,
+            "END_D": 353,
+            "D_TPQ": 350,
+            "Q_LAT_LON": " ",
+            "DEC_LAT": 47.54,
+            "DEC_LONG": 7.72,
+            "LATITUDE": "47.54N"
+          },
+          "geometry": {
+            "x": 7.72,
+            "y": 47.54
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 4,
+            "KNOWN": "Şimleu Silvaniei",
+            "PLACE": "Şimleu Silvaniei",
+            "REGION": "Sălaj",
+            "COUNTRY": "Romania",
+            "CENTROID": " ",
+            "YEAR_DISC": "1889",
+            "ITEM_ON": 8,
+            "HOBBS_NO": "H2001",
+            "Received_O": 2031,
+            "HOB_PD_ST": 380,
+            "HOB_PD_EN": 420,
+            "START_D": 380,
+            "END_D": 420,
+            "D_TPQ": 380,
+            "Q_LAT_LON": " ",
+            "DEC_LAT": 47.23,
+            "DEC_LONG": 22.8,
+            "LATITUDE": "47.23N"
+          },
+          "geometry": {
+            "x": 22.8,
+            "y": 47.23
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 5,
+            "KNOWN": "Unknown findspot (Pannonia)",
+            "PLACE": null,
+            "REGION": "Pannonia",
+            "COUNTRY": "Hungary",
+            "CENTROID": "Pannonia",
+            "YEAR_DISC": null,
+            "ITEM_ON": 3,
+            "HOBBS_NO": " ",
+            "Received_O": 2032,
+            "HOB_PD_ST": 300,
+            "HOB_PD_EN": 350,
+            "START_D": 300,
+            "END_D": 350,
+            "D_TPQ": 300,
+            "Q_LAT_LON": "?",
+            "DEC_LAT": 47.0,
+            "DEC_LONG": 18.0,
+            "LATITUDE": "47.00N"
+          },
+          "geometry": {
+            "x": 18.0,
+            "y": 47.0
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 6,
+            "KNOWN": "Colchester",
+            "PLACE": "Colchester",
+            "REGION": "Essex",
+            "COUNTRY": "United Kingdom",
+            "CENTROID": " ",
+            "YEAR_DISC": "1845",
+            "ITEM_ON": 5,
+            "HOBBS_NO": "H2050",
+            "Received_O": 2030,
+            "HOB_PD_ST": 405,
+            "HOB_PD_EN": 410,
+            "START_D": 405,
+            "END_D": 410,
+            "D_TPQ": 405,
+            "Q_LAT_LON": " ",
+            "DEC_LAT": 51.89,
+            "DEC_LONG": 0.9,
+            "LATITUDE": "51.89N"
+          },
+          "geometry": {
+            "x": 0.9,
+            "y": 51.89
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 7,
+            "KNOWN": "Trier",
+            "PLACE": "Trier",
+            "REGION": "Rheinland-Pfalz",
+            "COUNTRY": "Germany",
+            "CENTROID": " ",
+            "YEAR_DISC": "1993",
+            "ITEM_ON": 41,
+            "HOBBS_NO": "H2060",
+            "Received_O": 2030,
+            "HOB_PD_ST": 250,
+            "HOB_PD_EN": 300,
+            "START_D": 250,
+            "END_D": 300,
+            "D_TPQ": 250,
+            "Q_LAT_LON": " ",
+            "DEC_LAT": 49.75,
+            "DEC_LONG": 6.64,
+            "LATITUDE": "49.75N"
+          },
+          "geometry": {
+            "x": 6.64,
+            "y": 49.75
+          }
+        }
+      ]
+    },
+    "16": {
+      "name": "Late Roman precious-metal deposits, 200-700 CE (deposit date)",
+      "expected": 3,
+      "fields": [
+        {
+          "name": "OBJECTID",
+          "type": "esriFieldTypeOID",
+          "alias": "OBJECTID"
+        },
+        {
+          "name": "KNOWN",
+          "type": "esriFieldTypeString",
+          "alias": "Known as"
+        },
+        {
+          "name": "PLACE",
+          "type": "esriFieldTypeString",
+          "alias": "Place"
+        },
+        {
+          "name": "REGION",
+          "type": "esriFieldTypeString",
+          "alias": "Region"
+        },
+        {
+          "name": "COUNTRY",
+          "type": "esriFieldTypeString",
+          "alias": "Country"
+        },
+        {
+          "name": "CENTROID",
+          "type": "esriFieldTypeString",
+          "alias": "Centroid/region label"
+        },
+        {
+          "name": "YEAR_DISC",
+          "type": "esriFieldTypeString",
+          "alias": "Discovery year"
+        },
+        {
+          "name": "ITEM_ON",
+          "type": "esriFieldTypeInteger",
+          "alias": "Item count"
+        },
+        {
+          "name": "HOBBS_NO",
+          "type": "esriFieldTypeString",
+          "alias": "Hobbs number"
+        },
+        {
+          "name": "START_D",
+          "type": "esriFieldTypeInteger",
+          "alias": "Start date"
+        },
+        {
+          "name": "END_D",
+          "type": "esriFieldTypeInteger",
+          "alias": "End date"
+        },
+        {
+          "name": "START_Q",
+          "type": "esriFieldTypeString",
+          "alias": "Start quality"
+        },
+        {
+          "name": "END_Q",
+          "type": "esriFieldTypeString",
+          "alias": "End quality"
+        },
+        {
+          "name": "D_TPQ",
+          "type": "esriFieldTypeInteger",
+          "alias": "Terminus post quem"
+        },
+        {
+          "name": "Q_LAT_LON",
+          "type": "esriFieldTypeString",
+          "alias": "Coordinate quality"
+        },
+        {
+          "name": "DEC_LAT",
+          "type": "esriFieldTypeDouble",
+          "alias": "Decimal latitude"
+        },
+        {
+          "name": "DEC_LONG",
+          "type": "esriFieldTypeDouble",
+          "alias": "Decimal longitude"
+        }
+      ],
+      "features": [
+        {
+          "attributes": {
+            "OBJECTID": 1,
+            "KNOWN": "Kaiseraugst",
+            "PLACE": "Kaiseraugst",
+            "REGION": "Aargau",
+            "COUNTRY": "Switzerland",
+            "CENTROID": " ",
+            "YEAR_DISC": "1961",
+            "ITEM_ON": 270,
+            "HOBBS_NO": "H1975",
+            "START_D": 350,
+            "END_D": 353,
+            "START_Q": " ",
+            "END_Q": " ",
+            "D_TPQ": 350,
+            "Q_LAT_LON": " ",
+            "DEC_LAT": 47.54,
+            "DEC_LONG": 7.72
+          },
+          "geometry": {
+            "x": 7.72,
+            "y": 47.54
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 2,
+            "KNOWN": "Sully",
+            "PLACE": "Sully",
+            "REGION": "Vaud",
+            "COUNTRY": "Switzerland",
+            "CENTROID": "Lake Geneva region",
+            "YEAR_DISC": "1826",
+            "ITEM_ON": 12,
+            "HOBBS_NO": "H1982",
+            "START_D": 400,
+            "END_D": 450,
+            "START_Q": "c",
+            "END_Q": " ",
+            "D_TPQ": 400,
+            "Q_LAT_LON": "c",
+            "DEC_LAT": 46.43,
+            "DEC_LONG": 6.48
+          },
+          "geometry": {
+            "x": 6.48,
+            "y": 46.43
+          }
+        },
+        {
+          "attributes": {
+            "OBJECTID": 3,
+            "KNOWN": "Trier",
+            "PLACE": "Trier",
+            "REGION": "Rheinland-Pfalz",
+            "COUNTRY": "Germany",
+            "CENTROID": " ",
+            "YEAR_DISC": "1993",
+            "ITEM_ON": 41,
+            "HOBBS_NO": "H2060",
+            "START_D": 250,
+            "END_D": 300,
+            "START_Q": " ",
+            "END_Q": " ",
+            "D_TPQ": 250,
+            "Q_LAT_LON": " ",
+            "DEC_LAT": 49.75,
+            "DEC_LONG": 6.64
+          },
+          "geometry": {
+            "x": 6.64,
+            "y": 49.75
+          }
+        }
+      ]
+    }
+  }
+}

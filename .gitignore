@@ -29,3 +29,9 @@ rvt_service/cache/
 *.tif
 *.tiff
 *.cog
+
+# DARMC operator capture (third-party download, keep out of Git) and any SQL
+# data dump generated from it. The review report, the mapping and the trimmed
+# fixtures are small and are meant to be committed.
+data/hoards/darmc_hoards_layers.json
+data/hoards/*.sql

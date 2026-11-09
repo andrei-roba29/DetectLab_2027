@@ -1,0 +1,71 @@
+{
+  "notice": "REAL response excerpt supplied by the operator on 2026-11-09 (unmodified). Two hits, total=23, so paging and tile splitting are required to read a 150 km search. It proves the result shape only; the endpoint and the query DSL remain unverified.",
+  "total": { "value": 23, "relation": "eq" },
+  "hits": [
+    {
+      "id": "62d93aeacb4fda13105d74e2ab190d5f79e4f7b4ba1d53e8cd75b4d308eb7817",
+      "data": {
+        "ariadneSubject": [{ "prefLabel": "Site/monument" }],
+        "publisher": [{ "name": "National Heritage Institute - Romania" }],
+        "title": { "language": "ro", "text": "Așezarea Coțofeni de la Săndulești - punct 1" },
+        "spatial": [
+          {
+            "centroid": { "lon": 23.8044452667236, "lat": 46.5861129760742 },
+            "geopoint": { "lon": 23.8044452667236, "lat": 46.5861129760742 },
+            "placeName": "România. Județ: Cluj. Săndulești (Săndulești)."
+          }
+        ],
+        "resourceType": "dataset"
+      }
+    },
+    {
+      "id": "3908a63d0b96153e6b13ab83e4dd6d348e0e6052ca09db0b4249bb646fc6782e",
+      "data": {
+        "ariadneSubject": [{ "prefLabel": "E-Publication" }],
+        "publisher": [{ "name": "Archaeology Data Service" }],
+        "title": { "language": "en", "text": "Mesolithic Miscellany" },
+        "spatial": [
+          {
+            "boundingbox": "polygon ((-11.44643259 71.3490543765, -11.44643259 36.4074622505, 48.7244720459 36.4074622505, 48.7244720459 71.3490543765, -11.44643259 71.3490543765))",
+            "centroid": { "lon": 18.63901972795, "lat": 53.878258313500005 }
+          }
+        ],
+        "resourceType": "collection"
+      }
+    }
+  ],
+  "aggregations": {
+    "geogridCentroid": {
+      "doc_count": 54,
+      "grids": {
+        "buckets": [
+          { "key": "u0q7058", "doc_count": 3 },
+          { "key": "u3t680h", "doc_count": 2 },
+          { "key": "t7uc0qe", "doc_count": 2 },
+          { "key": "s000000", "doc_count": 1 }
+        ]
+      }
+    },
+    "ariadneSubject": {
+      "buckets": [
+        { "key": "Fieldwork archive", "doc_count": 12 },
+        { "key": "Scientific analysis", "doc_count": 4 },
+        { "key": "Artefact", "doc_count": 3 },
+        { "key": "E-Publication", "doc_count": 2 },
+        { "key": "Coin", "doc_count": 1 },
+        { "key": "Site/monument", "doc_count": 1 }
+      ]
+    },
+    "temporal": {
+      "doc_count": 22,
+      "temporal": {
+        "buckets": [
+          { "key": "roman", "doc_count": 5 },
+          { "key": "medieval", "doc_count": 3 },
+          { "key": "neolithic", "doc_count": 3 },
+          { "key": "epoca bronzului", "doc_count": 1 }
+        ]
+      }
+    }
+  }
+}
