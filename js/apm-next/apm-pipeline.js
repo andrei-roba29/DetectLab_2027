@@ -597,7 +597,22 @@
             if (!params.knownSites || params.knownSites.truncated || !params.knownSites.rows.length) return Promise.reject(core.keyedError('hoard.noBackground', {}, 'Complete known-site comparison data is unavailable. Choose random backgrounds.'));
             var mp = core.metresPerDegree(centre.lat);
             bg = params.knownSites.rows.filter(function(p){return core.haversineM(centre.lat,centre.lon,p.lat,p.lon)<=areaM && !sel.sites.some(function(q){return core.haversineM(p.lat,p.lon,q.lat,q.lon)<BG_EXCLUDE_M;});}).map(function(p){return {lat:p.lat,lon:p.lon,x:(p.lon-centre.lon)*mp.lon,y:(p.lat-centre.lat)*mp.lat};});
-        } else bg = sampleBackground(centre, areaM, params.bgCount || 5000, sel.sites, BG_EXCLUDE_M, params.rnd, params.backgroundAllowed);
+        } else {
+            // The Romania-only background predicate answers "is this point inside the
+            // national repertory's territory?". It is correct while that repertory is the
+            // site source. Outside Romania the training box is, by definition, outside it,
+            // so applying the predicate rejects every candidate: the model then had zero
+            // background samples and died with the internal "Logistic fit needs both site
+            // and background samples." That is a bug, not a data problem. Backgrounds
+            // outside Romania are terrain samples from the same 50 km box.
+            var outsideRomania = !!(siteMeta && siteMeta.region === 'outside-romania');
+            if (outsideRomania) warnings.push(M('warn.outsideBackground', {},
+                'Sites came from the external catalogues queried for this area. Background points are terrain samples from the same 50 km box, not a national repertory.'));
+            bg = sampleBackground(centre, areaM, params.bgCount || 5000, sel.sites, BG_EXCLUDE_M, params.rnd,
+                outsideRomania ? null : params.backgroundAllowed);
+        }
+        if (!bg.length) return Promise.reject(core.keyedError('err.noBackground', {},
+            'No background samples could be placed inside the 50 km training area.'));
         var pts = sel.sites.map(function (s) {
             var mpd = core.metresPerDegree(centre.lat);
             return { id: s.id, name: s.name, lat: s.lat, lon: s.lon, x: (s.lon - centre.lon) * mpd.lon, y: (s.lat - centre.lat) * mpd.lat, isSite: true, positionAccuracy: s.positionAccuracy };
@@ -731,6 +746,10 @@
                         soilPercentile: sampleIndex >= 0 ? built.S.vals.soil[sampleIndex] : null,
                         altitudePercentile: sampleIndex >= 0 ? built.S.vals.altitude[sampleIndex] : null,
                         aspectUsed: sampleIndex >= 0 && isFinite(built.S.vals.aspect[sampleIndex]) });
+                }
+                if (!built.counts.background || !built.counts.sites) {
+                    throw core.keyedError('err.noBackgroundSamples', { sites: built.counts.sites, background: built.counts.background },
+                        'After terrain sampling the sample set has ' + built.counts.sites + ' sites and ' + built.counts.background + ' background points; a fit needs both.');
                 }
                 if (built.counts.sites < minSites) {
                     var e2 = core.keyedError('err.tooFewTerrain', { n: built.counts.sites, min: minSites },
