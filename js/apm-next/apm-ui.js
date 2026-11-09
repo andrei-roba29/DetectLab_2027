@@ -459,6 +459,11 @@
         return root.DetectLabRomaniaApmSites.createProvider().getSites(centre, radiusKm, { token: token });
     }
 
+    /** True when the loaded site list is the DARE + ARIADNE answer for a non-Romanian point. */
+    function outsideRegion() {
+        return !!(state.records && state.records._meta && state.records._meta.region === 'outside-romania');
+    }
+
     function outsideStatus(meta) {
         var sources = (meta && meta.sources) || {};
         var dare = sources.dare || {}, ariadne = sources.ariadne || {};
@@ -650,10 +655,16 @@
                 params = {
                     centre: state.centre,
                     records: state.records,
-                    siteSource: { id: state.siteInput === 'csv' ? 'csv' : isHoard() ? 'hoards' : 'romania-repertory', label: state.siteInput === 'csv' ? 'Uploaded CSV' : isHoard() ? 'DARMC / RAN hoards' : 'Romanian National Archaeological Repertory',
-                        selectedPeriod: state.period || 'all', url: state.siteInput === 'csv' ? null : isHoard() ? 'Supabase apm_hoards_within RPC' : 'Supabase archaeological_sites_a RPC',
-                        retrievedAt: state.sitesRetrievedAt, positionAccuracy: state.siteInput === 'csv' ? 'CSV supplied accuracy' : 'COORD=DA; empty opt-in=' + !!root.DetectLabRomaniaApmConfig.includeEmptyCoord },
-                    backgroundAllowed: state.siteInput === 'csv' || isHoard() ? null : function (lat, lon) { return root.DetectLabRomaniaApmSites.insideRomania(lat, lon); },
+                    siteSource: { id: state.siteInput === 'csv' ? 'csv' : isHoard() ? 'hoards' : outsideRegion() ? 'dare+ariadne' : 'romania-repertory',
+                        label: state.siteInput === 'csv' ? 'Uploaded CSV' : isHoard() ? 'DARMC / RAN hoards' : outsideRegion() ? 'DARE + ARIADNE (outside Romania)' : 'Romanian National Archaeological Repertory',
+                        selectedPeriod: state.period || 'all', url: state.siteInput === 'csv' ? null : isHoard() ? 'Supabase apm_hoards_within RPC' : outsideRegion() ? 'DARE geojson.php + ARIADNE portal /api/search' : 'Supabase archaeological_sites_a RPC',
+                        retrievedAt: state.sitesRetrievedAt, positionAccuracy: state.siteInput === 'csv' ? 'CSV supplied accuracy' : outsideRegion() ? 'Merged catalogues; DARE points and ARIADNE geopoints' : 'COORD=DA; empty opt-in=' + !!root.DetectLabRomaniaApmConfig.includeEmptyCoord },
+                    // Restricted to Romanian territory only when the Romanian repertory is
+                    // the site source. Outside Romania (DARE + ARIADNE) the box itself defines
+                    // the background: a Romania-only predicate there rejects every candidate
+                    // and the fit ends with "needs both site and background samples".
+                    backgroundAllowed: state.siteInput === 'csv' || isHoard() || outsideRegion() ? null
+                        : function (lat, lon) { return root.DetectLabRomaniaApmSites.insideRomania(lat, lon); },
                     period: state.period,
                     radiusKm: isHoard() ? readRadius() : TRAIN_AREA_KM,
                     category: isHoard() ? 'hoards' : 'settlements', backgroundType: state.backgroundType,

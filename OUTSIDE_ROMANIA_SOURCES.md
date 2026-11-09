@@ -8,6 +8,42 @@ Each answer also carries the portal's own period vocabulary for the area
 of the same response. It is a label list, not a filter: filtering by period
 needs an operator-captured `{P}` template — see `ARIADNE_PROVIDER.md`.
 
+## Background points outside Romania — the "needs both site and background samples" bug
+
+The run used to fail outside Romania with
+
+> Modelul nu a putut fi rulat: Logistic fit needs both site and background samples.
+
+That message was the model's, not the data's. The UI handed the pipeline a
+`backgroundAllowed` predicate that asks *"is this point inside Romanian
+territory?"* — correct while the Romanian repertory is the site source, because
+backgrounds must not be drawn from ground where sites are missing from the
+dataset. Outside Romania that predicate rejects **every** candidate in the 50 km
+box, so the sample set had sites and no background, and the fit threw.
+
+The rule now:
+
+| site source | backgrounds |
+|---|---|
+| Romanian repertory (`romania-repertory`) | terrain samples restricted to Romanian territory |
+| DARE + ARIADNE outside Romania (`dare+ariadne`) | terrain samples from the same 50 km box, no territory predicate |
+| CSV (`csv`) | terrain samples from the same 50 km box |
+| hoards | per the hoard background choice |
+
+Two things make the failure impossible to repeat silently:
+
+- the pipeline drops the predicate itself when `_meta.region ===
+  'outside-romania'`, so a caller cannot reintroduce it;
+- an empty background set, or an empty class after terrain sampling, now raises
+  `err.noBackground` / `err.noBackgroundSamples` — a readable, typed reason —
+  instead of the internal fit message.
+
+The report states the provenance rather than implying a national repertory:
+`warn.outsideBackground` (backgrounds are terrain samples from the same box) and
+`siteSource.id = 'dare+ariadne'` with the two catalogue URLs. Outside Romania the
+Romanian UAT exclusion mask is unavailable, and that too is named
+(`warn.exclusionUnknown` with the number of unscored cells).
+
 ## What the two sources are
 
 | | DARE | ARIADNE |

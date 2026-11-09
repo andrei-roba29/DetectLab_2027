@@ -38,6 +38,13 @@ function harness(mode='ok') {
             return {data:{rows,total_in_area:40,excluded_approximate:0,excluded_unknown_coord:0,excluded_geometry:0,truncated:false},error:null};
         }
         if(u.host==='imperium.ahlfeldt.se') {
+            if(mode==='outsideMany'){
+                const many=Array.from({length:14},(_,i)=>({type:'Feature',id:'m'+i,
+                    geometry:{type:'Point',coordinates:[10.0+(i%5)*0.03,51.0+Math.floor(i/5)*0.03]},
+                    properties:{name:'Place '+i,numType:12}}));
+                const body={type:'FeatureCollection',features:many};
+                return {ok:true,status:200,headers:{get:()=>'application/json'},text:async()=>JSON.stringify(body),json:async()=>body};
+            }
             const features=[
                 {type:'Feature',id:'d1',geometry:{type:'Point',coordinates:[10.0,51.0]},properties:{name:'Gotinga',numType:12}},
                 {type:'Feature',id:'d2',geometry:{type:'Point',coordinates:[10.1,51.05]},properties:{name:'Settling',numType:11}},
@@ -50,6 +57,10 @@ function harness(mode='ok') {
         if(u.host==='portal.ariadne-infrastructure.eu') {
             const hit=(id,name,lat,lon)=>({id,data:{title:{text:name},resourceType:'Site/monument',
                 ariadneSubject:[{prefLabel:'Site/monument'}],spatial:[{geopoint:{lat,lon}}]}});
+            if(mode==='outsideMany') return {ok:true,status:200,headers:{get:()=>'application/json'},text:async()=>JSON.stringify({hits:[
+                hit('b1','Place 0',51.0001,10.0001),
+                hit('b2','Place 3',51.0002,10.0902)
+            ],total:{value:2},aggregations:{}})};
             return {ok:true,status:200,headers:{get:()=>'application/json'},text:async()=>JSON.stringify({hits:[
                 hit('a1','Gotinga',51.0005,10.0005),
                 hit('a2','Other place',51.02,9.98)
@@ -155,6 +166,29 @@ function harness(mode='ok') {
         assert(out.requests.slice(beforeRun).every(u=>['image.discomap.eea.europa.eu','overpass-api.de'].includes(new URL(u).host)),'the run itself touches nothing but DEM and hydro');
         console.log('PASS outside Romania: DARE and ARIADNE queried and merged (one place attested by both appears once), no Romania database call, explicit CSV upload completes as before.');
     } finally {out.dom.window.close();}
+    const many=harness('outsideMany');
+    try {
+        await many.pick(51,10);
+        await until(()=>/outside Romania/.test(many.w.document.querySelector('.apm-status').textContent),'outside trade load');
+        const status=many.w.document.querySelector('.apm-status').textContent;
+        assert.match(status,/1[0-9] site/,'the merged catalogues exceed the minimum: '+status);
+        assert(!many.w.document.querySelector('.apm-primary').disabled,'a runnable outside-Romania area can be trained');
+        const beforeRun=many.requests.length;
+        many.w.document.querySelector('.apm-primary').click();
+        await until(()=>many.completed||many.runError,'outside trade TRAIN completion');
+        if(many.runError)throw many.runError;
+        assert.equal(many.params.siteSource.id,'dare+ariadne','the report names the catalogues that answered, not the Romanian repertory');
+        assert.equal(many.params.backgroundAllowed,null,'backgrounds outside Romania are not restricted to Romanian territory');
+        assert(many.completed.diagnostics.sitesUsed >= 10,'the outside sites actually reach the model: '+many.completed.diagnostics.sitesUsed);
+        assert(many.completed.scoreStats.cells > 0,'the outside run really scored the terrain');
+        const warns=many.completed.warnings||[];
+        const outsideWarn=warns.find(w=>w.key==='warn.outsideBackground');
+        assert(outsideWarn && /Background points are terrain samples/.test(outsideWarn.text),'the report states where the background came from');
+        assert(warns.some(w=>w.key==='warn.exclusionUnknown'),'the missing Romanian UAT mask outside Romania is named, not silently ignored');
+        assert(warns.some(w=>w.key==='warn.robustSkipped'),'too few sites for the robust fit is stated instead of quietly skipped');
+        assert(many.requests.slice(beforeRun).every(u=>['image.discomap.eea.europa.eu','overpass-api.de'].includes(new URL(u).host)),'the run itself touches nothing but DEM and hydro');
+        console.log('PASS outside Romania TRAIN: the builtin DARE/ARIADNE list trains against terrain backgrounds from the same box, with no Romanian-territory predicate.');
+    } finally {many.dom.window.close();}
     const hoard=harness();
     try {
         await hoard.pick(46.75,25);
