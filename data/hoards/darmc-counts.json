@@ -1,0 +1,294 @@
+{
+  "fingerprint": "04988b33edd9cea266754d2d824158ae884e88f0d22f316e1112b55286c4fe82",
+  "layers": {
+    "8": {
+      "fetched": 21,
+      "kept": 21,
+      "dropped": 0,
+      "dropReasons": {},
+      "positionClasses": {
+        "exact": 0,
+        "approximate": 1,
+        "unknown": 20
+      },
+      "periodGroups": {
+        "carolingian": 21
+      },
+      "withDates": 21,
+      "withoutDates": 0
+    },
+    "9": {
+      "fetched": 28,
+      "kept": 28,
+      "dropped": 0,
+      "dropReasons": {},
+      "positionClasses": {
+        "exact": 0,
+        "approximate": 1,
+        "unknown": 27
+      },
+      "periodGroups": {
+        "carolingian": 28
+      },
+      "withDates": 28,
+      "withoutDates": 0
+    },
+    "10": {
+      "fetched": 140,
+      "kept": 139,
+      "dropped": 1,
+      "dropReasons": {
+        "invalid-point-geometry": 1
+      },
+      "positionClasses": {
+        "exact": 0,
+        "approximate": 11,
+        "unknown": 128
+      },
+      "periodGroups": {
+        "carolingian": 139
+      },
+      "withDates": 139,
+      "withoutDates": 0
+    },
+    "11": {
+      "fetched": 90,
+      "kept": 89,
+      "dropped": 1,
+      "dropReasons": {
+        "invalid-point-geometry": 1
+      },
+      "positionClasses": {
+        "exact": 0,
+        "approximate": 11,
+        "unknown": 78
+      },
+      "periodGroups": {
+        "carolingian": 88
+      },
+      "withDates": 89,
+      "withoutDates": 0
+    },
+    "12": {
+      "fetched": 1776,
+      "kept": 1776,
+      "dropped": 0,
+      "dropReasons": {},
+      "positionClasses": {
+        "exact": 0,
+        "approximate": 1776,
+        "unknown": 0
+      },
+      "periodGroups": {
+        "gallic": 1674,
+        "late-roman": 1674
+      },
+      "withDates": 1776,
+      "withoutDates": 0
+    },
+    "15": {
+      "fetched": 2047,
+      "kept": 2046,
+      "dropped": 1,
+      "dropReasons": {
+        "invalid-point-geometry": 1
+      },
+      "positionClasses": {
+        "exact": 0,
+        "approximate": 31,
+        "unknown": 2015
+      },
+      "periodGroups": {
+        "late-roman": 2041,
+        "gallic": 1357,
+        "carolingian": 4
+      },
+      "withDates": 2046,
+      "withoutDates": 0
+    },
+    "16": {
+      "fetched": 2047,
+      "kept": 2046,
+      "dropped": 1,
+      "dropReasons": {
+        "invalid-point-geometry": 1
+      },
+      "positionClasses": {
+        "exact": 0,
+        "approximate": 31,
+        "unknown": 2015
+      },
+      "periodGroups": {
+        "late-roman": 2041,
+        "gallic": 1357,
+        "carolingian": 4
+      },
+      "withDates": 2046,
+      "withoutDates": 0
+    }
+  },
+  "totals": {
+    "layers": 7,
+    "fetched": 6149,
+    "kept": 6145,
+    "dropped": 4
+  },
+  "duplicates": {
+    "marked": 2427,
+    "thresholds": {
+      "distanceM": 5000,
+      "nameSimilarity": 0.95
+    },
+    "pairs": [
+      {
+        "id": "0e858921-5f33-b6a9-9b75-368367ffc3e3",
+        "duplicate_of": "0baf7e04-acad-5ef0-ed7b-a6705ac9b3f0",
+        "distance_m": 0
+      },
+      {
+        "id": "139b16c3-12b3-13fc-f592-97a8d602bf91",
+        "duplicate_of": "028196a3-7cbf-e0cc-0d29-06fbd7f5cc4e",
+        "distance_m": 0
+      },
+      {
+        "id": "1b78e4f9-662e-b6e9-d30c-0d5ba52c93a9",
+        "duplicate_of": "01fe635a-ce10-3c8f-e685-4b78e73c152b",
+        "distance_m": 0
+      },
+      {
+        "id": "1bf29e11-88c8-08ad-99d3-e188ef44f654",
+        "duplicate_of": "18a3b9a3-9f89-b43f-6166-73722477c70c",
+        "distance_m": 0
+      },
+      {
+        "id": "20dc5232-6686-2bde-dd73-0811edf4c5c9",
+        "duplicate_of": "1a30336d-c4f7-793b-de24-026e97b56e68",
+        "distance_m": 0
+      },
+      {
+        "id": "25e0a3b3-d363-a061-5e23-57d2ad48dffc",
+        "duplicate_of": "0cca8869-ee57-48b5-aac7-d4ef5de06311",
+        "distance_m": 0
+      },
+      {
+        "id": "2c12f79a-eb2e-4278-d653-4fe819b31808",
+        "duplicate_of": "0686f068-f581-a164-30c0-916adf0d5152",
+        "distance_m": 0
+      },
+      {
+        "id": "335f0fd5-207c-3e28-df1b-d787c6fa6982",
+        "duplicate_of": "140ff919-bfa9-b492-2a02-c425f887156c",
+        "distance_m": 0
+      },
+      {
+        "id": "347f0bfd-83e8-7295-7c84-ca2cb4c31898",
+        "duplicate_of": "0c1c7233-858a-cb24-f81f-af0d4c6b4b21",
+        "distance_m": 0
+      },
+      {
+        "id": "364a1766-15cb-bd6c-5fd1-311a8b7f3c1d",
+        "duplicate_of": "028b4103-2de5-8166-f48e-3e6685223845",
+        "distance_m": 0
+      },
+      {
+        "id": "36d067b1-bd0d-6dbf-aa92-16073e36b93c",
+        "duplicate_of": "2c7d3e97-bdcb-7d1d-431d-6ad16af9aa40",
+        "distance_m": 0
+      },
+      {
+        "id": "3746ee35-40cd-b722-8b0d-67f0155eb128",
+        "duplicate_of": "1d534709-1404-6b4e-ef9d-3f7d309ac886",
+        "distance_m": 0
+      },
+      {
+        "id": "38d9ffe4-ac4a-8c5e-25b9-2ead8e03fdad",
+        "duplicate_of": "0ff021e6-3acd-f792-4fd6-1de731e22976",
+        "distance_m": 0
+      },
+      {
+        "id": "3a47262f-e4d0-3025-6f72-344a5d388f7f",
+        "duplicate_of": "03f2a2f3-5191-ca24-adfe-0ef1c3271893",
+        "distance_m": 0
+      },
+      {
+        "id": "48f0a08a-f645-1f8f-e3b0-c75bbfc88379",
+        "duplicate_of": "1d534709-1404-6b4e-ef9d-3f7d309ac886",
+        "distance_m": 0
+      },
+      {
+        "id": "497b1ac5-b12c-3f86-b743-7df0254f4e0b",
+        "duplicate_of": "238faf26-9a66-1528-e9f6-c3f69654bf06",
+        "distance_m": 0
+      },
+      {
+        "id": "4b337b8a-3de8-33de-38fd-504ef0916ba5",
+        "duplicate_of": "2d0de169-2f10-f714-1794-b4e2c78c9232",
+        "distance_m": 0
+      },
+      {
+        "id": "4ca5abac-f89d-9e0d-cc57-d92762e597e8",
+        "duplicate_of": "477e2bb5-c883-47b2-a440-a8190cdc16c2",
+        "distance_m": 0
+      },
+      {
+        "id": "4e56cfed-a19d-a37b-db15-8d67edcf33f8",
+        "duplicate_of": "1e9ec529-51e1-e57d-2cd9-ccb4db3b7fa3",
+        "distance_m": 0
+      },
+      {
+        "id": "51171b37-5151-731a-e8f1-8b5c73c93feb",
+        "duplicate_of": "0cca8869-ee57-48b5-aac7-d4ef5de06311",
+        "distance_m": 0
+      },
+      {
+        "id": "523c6b9e-6091-812c-ec4e-092fa9f5fc83",
+        "duplicate_of": "2066ea0e-f743-c17d-68bc-faa08f8ebfd7",
+        "distance_m": 0
+      },
+      {
+        "id": "529fd4fb-4fd9-b2af-e60b-ef3c4b99b0a3",
+        "duplicate_of": "18a3b9a3-9f89-b43f-6166-73722477c70c",
+        "distance_m": 0
+      },
+      {
+        "id": "54dc216c-02b8-823c-809a-feef0b750b36",
+        "duplicate_of": "072dc628-e350-02ac-b107-07dc0333982c",
+        "distance_m": 0
+      },
+      {
+        "id": "55961d2a-3980-82f5-9349-42bb0d006724",
+        "duplicate_of": "2eb055e2-74da-b2df-3855-88574e4a4ae6",
+        "distance_m": 0
+      },
+      {
+        "id": "567c78e6-a635-5593-2fde-53f6ad7c0644",
+        "duplicate_of": "193887d2-f6fa-ab00-743b-40c3c247c9ce",
+        "distance_m": 0
+      }
+    ]
+  },
+  "positions": {
+    "unknown": 4283,
+    "approximate": 1862
+  },
+  "periodGroups": {
+    "carolingian": 284,
+    "unknown": 105,
+    "gallic": 4388,
+    "late-roman": 1368
+  },
+  "dateBasis": {
+    "deposit": 6145
+  },
+  "duplicateMarking": {
+    "8": 0,
+    "9": 3,
+    "10": 9,
+    "11": 4,
+    "12": 922,
+    "15": 1,
+    "16": 1
+  },
+  "invalid": [],
+  "mappingStatus": "PROPOSED (derived, unreviewed)"
+}

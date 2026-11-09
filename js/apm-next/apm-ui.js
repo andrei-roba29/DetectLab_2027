@@ -446,7 +446,15 @@
                 setStatus(T('train.outsideRomania'), 'error');
             }
             loadPeriods();
-            if (!(records._meta && records._meta.outsideRomania)) setStatus(T(isHoard() && records._meta.insufficient ? 'hoard.countBlock' : 'train.periodApplied', { n: records._meta.usable || 0 }), isHoard() && records._meta.insufficient ? 'error' : 'ok');
+            if (!(records._meta && records._meta.outsideRomania)) {
+                var meta = records._meta || {};
+                setStatus(T(isHoard() && meta.insufficient ? 'hoard.countBlock' : 'train.periodApplied', { n: meta.usable || 0 }), isHoard() && meta.insufficient ? 'error' : 'ok');
+                // A zero because the toggle is off is not the same as a zero because
+                // there is nothing here: say which one it is.
+                if (isHoard() && meta.insufficient && !state.includeApproximate && Number(meta.approximate_available) > 0) {
+                    setStatus(T('hoard.approximateAvailable', { n: meta.approximate_available }), 'warn');
+                }
+            }
         }).catch(function (err) {
             if (!token.cancelled) {
                 state.csvAllowed = true; els.csvRow.hidden = false;

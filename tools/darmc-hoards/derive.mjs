@@ -236,6 +236,9 @@ export function deriveLayer(dump, id, options = {}) {
     }).sort((a, b) => b.count - a.count);
     const strictMapping = Object.fromEntries(positionCombos.map(c => [c.key, c.strict]));
     if (noPositionEvidence) strictMapping['{}'] = 'approximate';
+    // Kept so a supplied mapping can be re-read under either policy without
+    // re-deriving anything (and without the summary claiming a policy it did not apply).
+    const proposedMapping = { ...positionMapping };
 
     const tpqField = keys.find(k => /TPQ/i.test(k) && stats.get(k).yearRatio >= 0.5) || null;
     const type = deriveHoardType(layer, keys, stats);
@@ -278,6 +281,7 @@ export function deriveLayer(dump, id, options = {}) {
             qualityFields,
             positionCombos,
             strictMapping,
+            proposedMapping,
             hoardType: type,
             tpqField,
             unusedYearLikeFields: keys.filter(k => stats.get(k).yearRatio >= 0.5 && k !== idPick.idField

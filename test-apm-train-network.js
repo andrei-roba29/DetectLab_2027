@@ -28,7 +28,10 @@ function harness(mode='ok') {
         requests.push(url);
         const u=new URL(url);
         if(u.host==='project.supabase.example') {
-            if(u.pathname.endsWith('apm_hoards_within')) return {data:{rows:Array.from({length:9},(_,i)=>({id:String(i),lat:46.75,lon:25,position_class:'exact',period_groups:[]})),usable:9,total_in_area:9,truncated:false,period_counts:{}}};
+            if(u.pathname.endsWith('apm_hoards_within')) {
+                if(mode==='approximate') return {data:{rows:[],usable:3,total_in_area:3,truncated:false,period_counts:{},approximate_available:12,excluded_approximate:12}};
+                return {data:{rows:Array.from({length:9},(_,i)=>({id:String(i),lat:46.75,lon:25,position_class:'exact',period_groups:[]})),usable:9,total_in_area:9,truncated:false,period_counts:{}}};
+            }
             if(mode==='error')return {data:null,error:{message:'not authorised'}};
             return {data:{rows,total_in_area:40,excluded_approximate:0,excluded_unknown_coord:0,excluded_geometry:0,truncated:false},error:null};
         }
@@ -139,6 +142,18 @@ function harness(mode='ok') {
         assert(!hoard.ops.includes('sampleTile'),'review gate prevents terrain requests');
         console.log('PASS hoard UI: isolated hoard RPC only, <10 blocks and offers CSV, All periods default, release gate prevents terrain requests.');
     } finally {hoard.dom.window.close();}
+    const approx=harness('approximate');
+    try {
+        await approx.pick(46.75,25);
+        const selector2=approx.w.document.querySelector('.apm-category-picker');
+        selector2.value='hoards';selector2.dispatchEvent(new approx.w.Event('change'));
+        await until(()=>/excluded/i.test(approx.w.document.querySelector('.apm-status').textContent),'approximate hoard load');
+        const text=approx.w.document.querySelector('.apm-status').textContent;
+        assert.match(text,/12 .*approximate/,'the panel names the approximate hoards it is hiding');
+        assert.match(text,/include approximate/i,'and points at the switch that shows them');
+        assert(approx.w.document.querySelector('.apm-primary').disabled,'training still blocked at 3 usable');
+        console.log('PASS hoard approximate hint: a zero caused by the position filter is named, with the count and the switch, instead of a bare 0.');
+    } finally {approx.dom.window.close();}
     const race=harness();
     try {
         await race.pick(46.75,25);

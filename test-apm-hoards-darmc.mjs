@@ -209,6 +209,63 @@ ok('the cross-layer pair 15/2 ↔ 16/2 is marked once', pairs.filter(p => [p.id,
     const saved = JSON.parse(fs.readFileSync(mappingFile, 'utf8'));
     ok('the mapping file records the capture it came from', /^[0-9a-f]{64}$/.test(saved.captureFingerprint));
     ok('the mapping file is unreviewed by default', Object.values(saved.layers).every(l => l.reviewed === false));
+
+    // ── the REST push (no database, no network) ─────────────────────────────
+    const { pushRows, cleanRow } = await import('./tools/darmc-hoards/import.mjs');
+    const okRows = JSON.parse(execFileSync(process.execPath, ['-e', `
+        const fs=require('fs');
+        const d=JSON.parse(fs.readFileSync('test/fixtures/darmc/darmc-layers.sample.json','utf8'));
+        process.stdout.write(JSON.stringify(d))`], { encoding: 'utf8' }));
+
+    const seen = [];
+    const fetchOk = async (url, opts) => { seen.push({ url, headers: opts.headers, rows: JSON.parse(opts.body) }); return { ok: true, status: 201 }; };
+    const fakeRows = Array.from({ length: 7 }, (_, i) => cleanRow({
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-00000000000' + i, source: 'darmc', source_layer: 8, source_id: String(i),
+        name: 'H' + i, lat: 45 + i / 100, lon: 21, position_class: 'unknown', position_quality_raw: {},
+        position_accuracy_m: null, period_group: 'gallic', period_groups: ['gallic'], periods: [],
+        multiple_periods: false, deposit_start_year: 250, deposit_end_year: 260, date_basis: 'deposit',
+        hoard_type: 'coin', metal: null, country: null, bucket: 'hoard-only', duplicate_of: null, raw: {}, geom: 'generated'
+    }));
+    ok('a cleaned row never carries the generated geometry column', !('geom' in fakeRows[0]));
+    const pushed = await pushRows(fakeRows, { url: 'https://abcdefghijklmnop.supabase.co', key: 'service-key', fetchImpl: fetchOk, batchSize: 3 });
+    ok('the push sends the documented PostgREST endpoint', seen[0].url === 'https://abcdefghijklmnop.supabase.co/rest/v1/archaeological_hoards');
+    ok('it authenticates with the service key and upserts', seen[0].headers.apikey === 'service-key' && /merge-duplicates/.test(seen[0].headers.Prefer));
+    ok('it batches instead of sending 6,145 rows at once', pushed.batches === 3 && seen.map(s => s.rows.length).join(',') === '3,3,1');
+    ok('every row is accounted for', pushed.sent === 7);
+
+    const failSeen = [];
+    const fetchFail = async (url, opts) => { failSeen.push(1); return { ok: false, status: 401, text: async () => 'permission denied for table archaeological_hoards' }; };
+    await assert.rejects(() => pushRows(fakeRows, { url: 'https://abcdefghijklmnop.supabase.co', key: 'k', fetchImpl: fetchFail }),
+        e => /401/.test(e.message) && /permission denied/.test(e.message));
+    ok('a rejected batch raises the HTTP status and the body, and stops', failSeen.length === 1);
+
+    await assert.rejects(() => pushRows(fakeRows, { url: 'http://localhost:54321', key: 'k', fetchImpl: fetchOk }), e => /supabase\.co/.test(e.message));
+    await assert.rejects(() => pushRows(fakeRows, { url: 'https://abcdefghijklmnop.supabase.co', key: '', fetchImpl: fetchOk }), e => /SERVICE_ROLE_KEY/.test(e.message));
+    ok('the push refuses a non-Supabase host and an empty key', true);
 }
 
-console.log(`PASS DARMC capture pipeline (${checks} checks): loader validation and warnings; value-driven date/name/id derivation; forbidden discovery-year and count fields never used; per-combination position proposals with proposed vs strict readings; deterministic uuids; table-contract validation; reversed-date and bad-geometry drops; unreviewed mappings drop closed; duplicate evidence across layers 15/16 and within layers; fixture trimming with quality-combination coverage; data-only SQL with no deletes; CLI dry-run by default and refusal to apply an unreviewed mapping. Synthetic capture only — no live service, no database.`);
+// ── the real capture, when it is present (it is git-ignored, so it may not be) ──
+{
+    const real = 'data/hoards/darmc_hoards_layers.json';
+    if (!fs.existsSync(real)) {
+        console.log('note: real DARMC capture absent — the real-file section is skipped (data/hoards/darmc_hoards_layers.json is git-ignored)');
+    } else {
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'darmc-real-'));
+        const countsFile = path.join(tmp, 'counts.json');
+        const strict = JSON.parse(execFileSync(process.execPath, ['tools/darmc-hoards/import.mjs', '--dump', real, '--json', countsFile], { encoding: 'utf8' }));
+        const proposed = JSON.parse(execFileSync(process.execPath, ['tools/darmc-hoards/import.mjs', '--dump', real, '--position', 'proposed'], { encoding: 'utf8' }));
+        ok('the real capture reads 6,149 records and drops only the 4 without a point', strict.counts.fetched === 6149 && strict.counts.kept === 6145 && strict.counts.dropped === 4);
+        ok('strict leaves nothing exact in the real catalogue', strict.counts.positionClasses.exact === undefined && strict.counts.positionClasses.unknown === 4283 && strict.counts.positionClasses.approximate === 1862);
+        ok('proposed turns exactly those 4,283 into exact', proposed.counts.positionClasses.exact === 4283 && proposed.counts.positionClasses.approximate === 1862);
+        ok('the strict run warns that the panel would still show nothing', strict.warnings.some(w => /0 of 6145 rows are exact/.test(w)));
+        ok('the proposed run does not warn', !proposed.warnings.some(w => /0 of/.test(w)));
+        ok('duplicate marking finds the 15/16 overlap plus the in-layer repeats', strict.counts.duplicates === 2427);
+        ok('every row carries a deposit basis in this capture', JSON.stringify(strict.counts.dateBasis) === '{"deposit":6145}');
+        const mapFile = path.join(tmp, 'mapping.json');
+        execFileSync(process.execPath, ['tools/darmc-hoards/import.mjs', '--dump', real, '--mapping', mapFile], { encoding: 'utf8' });
+        const reloaded = JSON.parse(execFileSync(process.execPath, ['tools/darmc-hoards/import.mjs', '--dump', real, '--mapping-in', mapFile, '--position', 'proposed'], { encoding: 'utf8' }));
+        ok('a supplied mapping can be re-read under the other policy, and the classes follow', reloaded.counts.positionClasses.exact === 4283 && reloaded.positionPolicy === 'proposed');
+    }
+}
+
+console.log(`PASS DARMC capture pipeline (${checks} checks): loader validation and warnings; value-driven date/name/id derivation; forbidden discovery-year and count fields never used; per-combination position proposals with proposed vs strict readings; deterministic uuids; table-contract validation; reversed-date and bad-geometry drops; unreviewed mappings drop closed; duplicate evidence across layers 15/16 and within layers; fixture trimming with quality-combination coverage; data-only SQL with no deletes; the PostgREST push (batching, headers, refusal of a bad host or empty key); CLI dry-run by default and refusal to apply an unreviewed mapping. Synthetic capture for the contract; the real 6,149-record capture is exercised when data/hoards/darmc_hoards_layers.json is present. No live service, no database.`);
