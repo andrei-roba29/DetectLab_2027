@@ -1,6 +1,7 @@
 /**
- * ARIADNE provider: parsing, tiling, paging, caching, and the transport switch.
- * Fixtures only — the real response excerpt plus a fake transport. No network.
+ * ARIADNE provider — GET request shape, cell-grid path, fixed roles, transport switch.
+ * Fixtures only: the real (trimmed) hit excerpt, a synthetic grid response, and
+ * network mocks. No live request is made.
  *
  *   node test-apm-ariadne.mjs
  */
@@ -18,204 +19,306 @@ const parse = require('./js/apm-next/ariadne/ariadne-parse.js');
 const query = require('./js/apm-next/ariadne/ariadne-query.js');
 const upstream = require('./js/apm-next/ariadne/ariadne-upstream.js');
 const provider = require('./js/apm-next/ariadne/ariadne-provider.js');
+const romania = require('./js/apm-next/apm-romania-sites.js');
+const shared = await import('./supabase/functions/_shared/ariadne-params.js');
 
-const FIXTURE = JSON.parse(fs.readFileSync(path.join(here, 'test/fixtures/ariadne/search-response.sample.json'), 'utf8'));
-delete FIXTURE.notice; // the fixture's provenance note is ours, not ARIADNE's
+const HITS = JSON.parse(fs.readFileSync(path.join(here, 'test/fixtures/ariadne/search-response.sample.json'), 'utf8'));
+const GRID = JSON.parse(fs.readFileSync(path.join(here, 'test/fixtures/ariadne/search-response.grid.json'), 'utf8'));
+delete HITS.notice; delete GRID.notice;
+
+const CLUJ = { lat: 46.77, lon: 23.59 };
+const VIENNA = { lat: 48.2082, lon: 16.3738 };
+
+/** A grid response whose cells sit at known offsets (km) from a centre. */
+function gridAt(centre, offsets) {
+    const buckets = offsets.map(([dLatKm, dLonKm, count]) => ({
+        key: tiles.encodeGeohash(centre.lat + dLatKm / 111.32, centre.lon + dLonKm / (111.32 * Math.cos(centre.lat * Math.PI / 180)), 7),
+        doc_count: count
+    }));
+    return { hits: [], total: { value: 0, relation: 'eq' }, aggregations: { geogridCentroid: { grids: { doc_count: offsets.reduce((n, o) => n + o[2], 0), buckets } } } };
+}
 
 let checks = 0;
 const ok = (label, cond, extra) => { checks++; assert.ok(cond, `${label}${extra ? ` — ${extra}` : ''}`); };
-const CLUJ = { lat: 46.77, lon: 23.59 };
 
-// ── 1. parsing the real response ─────────────────────────────────────────────
-const parsed = parse.parseResponse(FIXTURE);
-ok('the fixture yields one record per hit', parsed.hits.length === 2, String(parsed.hits.length));
-ok('the reported total is read, not inferred from the page', parsed.total === 23 && parsed.relation === 'eq');
-const site = parsed.hits[0];
-ok('the site keeps its real title', site.name === 'Așezarea Coțofeni de la Săndulești - punct 1');
-ok('the site keeps its point', site.lat === 46.5861129760742 && site.lon === 23.8044452667236);
-ok('the site is a geopoint, not a centroid', site.positionKind === 'geopoint' && site.approximatePosition === false);
-ok('the publisher is read from the array shape', site.publisher === 'National Heritage Institute - Romania');
-ok('the subjects are read from prefLabel', site.subjects[0] === 'Site/monument');
-ok('the record id is namespaced', site.id === 'ariadne:' + FIXTURE.hits[0].id);
+// ── 1. the request is a GET with URL parameters ─────────────────────────────
+ok('the base address is the verified portal', config.baseUrl === 'https://portal.ariadne-infrastructure.eu', config.baseUrl);
+ok('the path is /api/search', config.searchPath === '/api/search');
 
-const publication = parsed.hits[1];
-ok('a bounding-box-only hit still gets the centroid it publishes', publication.lat === 53.878258313500005 && publication.positionKind === 'centroid');
-ok('that hit is flagged approximate', publication.approximatePosition === true);
-ok('no coordinate is invented from the bounding box', !/polygon/.test(JSON.stringify(publication)));
-
-ok('the subject buckets survive', parsed.buckets.subjects.length === 6 && parsed.buckets.subjects[0].key === 'Fieldwork archive' && parsed.buckets.subjects[0].count === 12);
-ok('the temporal buckets are nested one level down, and read correctly', parsed.buckets.temporal.some(b => b.key === 'roman' && b.count === 5));
-ok('the cell buckets are read from aggregations.geogridCentroid.grids', parsed.buckets.cells.length === 4 && parsed.buckets.cells[0].key === 'u0q7058');
-
-ok('a site/monument is a positive', parse.isPositive(site, ['Site/monument']) === true);
-ok('an E-Publication is not a positive', parse.isPositive(publication, ['Site/monument']) === false);
-ok('a record with no subject is never a positive', parse.isPositive({ ...site, subjects: [] }, ['Site/monument']) === false);
-ok('a hit with no point is rejected, not placed at 0,0', parse.toRecord({ id: 'x', data: { title: { text: 'n' } } }).rejected === 'no-point');
-ok('a hit with only a bounding box is rejected with its own reason', parse.toRecord({ id: 'y', data: { spatial: [{ boundingbox: 'polygon (...)' }] } }).rejected === 'bounding-box-only');
-ok('an out-of-range point is refused', parse.toRecord({ id: 'z', data: { spatial: [{ geopoint: { lat: 999, lon: 0 } }] } }).rejected === 'no-point');
-ok('a malformed response does not throw', parse.parseResponse(null).malformed === true);
-
-// ── 2. tiling ────────────────────────────────────────────────────────────────
+const box = tiles.boxAround(CLUJ, 10);
+const params = query.buildParams(config, { box });
+ok('parameters follow the verified order', Object.keys(params).slice(0, 7).join(',') === 'forceReload,mapq,q,bbox,loadingStatus,sort,order', Object.keys(params).join(','));
+ok('forceReload/mapq/loadingStatus/sort/order are the verified constants',
+    params.forceReload === 'true' && params.mapq === 'true' && params.q === '' && params.loadingStatus === '2' && params.sort === 'distance' && params.order === 'asc');
+ok('bbox is N,W,S,E', params.bbox.split(',').length === 4 && Number(params.bbox.split(',')[0]) > Number(params.bbox.split(',')[2]));
 {
-    const box = tiles.boxAround(CLUJ, 150);
-    ok('150 km is about ±1.35° of latitude', Math.abs((box.north - box.south) / 2 - 1.347) < 0.01, String((box.north - box.south) / 2));
-    ok('the box contains the centre', tiles.encloses(box, CLUJ.lat, CLUJ.lon));
-    const one = tiles.splitBox(box, 1);
-    ok('one tile when asked for one', one.length === 1);
-    const eight = tiles.splitBox(box, 8);
-    ok('splitting produces the requested tile count', eight.length === 8);
-    ok('every tile sits inside the box', eight.every(t => t.south >= box.south && t.north <= box.north && t.west >= box.west && t.east <= box.east));
+    const url = query.buildUrl(config.baseUrl, config.searchPath, params);
+    ok('the URL is a GET on the portal', url.startsWith('https://portal.ariadne-infrastructure.eu/api/search?'));
+    ok('the URL carries no body and no POST verb', /^https:\/\/[^?]+\?[^#]+$/.test(url));
+    ok('the portal bbox round-trips', JSON.stringify(tiles.parseBbox(params.bbox)) === JSON.stringify({
+        north: Number(params.bbox.split(',')[0]), west: Number(params.bbox.split(',')[1]),
+        south: Number(params.bbox.split(',')[2]), east: Number(params.bbox.split(',')[3])
+    }));
+}
+ok('no filter fragment is guessed', !query.filtersConfigured(config) && config.filters.siteType === '' && config.filters.period === '');
+{
+    const withFilters = query.buildParams({ ...config, filters: { siteType: 'subject=Site/monument', period: 'period=roman' } }, { box });
+    const keys = Object.keys(withFilters);
+    ok('filter fragments are appended last', keys.slice(-2).join(',') === 'subject,period', keys.join(','));
+    ok('a fragment with a value becomes a parameter', withFilters.subject === 'Site/monument');
+    ok('filters only count as configured when every fragment is present', query.filtersConfigured({ filters: { siteType: 'x', period: '' } }) === false);
+}
+
+// ── 2. geometry ─────────────────────────────────────────────────────────────
+{
+    const b150 = tiles.boxAround(CLUJ, 150);
+    ok('a 150 km radius gives a ~300 km box', Math.abs(tiles.boxHeightKm(b150) - 300) < 1 && Math.abs(tiles.boxWidthKm(b150) - 300) < 6);
+    const pieces = tiles.splitToMaxSide(b150, config.maxSideKm);
+    ok('every request box respects the 120 km server limit', pieces.every(t => Math.max(tiles.boxHeightKm(t), tiles.boxWidthKm(t)) <= config.maxSideKm + 0.5));
     const area = t => (t.north - t.south) * (t.east - t.west);
-    const sum = eight.reduce((n, t) => n + area(t), 0);
-    ok('the tiles partition the box with no gap and no overlap', Math.abs(sum - area(box)) < 1e-9, `${sum} vs ${area(box)}`);
-    ok('splitting is deterministic', JSON.stringify(tiles.splitBox(box, 8)) === JSON.stringify(eight));
+    ok('the pieces partition the box', Math.abs(pieces.reduce((n, t) => n + area(t), 0) - area(b150)) < 1e-9);
+    const q = tiles.quadrants(b150);
+    ok('quadrants are four and tile the box', q.length === 4 && Math.abs(q.reduce((n, t) => n + area(t), 0) - area(b150)) < 1e-9);
+    const key = tiles.encodeGeohash(CLUJ.lat, CLUJ.lon, 7);
+    ok('a geohash-7 key is 7 characters', key.length === 7);
+    const centre = tiles.cellCentre(key);
+    ok('the cell centre lies inside its own cell', tiles.insideBox(centre.box, centre.lat, centre.lon));
+    ok('cell size is about 152 m', Math.abs(tiles.boxHeightKm(centre.box) * 1000 - 152) < 2, (tiles.boxHeightKm(centre.box) * 1000).toFixed(1));
+    ok('a non-geohash key is refused', tiles.cellCentre('not-a-key!') === null);
 }
 {
-    const hash = tiles.encodeGeohash(CLUJ.lat, CLUJ.lon, 7);
-    ok('geohash is 7 characters by default in this call', hash.length === 7);
-    const back = tiles.decodeGeohash(hash);
-    ok('the encoded cell contains the point', tiles.encloses(back, CLUJ.lat, CLUJ.lon));
-    ok('a geohash cover of the 150 km box is refused when it would need too many cells',
-        tiles.geohashCells(tiles.boxAround(CLUJ, 150), 5, 64).cells === null);
-    ok('a coarser cover fits', Array.isArray(tiles.geohashCells(tiles.boxAround(CLUJ, 150), 2, 64).cells));
+    // The Ariadne copy of the Romanian outline must not drift from the APM one.
+    let mismatches = 0, tested = 0;
+    for (let lat = 43.5; lat <= 48.5; lat += 0.25) {
+        for (let lon = 20; lon <= 29.5; lon += 0.25) {
+            tested++;
+            const a = tiles.insidePolygon(lat, lon, config.romania);
+            const b = romania.insideRomania(lat, lon);
+            if (a !== b) mismatches++;
+        }
+    }
+    ok('the Romanian outline matches the APM module', mismatches === 0, `${mismatches} of ${tested} differ`);
+    ok('Cluj is inside Romania, Vienna is not', tiles.insidePolygon(CLUJ.lat, CLUJ.lon, config.romania) && !tiles.insidePolygon(VIENNA.lat, VIENNA.lon, config.romania));
 }
 
-// ── 3. the query body ────────────────────────────────────────────────────────
+// ── 3. parsing: hits need a geopoint; the grid is the large-box path ────────
 {
-    const box = { south: 45, north: 48, west: 22, east: 25 };
-    const body = query.buildSearchBody({ box, from: 0, size: 100, aggregations: true, fields: config.fields });
-    ok('the body carries paging', body.from === 0 && body.size === 100);
-    ok('the body filters with a bounding box', body.query.bool.filter[0].geo_bounding_box['spatial.geopoint'].top_left.lat === 48);
-    ok('aggregations are only requested when asked', Boolean(body.aggregations) && !query.buildSearchBody({ box, fields: config.fields }).aggregations);
-    const cells = query.buildSearchBody({ cells: ['u0q7058'], from: 0, size: 10, fields: config.fields });
-    ok('cell search replaces the bbox filter', JSON.stringify(cells.query.bool.filter[0].terms) === '{"geogridCentroid":["u0q7058"]}');
-    ok('page count follows the reported total', query.pagesFor(23, 10, 8) === 3 && query.pagesFor(1000, 100, 8) === 8);
+    const p = parse.parseResponse(HITS);
+    ok('the excerpt yields one usable record', p.hits.length === 1, String(p.hits.length));
+    ok('that record carries a geopoint', p.hits[0].positionKind === 'geopoint' && p.hits[0].lat === 46.5861129760742);
+    ok('a boundingbox-only hit is rejected as a collection envelope', p.rejected['collection-boundingbox-only'] === 1);
+    ok('no coordinate was invented from the bounding box or its centroid', !p.hits.some(h => h.ariadneId === HITS.hits[1].id));
+    ok('the reported total is read', p.total === 23 && p.relation === 'eq');
+    ok('the subject buckets are read', p.buckets.subjects.length === 6 && p.buckets.subjects[0].count === 12);
+}
+{
+    const p = parse.parseResponse(GRID);
+    ok('a grid response has no hits', p.hits.length === 0);
+    ok('every cell becomes a point with a real centre', p.cells.length === 6 && p.cells.every(c => Number.isFinite(c.lat) && Number.isFinite(c.lon)));
+    ok('the cell count is preserved', p.cells[0].count === 3 && p.cells.find(c => c.key === 'u83hs2m').count === 7);
+    ok('a 5000-cell answer is capped', parse.isCapped(5000, config.cellCap) && !parse.isCapped(4999, config.cellCap));
+    ok('a malformed body does not throw', parse.parseResponse(null).malformed === true);
 }
 
-// ── 4. the transport switch ──────────────────────────────────────────────────
-await (async () => {
+// ── 4. the upstream call: GET, and the transport switch ────────────────────
+{
     const calls = [];
-    const fakeFetch = (url, init) => { calls.push({ url, init }); return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(FIXTURE)) }); };
+    const fakeFetch = (url, init) => { calls.push({ url, init }); return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(HITS)) }); };
     const deps = { fetch: fakeFetch, anonKey: 'anon', getAccessToken: () => 'jwt', functionsUrl: 'https://ref.supabase.co/functions/v1' };
+    const browserMode = upstream.create({ ...config, transport: 'browser', minSpacingMs: 0 }, deps);
+    const serverMode = upstream.create({ ...config, transport: 'server', minSpacingMs: 0, functionsUrl: deps.functionsUrl }, deps);
 
-    const serverMode = upstream.create({ ...config, transport: 'server', functionsUrl: deps.functionsUrl }, deps);
-    const browserMode = upstream.create({ ...config, transport: 'browser', baseUrl: 'https://ariadne.example/search' }, deps);
-    ok('the flag selects the mode', serverMode.mode === 'server' && browserMode.mode === 'browser');
+    await browserMode.call(params, {});
+    const call1 = calls[0];
+    ok('browser mode issues a GET', call1.init.method === 'GET');
+    ok('browser mode has no request body', call1.init.body === undefined);
+    ok('browser mode sends every parameter in the URL', call1.url.includes('bbox=' + encodeURIComponent(params.bbox)) && call1.url.includes('loadingStatus=2'));
 
-    await Promise.all([
-        serverMode.call({ path: '', method: 'POST', body: { size: 1 } }, {}),
-        browserMode.call({ path: '', method: 'POST', body: { size: 1 } }, {})
-    ]).then(([a, b]) => {
-        const [serverCall, browserCall] = calls;
-        ok('server mode posts to the edge function', serverCall.url === 'https://ref.supabase.co/functions/v1/ariadne');
-        ok('server mode sends the user token, never an upstream key', serverCall.init.headers.Authorization === 'Bearer jwt' && !/ariadne\.example/.test(serverCall.url));
-        ok('server mode wraps the same body', JSON.parse(serverCall.init.body).body.size === 1 && JSON.parse(serverCall.init.body).path === '');
-        ok('browser mode posts straight to the host', browserCall.url === 'https://ariadne.example/search');
-        ok('the two modes send the same search body', JSON.parse(serverCall.init.body).body.size === JSON.parse(browserCall.init.body).size);
-        ok('the result shape is identical', a.via === 'server' && b.via === 'browser' && a.json.total.value === b.json.total.value);
-        ok('bytes and timing are measured', a.bytes > 0 && typeof a.ms === 'number');
+    await serverMode.call(params, {});
+    const call2 = calls[1];
+    ok('server mode posts to the edge function', call2.url === 'https://ref.supabase.co/functions/v1/ariadne' && call2.init.method === 'POST');
+    ok('server mode sends the same parameters, not a URL', JSON.parse(call2.init.body).params.bbox === params.bbox && !/portal\.ariadne/.test(call2.init.body));
+    ok('server mode sends the user token', call2.init.headers.Authorization === 'Bearer jwt');
 
-        assert.throws(() => upstream.create({ ...config, transport: 'browser', baseUrl: '' }, deps), e => e.key === 'ariadne.notConfigured');
-        ok('browser mode refuses an empty endpoint instead of guessing one', true);
+    assert.throws(() => upstream.create({ ...config, transport: 'browser', baseUrl: '' }, deps), e => e.key === 'ariadne.notConfigured');
+    ok('an empty base address is refused, never guessed', true);
 
-        const http500 = upstream.create({ ...config, transport: 'browser', baseUrl: 'https://x' }, { fetch: () => Promise.resolve({ ok: false, status: 500, text: () => Promise.resolve('{"message":"boom"}') }) });
-        return http500.call({ path: '', method: 'POST', body: {} }, {}).then(
-            () => { throw new Error('should have thrown'); },
-            e => { ok('an upstream error becomes a typed failure', e.key === 'ariadne.http' && /500/.test(e.message)); }
-        );
-    }).then(() => {
-        // A fetch that never answers but honours the abort signal, like the real one.
-        const hangFetch = (url, init) => new Promise((_, reject) => {
-            init.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
-        });
-        const hang = upstream.create({ ...config, transport: 'browser', baseUrl: 'https://x', timeoutMs: 30 }, { fetch: hangFetch });
-        return hang.call({ path: '', method: 'POST', body: {} }, {}).then(
-            () => { throw new Error('should have thrown'); },
-            e => { ok('a hung request times out as a network failure', e.key === 'ariadne.network' && /timed out/.test(e.message)); }
-        );
-    });
-})();
+    const http429 = upstream.create({ ...config, transport: 'browser', minSpacingMs: 0 }, { fetch: () => Promise.resolve({ ok: false, status: 429, text: () => Promise.resolve('{"error":"rate_limited"}') }) });
+    await http429.call(params, {}).then(() => { throw new Error('should throw'); }, e => ok('a 429 becomes a typed rate-limit failure', e.key === 'ariadne.rateLimited'));
+    const http403 = upstream.create({ ...config, transport: 'browser', minSpacingMs: 0 }, { fetch: () => Promise.resolve({ ok: false, status: 403, text: () => Promise.resolve('{"error":"premium_required"}') }) });
+    await http403.call(params, {}).then(() => { throw new Error('should throw'); }, e => ok('a 403 becomes a premium failure', e.key === 'ariadne.premiumRequired'));
 
-// ── 5. the provider: paging, dedupe, disc filter, roles, cache ──────────────
-await (async () => {
-    const seen = [];
-    const fakeTransport = {
-        mode: 'server',
-        call: (request, opts) => {
-            seen.push(request.body);
-            return Promise.resolve({ status: 200, ok: true, json: FIXTURE, bytes: 1234, ms: 40, via: 'server' });
+    // Polite spacing: serialised, at least minSpacingMs apart.
+    const stamps = [];
+    const spaced = upstream.create({ ...config, transport: 'browser', minSpacingMs: 60 }, { fetch: () => { stamps.push(Date.now()); return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('{}') }); } });
+    const t0 = Date.now();
+    await Promise.all([spaced.call(params, {}), spaced.call(params, {})]);
+    ok('two calls are serialised at least 60 ms apart', stamps.length === 2 && stamps[1] - stamps[0] >= 55, String(stamps[1] - stamps[0]));
+    ok('and the pair is not concurrent', Date.now() - t0 >= 55);
+}
+
+// ── 5. provider: fixed roles, grid recursion, dedupe, cache ────────────────
+function mock(responses) {
+    const calls = [];
+    let i = 0;
+    return {
+        mode: 'server', calls,
+        call: async p => {
+            calls.push(p);
+            const r = responses[Math.min(i++, responses.length - 1)];
+            return { status: 200, ok: true, json: r, bytes: 500, ms: 20, via: 'server' };
         }
     };
-    const p = provider.createProvider({ config: { ...config, pageSize: 10, maxPages: 8, maxTiles: 4, cacheTtlMs: 1000 }, transport: fakeTransport });
-    ok('the provider exposes the SiteProvider interface', typeof p.getSites === 'function' && p.id === 'ariadne' && p.source === 'ARIADNE portal');
+}
+const withFilters = { ...config, filters: { siteType: 'subject=Site/monument', period: 'period=roman' }, maxDepth: 3, minSpacingMs: 0 };
 
-    const records = await p.getSites(CLUJ, 150);
-    ok('only records inside the disc survive', records.length === 1, `${records.length}`);
-    ok('that record is the Romanian site', records[0].ariadneId === FIXTURE.hits[0].id);
-    ok('it carries its distance from the centre', records[0].distanceM > 20000 && records[0].distanceM < 30000, String(records[0].distanceM));
-    ok('the far-away publication is excluded by the radius, not by its type', !records.some(r => r.ariadneId === FIXTURE.hits[1].id));
+{
+    const t = mock([HITS]);
+    const p = provider.createProvider({ config: withFilters, transport: t });
+    const disabled = await p.getSites(CLUJ, 50, { appMode: 'settlement' });
+    ok('a Romanian centre is never used (settlement)', disabled.length === 0 && disabled._meta.disabled && disabled._meta.reason === 'romania-excluded');
+    const forced = await p.getSites(CLUJ, 50, { appMode: 'settlement', role: 'positive', mode: 'positive' });
+    ok('a caller cannot ask for a role the rules forbid', forced._meta.disabled && forced._meta.reason === 'romania-excluded');
+    const disabledHoard = await p.getSites(CLUJ, 50, { appMode: 'hoard' });
+    ok('a Romanian centre is never used (hoard)', disabledHoard._meta.reason === 'romania-excluded' && t.calls.length === 0);
+    ok('and no request was made', t.calls.length === 0);
 
-    const meta = records._meta;
-    ok('the provider reports the transport it used', meta.transport === 'server');
-    ok('the provider reports that nothing live was verified', meta.live === false && /Not verified/.test(meta.note));
-    ok('paging: three pages were requested per tile', seen.filter(b => b.from === 0).length === 4 && seen.length === 12, `${seen.length} requests`);
-    const froms = [...new Set(seen.map(b => b.from))].sort((a, b) => a - b);
-    ok('the pages walk contiguous windows and never repeat one', JSON.stringify(froms) === '[0,2,4]', JSON.stringify(froms));
-    ok('every page asks for the configured size', seen.every(b => b.size === 10));
-    ok('an incomplete read is reported as truncated, not as a small result set', meta.truncated === true);
-    ok('the request count and bytes are reported', meta.requests === seen.length && meta.bytes === seen.length * 1234);
+    const p2 = provider.createProvider({ config: { ...config, filters: { siteType: '', period: '' } }, transport: mock([HITS]) });
+    const blocked = await p2.getSites(VIENNA, 50, { appMode: 'settlement' });
+    ok('settlement outside Romania stays blocked until the filters are captured', blocked._meta.disabled && blocked._meta.reason === 'filters-not-configured');
+    const hoardOk = await p2.getSites(VIENNA, 50, { appMode: 'hoard' });
+    ok('hoard comparison is allowed without the filters', !hoardOk._meta.disabled && hoardOk._meta.role === 'comparison');
+    ok('an unknown app mode is disabled', p2.roleFor('manual', VIENNA).role === 'disabled');
+}
 
-    seen.length = 0;
-    const again = await p.getSites(CLUJ, 150);
-    ok('a repeated search is served from cache', seen.length === 0 && again._meta.cached === true && again.length === 1);
-
-    seen.length = 0;
-    const comparison = await p.getSites(CLUJ, 150, { mode: 'comparison' });
-    ok('comparison mode is a separate cache entry and a separate query', seen.length > 0 && comparison.length === 1);
-    ok('comparison still refuses to invent a point for the bounding-box hit', comparison.every(r => Number.isFinite(r.lat)));
-
-    const counts = await p.getCounts(CLUJ, 150, { mode: 'comparison' });
-    ok('counts expose the subject buckets', counts.subjects['Site/monument'] >= 4, JSON.stringify(counts.subjects));
-    ok('counts expose the cell buckets', Object.keys(counts.cells).length >= 1);
-
-    assert.rejects(() => p.getSites({ lat: 999, lon: 0 }, 150), e => e.key === 'ariadne.invalid');
-    ok('an invalid centre is refused', true);
-
-    // Partial failure must not look like a small result set.
-    let n = 0;
-    const flaky = provider.createProvider({
-        config: { ...config, pageSize: 10, maxPages: 8, maxTiles: 4 },
-        transport: { mode: 'server', call: () => { n++; return n === 2 ? Promise.reject(Object.assign(new Error('HTTP 429'), { key: 'ariadne.http' })) : Promise.resolve({ status: 200, ok: true, json: FIXTURE, bytes: 10, ms: 1 }); } }
+{
+    // Hits path: relocate the real hits to Vienna so the role gate lets them through.
+    const moved = JSON.parse(JSON.stringify(HITS));
+    moved.hits.forEach((h, i) => {
+        h.data.spatial = [{ geopoint: { lat: VIENNA.lat + 0.01 * (i + 1), lon: VIENNA.lon + 0.01 * (i + 1) }, centroid: { lat: VIENNA.lat, lon: VIENNA.lon }, placeName: 'Wien' }];
     });
-    return flaky.getSites(CLUJ, 150).then(
-        () => { throw new Error('should have thrown'); },
-        e => {
-            ok('a failed tile fails the whole search', e.key === 'ariadne.http');
-            ok('the failure carries partial-progress metadata', e.meta && e.meta.partial === true && e.meta.failures.length === 1);
-        }
-    );
-})();
+    moved.hits[1].data.spatial = [{ boundingbox: 'polygon (...)', centroid: { lat: VIENNA.lat, lon: VIENNA.lon } }];
+    const t = mock([moved]);
+    const p = provider.createProvider({ config: withFilters, transport: t });
+    const pos = await p.getSites(VIENNA, 10, { appMode: 'settlement' });
+    ok('settlement keeps only Site/monument', pos.length === 1 && pos[0].subjects[0] === 'Site/monument', String(pos.length));
+    ok('the role is reported', pos._meta.role === 'positive' && pos._meta.transport === 'server');
+    ok('one request, no paging', t.calls.length === 1, String(t.calls.length));
+    const cmp = await provider.createProvider({ config: withFilters, transport: mock([moved]) }).getSites(VIENNA, 10, { appMode: 'hoard' });
+    ok('hoard comparison does not require a site subject', cmp.length === 1 && cmp._meta.role === 'comparison');
+}
 
-// ── 6. the edge function (static checks) ────────────────────────────────────
+{
+    // Large box: capped grid → four quadrants; dedupe by key; drop outside the disc.
+    const capped = { hits: [], total: { value: 0, relation: 'eq' }, aggregations: { geogridCentroid: { grids: { doc_count: 5000, buckets: [] } } } };
+    const bucket = (seed) => {
+        const out = [];
+        for (let i = 0; i < 5000; i++) out.push({ key: tiles.encodeGeohash(VIENNA.lat + (i % 70) * 0.001, VIENNA.lon + Math.floor(i / 70) * 0.001, 7), doc_count: 1 + (i % 3) });
+        return out;
+    };
+    capped.aggregations.geogridCentroid.grids.buckets = bucket();
+    // Cells at 0, 0.3, 0.3, 30 and 200 km from the centre (geohash-7 is ~152 m, so
+    // the three near ones must still be three distinct keys).
+    const local = gridAt(VIENNA, [[0, 0, 3], [0.3, 0, 2], [0, 0.3, 2], [30, 0, 1], [200, 0, 7]]);
+    const t = mock([capped, local]);
+    const p = provider.createProvider({ config: { ...withFilters, maxRequests: 80 }, transport: t });
+    const grid = await p.getGrid(VIENNA, 60, { appMode: 'hoard' });
+    ok('a capped answer triggers exactly four quadrants', t.calls.length === 5, `${t.calls.length} requests`);
+    ok('the quadrants are the four sub-boxes of the first request', (() => {
+        const first = tiles.parseBbox(t.calls[0].bbox);
+        const qs = tiles.quadrants(first).map(q => tiles.bboxString(q));
+        return qs.every(q => t.calls.slice(1).some(c => c.bbox === q));
+    })());
+    ok('cells repeated across quadrants are deduplicated by key', new Set(grid.map(c => c.key)).size === grid.length && grid.length === 4, `${grid.length} cells`);
+    ok('cells outside the circle are dropped', grid.every(c => tiles.distanceM(VIENNA, c) <= 60 * 1000 + 1) && !grid.some(c => Math.round(tiles.distanceM(VIENNA, c)) > 30000));
+
+    const wide = await provider.createProvider({ config: { ...withFilters, maxRequests: 80 }, transport: mock([local]) }).getGrid(VIENNA, 150, { appMode: 'hoard' });
+    const narrow = await provider.createProvider({ config: { ...withFilters, maxRequests: 80 }, transport: mock([local]) }).getGrid(VIENNA, 5, { appMode: 'hoard' });
+    ok('the same grid yields 4 cells at 150 km', wide.length === 4, String(wide.length));
+    ok('and only the cells inside a 5 km disc', narrow.length === 3, `${narrow.length} of 4`);
+}
+{
+    // Records from the grid, and the recursion limit.
+    const capped = {
+        hits: [], total: { value: 0, relation: 'eq' },
+        aggregations: { geogridCentroid: { grids: { doc_count: 5000, buckets: Array.from({ length: 5000 }, (_, i) => ({ key: tiles.encodeGeohash(VIENNA.lat + (i % 70) * 0.001, VIENNA.lon + Math.floor(i / 70) * 0.001, 7), doc_count: 2 })) } } }
+    };
+    const p = provider.createProvider({ config: { ...withFilters, maxDepth: 1, maxRequests: 20 }, transport: mock([capped]) });
+    const recs = await p.getSites(VIENNA, 60, { appMode: 'hoard' });
+    ok('the grid path produces one approximate point per cell', recs.length > 0 && recs.every(r => r.positionKind === 'cell' && r.approximatePosition === true));
+    ok('the per-cell record count is preserved', recs[0].cellCount === 2);
+    ok('a search that still hits the cap at maxDepth is reported incomplete', recs._meta.incomplete === true);
+    ok('the cap is reported, not hidden', recs._meta.cellsCapped >= 1);
+
+    const capped2 = JSON.parse(JSON.stringify(capped));
+    const p2 = provider.createProvider({ config: { ...withFilters, maxDepth: 2, maxRequests: 3 }, transport: mock([capped2]) });
+    const recs2 = await p2.getSites(VIENNA, 60, { appMode: 'hoard' });
+    ok('the request budget stops the recursion', recs2._meta.requests === 3 && recs2._meta.incomplete === true);
+}
+{
+    // Cache.
+    const t = mock([gridAt(VIENNA, [[0, 0, 1], [0.01, 0.01, 1]])]);
+    const p = provider.createProvider({ config: { ...withFilters, maxDepth: 0 }, transport: t });
+    await p.getGrid(VIENNA, 5, { appMode: 'hoard' });
+    const before = t.calls.length;
+    const again = await p.getGrid(VIENNA, 5, { appMode: 'hoard' });
+    ok('a repeated search is served from cache', t.calls.length === before && again._meta.cached === true);
+    await p.getGrid(VIENNA, 6, { appMode: 'hoard' });
+    ok('a different radius is a different query', t.calls.length > before);
+}
+
+// ── 5b. the cost of a 150 km grid search is stated, not discovered ─────────
+{
+    const p = provider.createProvider({ config: withFilters, transport: mock([GRID]) });
+    const e = p.estimate(VIENNA, 150);
+    ok('the estimate reports the base tiles', e.baseTiles === 16, String(e.baseTiles));
+    ok('and the recursion depth needed before the cap stops firing', e.depth === 3, String(e.depth));
+    ok('with the resulting request count', e.requests === 1024, String(e.requests));
+    ok('a 150 km grid does not fit the default request budget', e.withinBudget === false);
+    ok('the estimate is labelled arithmetic', e.calculated === true);
+    const small = p.estimate(VIENNA, 10);
+    ok('a 10 km search needs one split and fits the budget', small.requests === 4 && small.depth === 1 && small.withinBudget === true, JSON.stringify(small));
+}
+
+// ── 6. the edge function and its shared rules ──────────────────────────────
 {
     const src = fs.readFileSync(path.join(here, 'supabase/functions/ariadne/index.ts'), 'utf8');
-    ok('the function takes the upstream URL from the environment', /Deno\.env\.get\("ARIADNE_BASE_URL"\)/.test(src));
-    ok('no upstream URL is hard-coded', !/https?:\/\/(?!\$\{)[a-z0-9.-]*ariadne/i.test(src));
-    ok('no key is embedded', !/(sk-|eyJhbGciOi)/.test(src));
-    ok('the browser cannot supply an absolute URL', /raw\.startsWith\("\/"\)/.test(src) && /includes\("\.\."\)/.test(src) && /\^\[a-z\]\+:/.test(src));
-    ok('only POST is accepted', /req\.method !== "POST"/.test(src));
+    ok('the function is POST only', /req\.method !== "POST"/.test(src));
     ok('the caller must be signed in', /auth\/v1\/user/.test(src) && /401/.test(src));
+    ok('premium is enforced server-side', /profiles\?id=eq\./.test(src) && /premium_required/.test(src) && /403/.test(src));
+    ok('the base address and filters come from the environment', /ARIADNE_BASE_URL/.test(src) && /ARIADNE_SITE_FILTER/.test(src) && /ARIADNE_PERIOD_FILTER/.test(src));
+    ok('the client cannot set the filters', !/filters:\s*allowed\.params/.test(src) && /filters: \{ siteType: SITE_FILTER, period: PERIOD_FILTER \}/.test(src));
+    ok('parameters are whitelisted', /whitelist\(body\.params\)/.test(src) && /Unknown parameters/.test(src));
+    ok('the bbox is validated for format and size', /parseBbox\(/.test(src) && /bboxError\(/.test(src));
+    ok('the cache is consulted and filled', /cacheGet\(/.test(src) && /cachePut\(/.test(src));
+    ok('the rate gate is enforced and missing SQL fails closed', /gate\(userId\)/.test(src) && /gate_unavailable/.test(src) && /429/.test(src));
+    ok('the upstream body is passed through verbatim', /new Response\(upstreamText/.test(src));
     ok('an unreachable upstream is reported as such', /Upstream unreachable/.test(src) && /502/.test(src));
-    ok('the upstream body is passed through, not re-shaped', /respText/.test(src) && /new Response\(respText/.test(src));
+    ok('there is no fallback host', (src.match(/https?:\/\/[a-z0-9.-]+/g) || []).every(u => u.includes('portal.ariadne-infrastructure.eu') || u.includes('${') || u.includes('supabase')));
+
+    // Shared module parity: the server must accept and format exactly what the client builds.
+    const box10 = tiles.boxAround(VIENNA, 10);
+    const clientParams = query.buildParams(config, { box: box10 });
+    const sharedBox = shared.parseBbox(clientParams.bbox);
+    ok('the server parses the bbox the client sends', sharedBox !== null && Math.abs(sharedBox.north - box10.north) < 1e-5);
+    ok('the server accepts a normal box', shared.bboxError(sharedBox) === null);
+    ok('the server refuses an oversized side', shared.bboxError(shared.parseBbox(tiles.bboxString(tiles.boxAround(VIENNA, 150)))) !== null);
+    ok('the server refuses north<=south', shared.parseBbox('45,10,46,20') === null);
+    ok('the server refuses junk', shared.parseBbox('1,2,3') === null && shared.parseBbox('a,b,c,d') === null);
+    ok('the whitelist drops unknown keys', shared.whitelist({ bbox: '1,2,3,4', nasty: 'x' }).rejected[0] === 'nasty');
+    const serverParams = shared.buildParams({ baseParams: { forceReload: 'true', mapq: 'true', q: '', loadingStatus: '2', sort: 'distance', order: 'asc' }, client: { bbox: clientParams.bbox }, filters: { siteType: 'subject=Site/monument', period: 'period=roman' } });
+    ok('the server builds the same parameter order', Object.keys(serverParams).slice(0, 7).join(',') === 'forceReload,mapq,q,bbox,loadingStatus,sort,order');
+    ok('the server appends its own filters last', Object.keys(serverParams).slice(-2).join(',') === 'subject,period');
+    ok('the server URL is the verified endpoint', shared.buildUpstreamUrl('https://portal.ariadne-infrastructure.eu', serverParams).startsWith('https://portal.ariadne-infrastructure.eu/api/search?'));
 }
 
-// ── 7. the switch really is isolated ────────────────────────────────────────
+// ── 7. isolation ───────────────────────────────────────────────────────────
 {
     const files = ['js/apm-next/ariadne/ariadne-provider.js', 'js/apm-next/ariadne/ariadne-parse.js', 'js/apm-next/ariadne/ariadne-tiles.js', 'js/apm-next/ariadne/ariadne-query.js'];
-    const transportWords = files.filter(f => /config\.transport|functionsUrl|baseUrl|\btransport\.mode\b/.test(fs.readFileSync(path.join(here, f), 'utf8')));
-    ok('only the provider references the transport, and only to report it', transportWords.length === 1 && /ariadne-provider/.test(transportWords[0]), transportWords.join(','));
-    const panel = fs.readFileSync(path.join(here, 'js/apm-next/apm-ui.js'), 'utf8');
-    ok('the panel is untouched by this work', !/ariadne/i.test(panel));
+    const wired = files.filter(f => /config\.transport|functionsUrl|transport\.mode/.test(fs.readFileSync(path.join(here, f), 'utf8')));
+    ok('only the provider references the transport, and only to report it', wired.length === 1 && /ariadne-provider/.test(wired[0]), wired.join(','));
+    ok('the panel is untouched by this work', !/ariadne/i.test(fs.readFileSync(path.join(here, 'js/apm-next/apm-ui.js'), 'utf8')));
+    ok('the old POST-body probe page is gone', !fs.existsSync(path.join(here, 'tools/live-check/ariadne-probe.html')));
 }
 
-console.log(`PASS ARIADNE provider (${checks} checks): real response parsed (title, point vs centroid, publisher, subjects, buckets); no coordinate invented from a bounding box; positive vs comparison selection; 150 km box tiled with an exact partition; geohash cover refused when too fine; query body built in one place; server/browser transport switch proven to change only the destination, with typed http/network/not-configured failures; paging (contiguous windows, capped), dedupe, disc filter and cache; a failed tile fails the search instead of returning a plausible subset; edge function static contract; panel untouched. NOT VERIFIED: the live endpoint, its query DSL, CORS, and whether the server runtime can reach the host.`);
+console.log(`PASS ARIADNE portal provider (${checks} checks): GET /api/search with the verified parameter order and N,W,S,E bbox; filter fragments appended last and never guessed; 120 km request limit enforced by splitting; geohash-7 cells decoded to real centres; hits usable only with a geopoint and collection envelopes rejected; the 5000-cell cap triggers four quadrants up to maxDepth with dedupe and a truthful "incomplete" flag; the grid is the large-box data path and yields approximate points per cell; fixed roles (Romania excluded, settlement needs the captured filters, hoard is comparison-only); server/browser switch proven to change only the destination; serialised 1500 ms-spaced calls; shared server rules (whitelist, bbox limits, filter injection) tested against the same client output. NOT VERIFIED: the live host, CORS, and whether the function runtime can reach the portal.`);

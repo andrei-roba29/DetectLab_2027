@@ -222,12 +222,20 @@ export function deriveLayer(dump, id, options = {}) {
         combos.set(key, entry);
     }
     const positionMapping = {};
+    // A layer that publishes no position-quality field gets ONE explicit, reviewable
+    // layer-level default: 'approximate'. It is a decision, not a measurement, and it
+    // is applied identically under both policies.
+    const noPositionEvidence = qualityFields.length === 0;
+    if (noPositionEvidence) {
+        positionMapping['{}'] = 'approximate';
+    }
     const positionCombos = [...combos.values()].map(c => {
         const cls = classifyCombo(c.combo);
         positionMapping[c.key] = cls.proposed;
         return { ...c, ...cls, strictKey: cls.strict };
     }).sort((a, b) => b.count - a.count);
     const strictMapping = Object.fromEntries(positionCombos.map(c => [c.key, c.strict]));
+    if (noPositionEvidence) strictMapping['{}'] = 'approximate';
 
     const tpqField = keys.find(k => /TPQ/i.test(k) && stats.get(k).yearRatio >= 0.5) || null;
     const type = deriveHoardType(layer, keys, stats);
@@ -246,12 +254,13 @@ export function deriveLayer(dump, id, options = {}) {
         hoardType: type.hoardType,
         metalField,
         countryField,
+        tpqFallbackField: tpqField && tpqField !== datePick.dateStartField && tpqField !== datePick.dateEndField ? tpqField : null,
         reviewed: false
     };
     // Importable: has an identity and a validated date pair.
     // Trainable: also has position evidence. The two are deliberately separate.
     const complete = Boolean(mapping.idField && mapping.dateStartField && mapping.dateEndField && mapping.dateBasis);
-    const trainable = positionCombos.length > 0;
+    const trainable = positionCombos.length > 0 || noPositionEvidence;
     return {
         layer: id,
         name: layer.name,
@@ -280,9 +289,11 @@ export function deriveLayer(dump, id, options = {}) {
             !idPick.idField && 'no unique identifier',
             !namePick.nameField && 'no usable name field',
             !datePick.dateStartField && 'no validated ordered year pair',
-            !positionCombos.length && 'no position-quality field',
+            noPositionEvidence && 'no position-quality field: every row is classified approximate by an explicit layer-level default, not by evidence',
             type.needsReview && `hoard_type ${type.hoardType} proposed from field semantics`,
-            tpqField && ('layer carries a year-like TPQ field ' + tpqField + '; whether the chosen pair is a deposit interval or a TPQ needs a decision')
+            tpqField && (tpqField === datePick.dateStartField || tpqField === datePick.dateEndField
+                ? ('the chosen date pair includes the TPQ field ' + tpqField + '; its basis needs a decision')
+                : ('rows with empty deposit dates fall back to ' + tpqField + ' and are labelled tpq (lower bound, not an interval)'))
         ].filter(Boolean)
     };
 }

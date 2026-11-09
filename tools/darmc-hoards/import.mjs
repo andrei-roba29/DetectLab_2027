@@ -35,9 +35,9 @@ const HELP = `DARMC hoards import — dry run by default.
   --fixtures <dir>       write trimmed per-layer fixtures from the capture
   --per-layer <n>        fixture records per layer (default 12)
   --emit-sql <file>      write the row data as an idempotent SQL file
-  --position strict      classify "no position evidence" as unknown (default: proposed)
-  --position-default L=C layer with no position-quality field: give every record class C
-                         (e.g. --position-default 12=exact); without it they are unknown
+  --position proposed    classify "no field says otherwise" as exact (not the default)
+  --position-default L=C layer with no position-quality field: override its class
+                         (default for such a layer: approximate)
   --limit <n>            cap records read per layer (for a quick look)
   --snapshot <label>     snapshot id written with each row (needs 018_apm_hoards_import.sql)
   --apply                write to the database (needs a reviewed mapping + DATABASE_URL)
@@ -82,7 +82,7 @@ async function main() {
     if (flag('--help') || !args.length) { console.log(HELP); return; }
     const dumpPath = arg('--dump');
     if (!dumpPath) throw new Error('--dump <file> is required (the capture is the only source)');
-    const policy = (arg('--position') || 'proposed').toLowerCase();
+    const policy = (arg('--position') || 'strict').toLowerCase();
     if (!['proposed', 'strict'].includes(policy)) throw new Error('--position must be proposed or strict');
     const limit = arg('--limit') ? Number(arg('--limit')) : null;
 

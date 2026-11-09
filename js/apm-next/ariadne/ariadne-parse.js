@@ -1,30 +1,30 @@
 /*!
- * ARIADNE search response → records. Pure, no network, no DOM.
+ * ARIADNE search response → records and cells. Pure; no network, no DOM.
  *
- * Shape taken from the real response excerpt of 2026-11-09:
- *   { total:{value,relation},
- *     hits:[ { id, data:{ ariadneSubject:[{prefLabel}], publisher:[{name}],
- *                         title:{language,text}, spatial:[{centroid:{lon,lat},
- *                         geopoint:{lon,lat}, placeName, boundingbox}], resourceType } } ],
- *     aggregations:{ geogridCentroid:{grids:{buckets:[{key,doc_count}]}},
- *                    ariadneSubject:{buckets:[...]}, temporal:{temporal:{buckets:[...]}} } }
+ * Verified shape (operator's own responses, 2026-11-09):
+ *   small box : hits populated, one page, no paging
+ *   large box : hits: [] and aggregations.geogridCentroid.grids.buckets holds
+ *               geohash-7 cells (~152 m), capped at 5000
  *
- * A hit without a point is never given an invented one. A bounding box is not a site.
+ * A hit is a point only when data.spatial[] carries a geopoint. A record with
+ * just a boundingbox is a collection envelope, not a site: it is rejected, and
+ * no coordinate is ever derived from the box or from its centroid.
  */
 (function (root, factory) {
-    var api = factory();
+    var tiles = typeof module === 'object' && module.exports
+        ? require('./ariadne-tiles.js')
+        : root.DetectLabAriadneTiles;
+    var api = factory(tiles);
     if (typeof module === 'object' && module.exports) module.exports = api;
     else root.DetectLabAriadneParse = api;
-})(typeof self !== 'undefined' ? self : this, function () {
+})(typeof self !== 'undefined' ? self : this, function (tiles) {
     'use strict';
 
     function finite(v) { return typeof v === 'number' && Number.isFinite(v); }
 
     function point(v) {
         if (!v || typeof v !== 'object') return null;
-        var lat = v.lat == null ? v.latitude : v.lat;
-        var lon = v.lon == null ? (v.lng == null ? v.longitude : v.lng) : v.lon;
-        lat = Number(lat); lon = Number(lon);
+        var lat = Number(v.lat), lon = Number(v.lon == null ? v.lng : v.lon);
         if (!finite(lat) || !finite(lon)) return null;
         if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
         return { lat: lat, lon: lon };
@@ -38,15 +38,14 @@
             var item = list[i];
             if (item == null) continue;
             if (typeof item === 'string') { out.push(item); continue; }
-            var text = item[key] == null ? (item.name == null ? item.text : item.name) : item[key];
+            var text = item[key] == null ? item.name : item[key];
             if (text != null && String(text).trim() !== '') out.push(String(text));
         }
         return out;
     }
 
     function titleOf(data) {
-        if (!data) return '';
-        var t = data.title;
+        var t = data && data.title;
         if (t == null) return '';
         if (typeof t === 'string') return t;
         if (Array.isArray(t)) {
@@ -61,17 +60,16 @@
         if (!hit || !hit.id) return { rejected: 'no-id' };
         var data = hit.data || {};
         var spatial = Array.isArray(data.spatial) ? data.spatial : (data.spatial ? [data.spatial] : []);
-        var chosen = null, how = null, places = [], onlyBox = false;
+        var chosen = null, places = [], boxOnly = false;
         for (var i = 0; i < spatial.length; i++) {
             var s = spatial[i] || {};
             if (s.placeName) places.push(String(s.placeName));
             var p = point(s.geopoint);
-            if (p && !chosen) { chosen = p; how = 'geopoint'; }
-            if (!chosen) { p = point(s.centroid); if (p) { chosen = p; how = 'centroid'; } }
-            if (!chosen && s.boundingbox) onlyBox = true;
+            if (p && !chosen) chosen = p;
+            if (!chosen && s.boundingbox) boxOnly = true;
         }
-        if (!chosen) return { rejected: onlyBox ? 'bounding-box-only' : 'no-point' };
-        var subjects = labelList(data.ariadneSubject, 'prefLabel');
+        // A collection envelope is not a location.
+        if (!chosen) return { rejected: boxOnly ? 'collection-boundingbox-only' : 'no-geopoint' };
         return {
             record: {
                 id: 'ariadne:' + String(hit.id),
@@ -82,10 +80,10 @@
                 source: 'ariadne',
                 type: data.resourceType || 'unknown',
                 resourceType: data.resourceType || null,
-                positionKind: how,
-                approximatePosition: how === 'centroid',
+                positionKind: 'geopoint',
+                approximatePosition: false,
                 publisher: labelList(data.publisher, 'name')[0] || null,
-                subjects: subjects,
+                subjects: labelList(data.ariadneSubject, 'prefLabel'),
                 places: places,
                 periodLabel: null
             }
@@ -99,27 +97,51 @@
         });
     }
 
+    /** One grid bucket → one cell with a real centre, or a rejection. */
+    function toCell(bucket) {
+        if (!bucket || bucket.key == null) return { rejected: 'bad-cell' };
+        var centre = tiles.cellCentre(String(bucket.key));
+        if (!centre) return { rejected: 'bad-cell-key' };
+        return {
+            cell: {
+                key: String(bucket.key),
+                count: Number(bucket.doc_count == null ? bucket.count : bucket.doc_count) || 0,
+                lat: centre.lat,
+                lon: centre.lon,
+                box: centre.box
+            }
+        };
+    }
+
     function parseResponse(json) {
-        if (!json || typeof json !== 'object') return { hits: [], total: 0, relation: null, rejected: {}, buckets: {}, malformed: true };
-        var hits = Array.isArray(json.hits) ? json.hits : [];
-        var records = [], rejected = {};
-        for (var i = 0; i < hits.length; i++) {
-            var r = toRecord(hits[i]);
-            if (r.record) records.push(r.record);
+        if (!json || typeof json !== 'object') return { hits: [], cells: [], total: 0, rejected: { malformed: 1 }, buckets: {}, malformed: true };
+        var rawHits = Array.isArray(json.hits) ? json.hits : [];
+        var hits = [], rejected = {};
+        for (var i = 0; i < rawHits.length; i++) {
+            var r = toRecord(rawHits[i]);
+            if (r.record) hits.push(r.record);
             else rejected[r.rejected] = (rejected[r.rejected] || 0) + 1;
         }
         var aggs = json.aggregations || {};
+        var grid = aggs.geogridCentroid && aggs.geogridCentroid.grids ? aggs.geogridCentroid.grids : aggs.geogridCentroid;
+        var buckets = readBuckets(grid);
+        var cells = [];
+        for (var j = 0; j < buckets.length; j++) {
+            var c = toCell(buckets[j]);
+            if (c.cell) cells.push(c.cell);
+            else rejected[c.rejected] = (rejected[c.rejected] || 0) + 1;
+        }
         return {
-            hits: records,
-            rawHits: hits.length,
-            total: json.total && finite(Number(json.total.value)) ? Number(json.total.value) : records.length,
+            hits: hits,
+            rawHits: rawHits.length,
+            cells: cells,
+            gridDocCount: grid && finite(Number(grid.doc_count)) ? Number(grid.doc_count) : null,
+            total: json.total && finite(Number(json.total.value)) ? Number(json.total.value) : null,
             relation: json.total && json.total.relation ? String(json.total.relation) : null,
             rejected: rejected,
             buckets: {
                 subjects: readBuckets(aggs.ariadneSubject),
-                temporal: readBuckets(aggs.temporal && aggs.temporal.temporal ? aggs.temporal.temporal : aggs.temporal),
-                cells: readBuckets(aggs.geogridCentroid && aggs.geogridCentroid.grids ? aggs.geogridCentroid.grids : aggs.geogridCentroid),
-                cellsTotal: aggs.geogridCentroid && aggs.geogridCentroid.grids && finite(aggs.geogridCentroid.grids.doc_count) ? aggs.geogridCentroid.grids.doc_count : null
+                temporal: readBuckets(aggs.temporal && aggs.temporal.temporal ? aggs.temporal.temporal : aggs.temporal)
             },
             malformed: false
         };
@@ -137,5 +159,8 @@
         return false;
     }
 
-    return { parseResponse: parseResponse, toRecord: toRecord, isPositive: isPositive, point: point };
+    /** The cap is a truncation, not a total. */
+    function isCapped(cellCount, cap) { return cellCount >= cap; }
+
+    return { parseResponse: parseResponse, toRecord: toRecord, toCell: toCell, isPositive: isPositive, isCapped: isCapped, point: point };
 });

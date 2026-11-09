@@ -60,13 +60,22 @@
         if (['deposit','tpq'].indexOf(mapping.dateBasis) < 0) return { dropped: 'invalid-date-basis' };
         var start = year(a[mapping.dateStartField],mapping.yearConvention), end = year(a[mapping.dateEndField],mapping.yearConvention);
         if (start != null && end != null && start > end) return { dropped: 'reversed-deposit-dates' };
+        // A TPQ is a terminus post quem, not a deposit interval. It is used only when
+        // both deposit fields are empty, and the row is labelled 'tpq' so nothing
+        // downstream can mistake the lower bound for a burial date.
+        var basis = mapping.dateBasis;
+        if (start == null && end == null && mapping.tpqFallbackField && Object.prototype.hasOwnProperty.call(a, mapping.tpqFallbackField)) {
+            var tpq = year(a[mapping.tpqFallbackField], mapping.yearConvention);
+            if (tpq != null) { start = tpq; end = null; basis = 'tpq'; }
+        }
         var q = {}; (mapping.qualityFields || []).forEach(function(f) { q[f] = a[f] == null ? null : a[f]; });
         var rawKey = JSON.stringify(q), cls = position(rawKey,mapping.positionMapping);
         if ((mapping.centroidValues || []).indexOf(a.CENTROID) >= 0) cls = 'approximate';
         if (['exact','approximate','unknown'].indexOf(cls) < 0) return { dropped: 'invalid-position-mapping' };
+        var periods = basis === 'tpq' ? [] : groupsFor(start,end);
         return { row: { source:'darmc', source_layer:Number(layer), source_id:String(a[mapping.idField]), name:String(a[mapping.nameField] || ''), lat:lat,lon:lon,
-            position_class:cls, position_quality_raw:q, position_accuracy_m:config.accuracyM[cls], period_group:groupsFor(start,end)[0] || 'unknown', period_groups:groupsFor(start,end), periods:[], multiple_periods:false,
-            deposit_start_year:start,deposit_end_year:end,date_basis:mapping.dateBasis, hoard_type:mapping.hoardType || 'unknown',
+            position_class:cls, position_quality_raw:q, position_accuracy_m:config.accuracyM[cls], period_group:periods[0] || 'unknown', period_groups:periods, periods:[], multiple_periods:false,
+            deposit_start_year:start,deposit_end_year:end,date_basis:basis, hoard_type:mapping.hoardType || 'unknown',
             metal:a[mapping.metalField] == null ? null : String(a[mapping.metalField]),country:a[mapping.countryField] == null ? null : String(a[mapping.countryField]),
             bucket:'hoard-only',duplicate_of:null,raw:feature } };
     }

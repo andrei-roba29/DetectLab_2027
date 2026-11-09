@@ -13,8 +13,7 @@ let checks = 0;
 const ok = (label, cond, extra) => { checks++; assert.ok(cond, `${label}${extra ? ` — ${extra}` : ''}`); };
 
 const pages = {
-    'tools/live-check/hoards-150km.html': fs.readFileSync(path.join(here, 'tools/live-check/hoards-150km.html'), 'utf8'),
-    'tools/live-check/ariadne-probe.html': fs.readFileSync(path.join(here, 'tools/live-check/ariadne-probe.html'), 'utf8')
+    'tools/live-check/hoards-150km.html': fs.readFileSync(path.join(here, 'tools/live-check/hoards-150km.html'), 'utf8')
 };
 
 for (const [file, html] of Object.entries(pages)) {
@@ -34,16 +33,12 @@ ok('it flags transfer-limit truncation', /exceededTransferLimit/.test(hoards));
 ok('it labels calculated numbers as calculated', /Calculated, not measured/.test(hoards) && /calculated:/.test(hoards));
 ok('it sends an envelope in EPSG:4326', /esriGeometryEnvelope/.test(hoards) && /outSR: '4326'/.test(hoards));
 
-const ariadne = pages['tools/live-check/ariadne-probe.html'];
-ok('the ariadne page probes both paths', /direct:/.test(ariadne) && /viaFunction:/.test(ariadne));
-ok('it distinguishes CORS from HTTP failure', /corsLikely/.test(ariadne) && /no answer \(CORS or unreachable\)/.test(ariadne));
-ok('it exposes the query body for correction', /id="body"/.test(ariadne));
-ok('it states that the query body is unverified', /UNVERIFIED/.test(ariadne));
-ok('it says a 502/504 is the server reachability answer', /could not reach the host/.test(ariadne));
-ok('it does not embed a key', !/eyJhbGciOi/.test(ariadne));
+// The ARIADNE probe page was removed on the operator's instruction: they use their
+// own verified probe pages. Only the DARMC measurement page is ours to maintain.
+ok('no ARIADNE probe page remains', !fs.existsSync(path.join(here, 'tools/live-check/ariadne-probe.html')));
 
 const readme = fs.readFileSync(path.join(here, 'tools/live-check/README.md'), 'utf8');
 ok('the readme says what the pages cannot prove', /cannot tell you/i.test(readme));
-ok('the readme lists the report fields', /viaFunction\.outcome/.test(readme));
+ok('the readme lists the report fields', /truncated/.test(readme) && /calculated\.\*/.test(readme));
 
-console.log(`PASS live-check tools (${checks} checks): both pages are dependency-free, store nothing, never touch a local service, emit a copyable JSON report; the hoards page measures counts, bytes, latency and truncation and labels arithmetic as calculated; the Ariadne probe distinguishes CORS from HTTP failure and exposes the unverified query body. Running them — and therefore all live behaviour — is still yours to do.`);
+console.log(`PASS live-check tools (${checks} checks): the DARMC page is dependency-free, stores nothing, never touches a local service, emits a copyable JSON report, measures counts, bytes, latency and truncation and labels arithmetic as calculated. The ARIADNE probe was removed: the operator runs their own.`);

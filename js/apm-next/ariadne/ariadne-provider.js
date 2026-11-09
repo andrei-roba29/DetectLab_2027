@@ -1,21 +1,25 @@
 /*!
- * ARIADNE site provider for APM Next Gen.
+ * ARIADNE provider for APM Next Gen.
  *
- * Implements the existing SiteProvider interface so the pipeline does not care
- * where the records come from:
- *     { id, label, source, getSites(centre, radiusKm, opts) → Promise<Record[]> }
- * plus getCounts() for the panel's period/subject lists.
+ * Roles are FIXED, not user switches:
+ *   settlement mode + centre outside Romania → positive training sites
+ *   hoard mode      + centre outside Romania → known-site comparison only
+ *   any centre inside Romania                → never used
  *
- * Two roles, both selectable (default from config):
- *   mode 'positive'    — only hits whose ariadneSubject matches config.positiveSubjects
- *                        (a real site/monument with a point) may train the model.
- *   mode 'comparison'  — every hit with a point, used only as a known-site comparison set.
+ * Data path, as verified against the portal:
+ *   · small boxes return hits (one page, no paging) — usable only with a geopoint
+ *   · 50–150 km boxes return hits: [] and a geohash-7 cell grid (~152 m) capped at
+ *     exactly 5000 cells. A capped answer is incomplete: the box is split into four
+ *     quadrants and retried, recursively, up to `maxDepth`, deduplicating by cell key.
  *
- * The upstream call is delegated to ONE injected function (ariadne-upstream.js),
- * so 'server' vs 'browser' transport changes nothing here.
+ * The settlement role additionally requires the captured site-type/period filter
+ * fragments: without them the grid cannot be restricted to sites, so the role stays
+ * blocked rather than guessing.
  *
- * NOT VERIFIED against the live host. Everything below is exercised by
- * test-apm-ariadne.mjs against the real response fixture and a fake transport.
+ * The upstream call is delegated to one injected function (ariadne-upstream.js), so
+ * 'server' vs 'browser' changes nothing here.
+ *
+ * NOT VERIFIED against the live host from this environment.
  */
 (function (root, factory) {
     var node = typeof module === 'object' && module.exports;
@@ -33,129 +37,194 @@
 
     function err(key, message) { var e = new Error(message); e.key = key; return e; }
 
-    function distanceM(a, b) {
-        var d = Math.PI / 180;
-        var p = (b.lat - a.lat) * d, q = (b.lon - a.lon) * d;
-        return 12742000 * Math.asin(Math.min(1, Math.sqrt(Math.sin(p / 2) * Math.sin(p / 2) + Math.cos(a.lat * d) * Math.cos(b.lat * d) * Math.sin(q / 2) * Math.sin(q / 2))));
-    }
-
-    function mergeBuckets(into, list) {
-        for (var i = 0; i < list.length; i++) {
-            var b = list[i];
-            into[b.key] = (into[b.key] || 0) + (b.count || 0);
-        }
-        return into;
-    }
-
     function createProvider(options) {
         options = options || {};
         var config = Object.assign({}, defaults, options.config || {});
-        var transport = options.transport || (options.upstream ? options.upstream : upstream.create(config, options.deps));
-        // Allow a bare {call} to be injected (tests, or a future non-Supabase proxy).
-        var call = typeof transport.call === 'function' ? transport.call.bind(transport) : transport.call;
+        var transport = options.transport || upstream.create(config, options.deps);
+        var call = transport.call.bind(transport);
         var now = options.now || function () { return Date.now(); };
-        var cache = options.cache || { map: new Map(), get: function (k) { var v = this.map.get(k); return v && v.expires > now() ? v.value : null; }, set: function (k, v) { this.map.set(k, { value: v, expires: now() + config.cacheTtlMs }); } };
+        var cache = options.cache || (function () {
+            var map = new Map();
+            return {
+                map: map,
+                get: function (k) { var v = map.get(k); return v && v.expires > now() ? v.value : null; },
+                set: function (k, v) { map.set(k, { value: v, expires: now() + config.cacheTtlMs }); },
+                clear: function () { map.clear(); }
+            };
+        })();
+        var insideRomania = options.insideRomania || function (lat, lon) { return tiles.insidePolygon(lat, lon, config.romania); };
 
-        function cacheKey(centre, radiusKm, mode) {
-            return [mode, centre.lat.toFixed(3), centre.lon.toFixed(3), Math.round(radiusKm)].join('|');
+        /** The fixed role for a mode and a centre. Never a user choice. */
+        function roleFor(appMode, centre) {
+            if (!centre || !Number.isFinite(centre.lat) || !Number.isFinite(centre.lon)) return { role: 'disabled', reason: 'invalid-centre' };
+            if (insideRomania(centre.lat, centre.lon)) return { role: 'disabled', reason: 'romania-excluded' };
+            if (appMode === 'settlement') {
+                if (!query.filtersConfigured(config)) return { role: 'disabled', reason: 'filters-not-configured' };
+                return { role: config.roles.settlement };
+            }
+            if (appMode === 'hoard') return { role: config.roles.hoard };
+            return { role: 'disabled', reason: 'unknown-app-mode' };
         }
 
-        function radiusKmClamp(r) { return Math.min(Math.abs(r) || 0, 200); }
+        function cacheKey(centre, radiusKm, appMode) {
+            return [appMode, centre.lat.toFixed(3), centre.lon.toFixed(3), Math.round(radiusKm)].join('|');
+        }
 
-        /** Page through one tile. Throws rather than returning a partial tile. */
-        async function searchTile(tile, mode, signal, stats) {
-            var pageSize = config.pageSize, maxPages = config.maxPages;
-            var collected = [], from = 0, total = 0, relation = null, rejected = {}, subjects = [], cells = [];
-            for (var page = 0; page < maxPages; page++) {
-                var body = query.buildSearchBody({ box: tile, from: from, size: pageSize, aggregations: page === 0, fields: config.fields });
-                var res = await call({ path: '', method: 'POST', body: body }, { signal: signal, timeoutMs: config.timeoutMs });
+        async function search(centre, radiusKm, appMode, signal) {
+            var decision = roleFor(appMode, centre);
+            if (decision.role === 'disabled') {
+                return { records: [], cells: [], meta: baseMeta(centre, radiusKm, appMode, decision) };
+            }
+            radiusKm = Math.min(Math.abs(radiusKm) || 0, config.maxRadiusKm);
+            if (!(radiusKm > 0)) throw err('ariadne.invalid', 'Invalid radius');
+
+            var key = cacheKey(centre, radiusKm, appMode);
+            var cached = cache.get(key);
+            if (cached) { cached.meta.cached = true; return cached; }
+
+            var stats = { requests: 0, bytes: 0, upstreamMs: 0, tilesPlanned: 0, tilesDone: 0, capped: 0, incomplete: false };
+            var cellMap = new Map();
+            var hits = [];
+            var rejected = {};
+            var subjects = {}, temporal = {};
+            var started = now();
+            var root = tiles.boxAround(centre, radiusKm);
+            var queue = tiles.splitToMaxSide(root, config.maxSideKm).map(function (box) { return { box: box, depth: 0 }; });
+            stats.tilesPlanned = queue.length;
+
+            while (queue.length) {
+                if (stats.requests >= config.maxRequests) { stats.incomplete = true; break; }
+                var tile = queue.shift();
+                var params = query.buildParams(config, { box: tile.box });
+                var res = await call(params, { signal: signal });
                 stats.requests++;
                 stats.bytes += res.bytes || 0;
-                stats.ms += res.ms || 0;
+                stats.upstreamMs += res.ms || 0;
                 var parsed = parse.parseResponse(res.json);
-                total = parsed.total;
-                relation = parsed.relation;
-                for (var k in parsed.rejected) rejected[k] = (rejected[k] || 0) + parsed.rejected[k];
-                subjects = mergeBuckets(subjects, parsed.buckets.subjects);
-                cells = mergeBuckets(cells, parsed.buckets.cells);
-                collected = collected.concat(parsed.hits);
-                if (parsed.rawHits === 0) break;
-                from += parsed.rawHits;
-                if (from >= total) break;
-                if (page + 1 >= query.pagesFor(total, pageSize, maxPages)) break;
-            }
-            stats.truncated = stats.truncated || (Number.isFinite(total) && collected.length < total && relation !== 'eq' ? true : collected.length < total);
-            return { records: collected, total: total, relation: relation, rejected: rejected, subjects: subjects, cells: cells };
-        }
+                Object.keys(parsed.rejected).forEach(function (k) { rejected[k] = (rejected[k] || 0) + parsed.rejected[k]; });
+                parsed.buckets.subjects.forEach(function (b) { subjects[b.key] = (subjects[b.key] || 0) + b.count; });
+                parsed.buckets.temporal.forEach(function (b) { temporal[b.key] = (temporal[b.key] || 0) + b.count; });
+                hits = hits.concat(parsed.hits);
 
-        async function gather(centre, radiusKm, mode, signal) {
-            if (!centre || !Number.isFinite(centre.lat) || !Number.isFinite(centre.lon) || Math.abs(centre.lat) > 90 || Math.abs(centre.lon) > 180) {
-                throw err('ariadne.invalid', 'Invalid centre coordinates');
-            }
-            radiusKm = radiusKmClamp(radiusKm);
-            if (!(radiusKm > 0)) throw err('ariadne.invalid', 'Invalid radius');
-            var key = cacheKey(centre, radiusKm, mode);
-            var hit = cache.get(key);
-            if (hit) { hit.meta.cached = true; return hit; }
-
-            var box = tiles.boxAround(centre, radiusKm);
-            var list = tiles.splitBox(box, config.maxTiles);
-            var stats = { requests: 0, bytes: 0, ms: 0, truncated: false };
-            var all = [], totals = 0, rejected = {}, subjects = {}, cells = {}, failures = [];
-            var pending = list.map(function (tile) { return tile; });
-            var workers = [];
-            var started = now();
-
-            async function worker() {
-                while (pending.length) {
-                    var tile = pending.shift();
-                    try {
-                        var r = await searchTile(tile, mode, signal, stats);
-                        all = all.concat(r.records);
-                        totals += r.total || 0;
-                        for (var k in r.rejected) rejected[k] = (rejected[k] || 0) + r.rejected[k];
-                        mergeBuckets(subjects, Object.keys(r.subjects).map(function (k) { return { key: k, count: r.subjects[k] }; }));
-                        mergeBuckets(cells, Object.keys(r.cells).map(function (k) { return { key: k, count: r.cells[k] }; }));
-                    } catch (e) {
-                        failures.push({ tile: tile, key: e.key || 'ariadne.error', message: e.message });
-                        throw e;
-                    }
+                var capped = parse.isCapped(parsed.cells.length, config.cellCap);
+                if (capped && tile.depth < config.maxDepth) {
+                    stats.capped++;
+                    tiles.quadrants(tile.box).forEach(function (q) { queue.push({ box: q, depth: tile.depth + 1 }); });
+                    stats.tilesPlanned += 4;
+                    continue;
                 }
+                if (capped) { stats.capped++; stats.incomplete = true; }
+                stats.tilesDone++;
+                parsed.cells.forEach(function (cell) {
+                    if (config.scopeBoxes && !tiles.insideBox(tile.box, cell.lat, cell.lon)) return;
+                    var existing = cellMap.get(cell.key);
+                    if (!existing || cell.count > existing.count) cellMap.set(cell.key, cell);
+                });
             }
-            for (var w = 0; w < Math.max(1, Math.min(config.concurrency, list.length)); w++) workers.push(worker());
-            try { await Promise.all(workers); }
-            catch (e) { e.meta = { partial: true, tilesPlanned: list.length, failures: failures }; throw e; }
 
-            var seen = new Set();
-            var records = [];
-            for (var i = 0; i < all.length; i++) {
-                var r = all[i];
-                if (seen.has(r.id)) continue;
-                seen.add(r.id);
-                if (config.excludeWithoutPoint && (!Number.isFinite(r.lat) || !Number.isFinite(r.lon))) continue;
-                var d = distanceM(centre, r);
-                if (d > radiusKm * 1000 + 1) continue;      // tiles are rectangles; the disc is the truth
-                r.distanceM = Math.round(d);
-                if (mode === 'positive' && !parse.isPositive(r, config.positiveSubjects)) continue;
-                records.push(r);
+            // The disc is the truth, the rectangle is only how we asked.
+            var cells = [];
+            cellMap.forEach(function (cell) {
+                if (tiles.distanceM(centre, cell) <= radiusKm * 1000 + 1) cells.push(cell);
+            });
+            cells.sort(function (a, b) { return tiles.distanceM(centre, a) - tiles.distanceM(centre, b) || a.key.localeCompare(b.key); });
+
+            var records;
+            if (hits.length) {
+                // Small box: precise points, one page, as the portal returns them.
+                var seen = new Set();
+                records = [];
+                for (var i = 0; i < hits.length; i++) {
+                    var h = hits[i];
+                    if (seen.has(h.id)) continue;
+                    seen.add(h.id);
+                    var d = tiles.distanceM(centre, h);
+                    if (d > radiusKm * 1000 + 1) continue;
+                    if (decision.role === 'positive' && !parse.isPositive(h, config.positiveSubjects || [])) continue;
+                    h.distanceM = Math.round(d);
+                    records.push(h);
+                }
+                records.sort(function (a, b) { return a.distanceM - b.distanceM; });
+            } else {
+                // Large box: the cell grid is the data. One approximate point per cell,
+                // never one per underlying record (they are not ours to invent).
+                records = cells.map(function (cell) {
+                    return {
+                        id: 'ariadne:cell:' + cell.key,
+                        name: '',
+                        lat: cell.lat,
+                        lon: cell.lon,
+                        source: 'ariadne',
+                        type: 'cell',
+                        positionKind: 'cell',
+                        approximatePosition: true,
+                        cellKey: cell.key,
+                        cellCount: cell.count,
+                        subjects: [],
+                        distanceM: Math.round(tiles.distanceM(centre, cell))
+                    };
+                });
             }
-            records.sort(function (a, b) { return a.distanceM - b.distanceM || String(a.id).localeCompare(String(b.id)); });
 
             var result = {
                 records: records,
-                meta: {
-                    source: 'ariadne', mode: mode, transport: transport.mode || 'injected',
-                    tileBbox: box, tiles: list.length, requests: stats.requests,
-                    bytes: stats.bytes, upstreamMs: stats.ms, elapsedMs: now() - started,
-                    totalInBox: totals, returned: records.length,
-                    truncated: Boolean(stats.truncated), rejected: rejected,
-                    subjects: subjects, cells: cells, cached: false,
-                    live: false,  // <- stays false: nothing here proves the host answers
-                    note: 'Not verified against the live ARIADNE host.'
-                }
+                cells: cells,
+                meta: Object.assign(baseMeta(centre, radiusKm, appMode, decision), {
+                    tiles: stats.tilesPlanned,
+                    tilesCompleted: stats.tilesDone,
+                    requests: stats.requests,
+                    bytes: stats.bytes,
+                    upstreamMs: stats.upstreamMs,
+                    elapsedMs: now() - started,
+                    hits: hits.length,
+                    cells: cells.length,
+                    cellsCapped: stats.capped,
+                    incomplete: stats.incomplete,
+                    rejected: rejected,
+                    subjects: subjects,
+                    temporal: temporal,
+                    cached: false
+                })
             };
             cache.set(key, result);
             return result;
+        }
+
+        function baseMeta(centre, radiusKm, appMode, decision) {
+            return {
+                source: 'ariadne', appMode: appMode || null, role: decision.role,
+                disabled: decision.role === 'disabled', reason: decision.reason || null,
+                centre: centre, radiusKm: radiusKm,
+                transport: transport.mode || 'injected',
+                live: false,
+                note: 'Not verified against the live ARIADNE host; the grid path is capped at ' + config.cellCap + ' cells per request.'
+            };
+        }
+
+        /**
+         * CALCULATED, not measured: how many requests a radius needs before the
+         * 5000-cell cap stops firing, and whether that fits in the budget.
+         */
+        function estimate(centre, radiusKm) {
+            radiusKm = Math.min(Math.abs(radiusKm) || 0, config.maxRadiusKm);
+            var box = tiles.boxAround(centre, radiusKm);
+            var base = tiles.splitToMaxSide(box, config.maxSideKm);
+            var cellKm = tiles.metresPerCell(config.cellPrecision) / 1000;
+            var side = 0;
+            for (var i = 0; i < base.length; i++) side = Math.max(side, tiles.boxHeightKm(base[i]), tiles.boxWidthKm(base[i]));
+            var depth = 0, count = base.length, perTile = Math.ceil(side / cellKm) * Math.ceil(side / cellKm);
+            while (perTile > config.cellCap && depth < config.maxDepth) {
+                depth++; count *= 4; side /= 2;
+                perTile = Math.ceil(side / cellKm) * Math.ceil(side / cellKm);
+            }
+            return {
+                radiusKm: radiusKm, baseTiles: base.length, depth: depth, requests: count,
+                cellsPerTileAtStop: perTile,
+                completable: perTile <= config.cellCap,
+                withinBudget: count <= config.maxRequests,
+                calculated: true,
+                note: 'Arithmetic from the 152 m cell size and the 5000-cell cap. Not a measurement.'
+            };
         }
 
         return {
@@ -163,11 +232,31 @@
             label: 'ARIADNE',
             source: 'ARIADNE portal',
             transportMode: transport.mode || 'injected',
-            getSites: function (centre, radiusKm, opts) { return gather(centre, radiusKm, (opts && opts.mode) || 'positive', opts && opts.signal).then(function (r) { var out = r.records; out._meta = r.meta; return out; }); },
-            getCounts: function (centre, radiusKm, opts) { return gather(centre, radiusKm, (opts && opts.mode) || 'comparison', opts && opts.signal).then(function (r) { return r.meta; }); },
-            clearCache: function () { if (cache.map && cache.map.clear) cache.map.clear(); }
+            roleFor: roleFor,
+            getSites: function (centre, radiusKm, opts) {
+                opts = opts || {};
+                return search(centre, radiusKm, opts.appMode, opts.signal).then(function (r) {
+                    var out = r.records.slice();
+                    out._meta = r.meta;
+                    return out;
+                });
+            },
+            getGrid: function (centre, radiusKm, opts) {
+                opts = opts || {};
+                return search(centre, radiusKm, opts.appMode, opts.signal).then(function (r) {
+                    var out = r.cells.slice();
+                    out._meta = r.meta;
+                    return out;
+                });
+            },
+            getCounts: function (centre, radiusKm, opts) {
+                opts = opts || {};
+                return search(centre, radiusKm, opts.appMode, opts.signal).then(function (r) { return r.meta; });
+            },
+            estimate: estimate,
+            clearCache: function () { if (cache.clear) cache.clear(); }
         };
     }
 
-    return { createProvider: createProvider, distanceM: distanceM };
+    return { createProvider: createProvider };
 });

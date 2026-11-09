@@ -57,16 +57,19 @@ Nothing is ever deleted.
 | Identifier | the attribute that is complete **and** unique in the file; service object id preferred | a name- or content-based hash of the record |
 | Name | best-coverage text attribute, name/place tokens weighted | an invented "site name" |
 | Deposit dates | a validated start/end pair: both year-like, ≥10% of the layer paired, ≥90% ordered | discovery years, coin counts, sizes, weights (all explicitly forbidden) |
-| Date basis | `tpq` only if a chosen field is a TPQ field; otherwise `deposit`; a year-like TPQ column that was *not* chosen is flagged for review | silently treating a TPQ as a burial interval |
+| Date basis | `deposit` from the chosen pair. A year-like TPQ column is used **only** as a labelled fallback (`date_basis='tpq'`, end year null) for rows whose deposit dates are empty | silently treating a TPQ as a burial interval, or letting it claim a period group |
 | Position class | every observed combination of the position-quality fields, classified once, with its row count | a default of "exact" for a layer with no quality field |
 | Duplicate rules | distance percentiles of same-name pairs, exact-coordinate groups, cross-layer coordinate matches | a hard-coded 1 km / 0.7 similarity guess |
 | Hoard type | a coin/non-coin column if it exists; otherwise flagged "needs review" | a silent default |
 
 Position classes are reported twice per combination: **proposed** ("no field says
 otherwise ⇒ exact") and **strict** ("nothing explicitly says exact ⇒ unknown").
-`--position strict` switches the whole run to the second reading. A layer with no
-position-quality field at all is **unknown** by default; `--position-default 12=exact`
-is the explicit way to overrule that.
+**Strict is the default** for the proposal; `--position proposed` switches the run to
+the other reading.
+
+Layer 12 publishes no position field at all. It is classified **approximate** by one
+explicit layer-level default (not by evidence), under either policy, and the report
+says so on that layer's row. `--position-default 12=exact` is the way to overrule it.
 
 Rows whose position class is `unknown` are still imported (they are real finds),
 but `apm_hoards_within` excludes them from training, so they cannot reach the model.
@@ -84,14 +87,17 @@ real counts, which land in `data/hoards/darmc-review.md`.
 | 9 | `DATE_E` → `DATE_L` | `FINDSPOT_Q`, `VERIFIED` | 3 |
 | 10 | `DATE_E` → `DATE_L` | `FINDSPOT_Q`, `VERIFIED` | 3 |
 | 11 | `DATE_E` → `DATE_L` | `FINDSPOT_Q`, `VERIFIED` | 3 |
-| 12 | `start_date` → `end_date` | **none** → unknown | 6 |
+| 12 | `start_date` → `end_date` | **none** → approximate (layer default) | 6 |
 | 15 | `HOB_PD_ST` → `HOB_PD_EN` | `Q_LAT_LON`, `CENTROID` | 7 |
 | 16 | `START_D` → `END_D` | `Q_LAT_LON`, `CENTROID` | 3 |
 
-`D_TPQ` is detected as a TPQ field and flagged on 15 and 16; `FINDATE`,
+`D_TPQ` is detected as a TPQ field and used only as the labelled fallback on 15 and
+16 (rows with empty deposit dates become `date_basis='tpq'`, start year only, no
+period group). `FINDATE`,
 `Find_year`, `YEAR_DISC`, `COINS*`, `hoardsize`, `preserved`, `Received_O` and
 `ITEM_ON` are never used as deposit dates. Layer 12 publishes no position-quality
-field, so under the default it imports as `unknown` and needs an explicit decision.
+field, so every one of its rows is `approximate` by that layer-level default. Rows
+elsewhere with blank quality values are `unknown` under the strict default.
 
 Duplicate evidence in the sample: 2 exact-coordinate groups inside a layer
 (4 records), 3 cross-layer coordinate matches between 15 and 16 (7 records),
@@ -109,7 +115,7 @@ distances, clamped to 250–5000 m — on the real file expect several kilometre
 
 ## Tested / not tested
 
-**Tested on fixtures** (`node test-apm-hoards-darmc.mjs`, 167 checks): loader
+**Tested on fixtures** (`node test-apm-hoards-darmc.mjs`, 177 checks): loader
 validation and warnings, value-driven derivation, forbidden date fields, position
 proposals and both policies, deterministic uuids, the table contract, reversed
 dates, bad geometry, unreviewed mappings dropping closed, duplicate evidence,

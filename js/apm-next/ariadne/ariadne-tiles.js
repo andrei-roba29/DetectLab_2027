@@ -1,13 +1,11 @@
 /*!
- * Splitting a 150 km search disc into query-sized tiles, and optional geohash
- * cells for hosts that only accept cell keys.
+ * Geometry for the ARIADNE portal: the bbox string, the size limits, the quadrant
+ * recursion and the geohash-7 cell maths.
  *
- * Two independent strategies:
- *   splitBox()      — k-d style split of the bounding box, always available, and
- *                     what the provider uses by default (one bbox query per tile).
- *   geohashCells()  — standard geohash cover, for an index that filters on cells.
+ * bbox format is the portal's, verified from a browser:
+ *   bbox=<N>,<W>,<S>,<E>   top-left lat, top-left lon, bottom-right lat, bottom-right lon
  *
- * Both are pure. Switching transport never touches either of them.
+ * Pure functions. No network, no DOM, no transport awareness.
  */
 (function (root, factory) {
     var api = factory();
@@ -17,12 +15,12 @@
     'use strict';
 
     var BASE32 = '0123456789bcdefghjkmnpqrstuvwxyz';
+    var KM_PER_DEG_LAT = 111.32;
 
     function boxAround(centre, radiusKm) {
-        var dLat = radiusKm / 111.32;
+        var dLat = radiusKm / KM_PER_DEG_LAT;
         var cos = Math.cos(centre.lat * Math.PI / 180);
-        // Near the poles a degree of longitude is very short; clamp instead of exploding.
-        var dLon = radiusKm / (111.32 * Math.max(Math.abs(cos), 0.05));
+        var dLon = radiusKm / (KM_PER_DEG_LAT * Math.max(Math.abs(cos), 0.05));
         return {
             south: Math.max(-85, centre.lat - dLat),
             north: Math.min(85, centre.lat + dLat),
@@ -31,35 +29,80 @@
         };
     }
 
-    function area(box) { return (box.north - box.south) * (box.east - box.west); }
+    /** The portal's parameter format: N,W,S,E. */
+    function bboxString(box) {
+        return [box.north, box.west, box.south, box.east].map(function (v) { return Number(v.toFixed(6)); }).join(',');
+    }
 
-    function splitBox(box, maxTiles) {
+    /** Strict parser for the same format. Returns null rather than a repaired value. */
+    function parseBbox(text) {
+        if (typeof text !== 'string') return null;
+        var parts = text.split(',');
+        if (parts.length !== 4) return null;
+        var n = parts.map(Number);
+        if (!n.every(function (v) { return Number.isFinite(v); })) return null;
+        var box = { north: n[0], west: n[1], south: n[2], east: n[3] };
+        if (box.north <= box.south || box.east <= box.west) return null;
+        if (box.north > 90 || box.south < -90 || box.west < -180 || box.east > 180) return null;
+        return box;
+    }
+
+    function boxWidthKm(box, lat) {
+        var mid = lat == null ? (box.north + box.south) / 2 : lat;
+        return (box.east - box.west) * KM_PER_DEG_LAT * Math.cos(mid * Math.PI / 180);
+    }
+
+    function boxHeightKm(box) {
+        return (box.north - box.south) * KM_PER_DEG_LAT;
+    }
+
+    function metresPerCell(precision) {
+        // geohash-7 is about 152 m x 152 m; each step up/down is a factor of 32 in area.
+        var base = 153;
+        return base * Math.pow(8, 7 - (precision || 7));
+    }
+
+    /** Split until every side is at most maxSideKm. Used to respect the server's bbox limit. */
+    function splitToMaxSide(box, maxSideKm) {
         var tiles = [box];
-        maxTiles = Math.max(1, maxTiles || 1);
-        while (tiles.length < maxTiles) {
-            // Always split the tile with the largest area, along its longer side.
-            var worst = 0;
-            for (var i = 1; i < tiles.length; i++) if (area(tiles[i]) > area(tiles[worst])) worst = i;
+        // Same tolerance the server applies, so a 120.0000001 km side is not split.
+        var limit = maxSideKm + 0.5;
+        for (var guard = 0; guard < 4096; guard++) {
+            var worst = -1, worstSide = 0;
+            for (var i = 0; i < tiles.length; i++) {
+                var side = Math.max(boxHeightKm(tiles[i]), boxWidthKm(tiles[i]));
+                if (side > limit && side > worstSide) { worst = i; worstSide = side; }
+            }
+            if (worst < 0) break;
             var t = tiles[worst];
-            var tall = (t.north - t.south) >= (t.east - t.west);
-            var next = tiles.slice(0, worst).concat(tiles.slice(worst + 1));
-            if (tall) {
+            var rest = tiles.slice(0, worst).concat(tiles.slice(worst + 1));
+            if (boxHeightKm(t) >= boxWidthKm(t)) {
                 var midLat = (t.north + t.south) / 2;
                 if (midLat === t.north || midLat === t.south) break;
-                next.push({ south: t.south, north: midLat, west: t.west, east: t.east },
-                          { south: midLat, north: t.north, west: t.west, east: t.east });
+                rest.push({ south: t.south, north: midLat, west: t.west, east: t.east }, { south: midLat, north: t.north, west: t.west, east: t.east });
             } else {
                 var midLon = (t.east + t.west) / 2;
                 if (midLon === t.east || midLon === t.west) break;
-                next.push({ south: t.south, north: t.north, west: t.west, east: midLon },
-                          { south: t.south, north: t.north, west: midLon, east: t.east });
+                rest.push({ south: t.south, north: t.north, west: t.west, east: midLon }, { south: t.south, north: t.north, west: midLon, east: t.east });
             }
-            tiles = next;
+            tiles = rest;
         }
         return tiles;
     }
 
-    function encloses(box, lat, lon) {
+    /** The four quadrants of a box, in a fixed order: SW, SE, NW, NE. */
+    function quadrants(box) {
+        var midLat = (box.north + box.south) / 2;
+        var midLon = (box.east + box.west) / 2;
+        return [
+            { south: box.south, north: midLat, west: box.west, east: midLon },
+            { south: box.south, north: midLat, west: midLon, east: box.east },
+            { south: midLat, north: box.north, west: box.west, east: midLon },
+            { south: midLat, north: box.north, west: midLon, east: box.east }
+        ];
+    }
+
+    function insideBox(box, lat, lon) {
         return lat >= box.south && lat <= box.north && lon >= box.west && lon <= box.east;
     }
 
@@ -95,27 +138,35 @@
         return { south: latMin, north: latMax, west: lonMin, east: lonMax };
     }
 
-    /** Cell keys whose squares cover the box. Returns null when the cover would exceed `maxCells`. */
-    function geohashCells(box, precision, maxCells) {
-        precision = precision || 5;
-        maxCells = maxCells || 64;
-        var latStep = 1, lonStep = 1;
-        var b = decodeGeohash(encodeGeohash((box.south + box.north) / 2, (box.west + box.east) / 2, precision));
-        latStep = b.north - b.south;
-        lonStep = b.east - b.west;
-        var rows = Math.ceil((box.north - box.south) / latStep) + 1;
-        var cols = Math.ceil((box.east - box.west) / lonStep) + 1;
-        if (rows * cols > maxCells) return { cells: null, needed: rows * cols, precision: precision };
-        var cells = {};
-        for (var i = 0; i < rows; i++) {
-            var lat = Math.min(box.north - 1e-9, box.south + i * latStep + latStep / 2);
-            for (var j = 0; j < cols; j++) {
-                var lon = Math.min(box.east - 1e-9, box.west + j * lonStep + lonStep / 2);
-                cells[encodeGeohash(lat, lon, precision)] = true;
-            }
-        }
-        return { cells: Object.keys(cells), needed: rows * cols, precision: precision };
+    /** Centre point of a cell key; null when the key is not a geohash. */
+    function cellCentre(key) {
+        if (typeof key !== 'string' || !key.length) return null;
+        for (var i = 0; i < key.length; i++) if (BASE32.indexOf(key[i]) < 0) return null;
+        var box = decodeGeohash(key);
+        return { lat: (box.north + box.south) / 2, lon: (box.east + box.west) / 2, box: box };
     }
 
-    return { boxAround: boxAround, splitBox: splitBox, encloses: encloses, encodeGeohash: encodeGeohash, decodeGeohash: decodeGeohash, geohashCells: geohashCells };
+    function distanceM(a, b) {
+        var d = Math.PI / 180;
+        var p = (b.lat - a.lat) * d, q = (b.lon - a.lon) * d;
+        return 12742000 * Math.asin(Math.min(1, Math.sqrt(Math.sin(p / 2) * Math.sin(p / 2) + Math.cos(a.lat * d) * Math.cos(b.lat * d) * Math.sin(q / 2) * Math.sin(q / 2))));
+    }
+
+    /** Ray casting on a lon/lat polygon (ring of [lon, lat] pairs). */
+    function insidePolygon(lat, lon, ring) {
+        var inside = false;
+        for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+            var a = ring[i], b = ring[j];
+            if (((a[1] > lat) !== (b[1] > lat)) && lon < (b[0] - a[0]) * (lat - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+        }
+        return inside;
+    }
+
+    return {
+        boxAround: boxAround, bboxString: bboxString, parseBbox: parseBbox,
+        boxWidthKm: boxWidthKm, boxHeightKm: boxHeightKm, metresPerCell: metresPerCell,
+        splitToMaxSide: splitToMaxSide, quadrants: quadrants, insideBox: insideBox,
+        encodeGeohash: encodeGeohash, decodeGeohash: decodeGeohash, cellCentre: cellCentre,
+        distanceM: distanceM, insidePolygon: insidePolygon
+    };
 });

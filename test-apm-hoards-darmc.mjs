@@ -108,7 +108,9 @@ for (const id of LAYERS) {
 ok('every sample feature becomes a contract-valid row', rows.length === 31, `${rows.length} rows`);
 ok('ids are deterministic uuids', rows[0].id === stableId(rows[0]) && /^[0-9a-f-]{36}$/.test(rows[0].id));
 ok('two capture records with the same attributes still get different ids', rows[0].id !== rows[1].id);
-ok('a layer with no position field yields unknown rows', rows.filter(r => r.source_layer === 12).every(r => r.position_class === 'unknown'));
+ok('a layer with no position field is approximate by an explicit layer default', rows.filter(r => r.source_layer === 12).every(r => r.position_class === 'approximate'));
+ok('that default is the same under the strict policy', derived.layers[12].evidence.strictMapping['{}'] === 'approximate');
+ok('the strict reading of layer 8 leaves its blank-quality rows unknown', Object.values(derived.layers[8].evidence.strictMapping).filter(v => v === 'unknown').length === 2);
 ok('no row carries a discovery year as a deposit date', rows.every(r => !(r.date_basis === 'deposit' && [1972, 1955, 1990, 1863].includes(r.deposit_start_year))));
 
 {
@@ -123,6 +125,20 @@ ok('no row carries a discovery year as a deposit date', rows.every(r => !(r.date
     ok('an out-of-range point is rejected', toRow(broken, 15, { ...derived.layers[15].mapping, reviewed: true }).dropped === 'invalid-point-geometry');
 }
 ok('an unreviewed mapping produces no rows', toRow(dump.layers[8].features[0], 8, derived.layers[8].mapping).dropped === 'unreviewed-layer-schema');
+
+// TPQ fallback: only when the deposit fields are empty, and always labelled.
+{
+    const m15 = { ...derived.layers[15].mapping, reviewed: true };
+    ok('layer 15 declares its TPQ fallback field', m15.tpqFallbackField === 'D_TPQ', String(m15.tpqFallbackField));
+    const empty = structuredClone(dump.layers[15].features[0]);
+    empty.attributes.HOB_PD_ST = null; empty.attributes.HOB_PD_EN = null; empty.attributes.D_TPQ = 500;
+    const fallback = toRow(empty, 15, m15).row;
+    ok('empty deposit dates fall back to the TPQ', fallback.deposit_start_year === 500 && fallback.deposit_end_year === null);
+    ok('the fallback is labelled tpq, not deposit', fallback.date_basis === 'tpq');
+    ok('a TPQ alone claims no period group', fallback.period_groups.length === 0 && fallback.period_group === 'unknown');
+    const withDates = toRow(structuredClone(dump.layers[15].features[0]), 15, m15).row;
+    ok('the fallback never overrides real deposit dates', withDates.date_basis === 'deposit' && withDates.deposit_start_year === 500 && withDates.deposit_end_year === 600);
+}
 
 // ── 4. duplicates ────────────────────────────────────────────────────────────
 const evidence = analyseDuplicateEvidence(rows);
@@ -173,8 +189,9 @@ ok('the cross-layer pair 15/2 ↔ 16/2 is marked once', pairs.filter(p => [p.id,
     ok('CLI counts every feature', summary.counts.fetched === 31 && summary.counts.kept === 31);
     ok('CLI reports the unreviewed mapping status', /PROPOSED/.test(summary.mappingStatus));
 
-    const strict = JSON.parse(execFileSync(process.execPath, ['tools/darmc-hoards/import.mjs', '--dump', SAMPLE, '--position', 'strict'], { encoding: 'utf8' }));
-    ok('the strict policy reclassifies the unsupported rows', strict.counts.positionClasses.unknown > summary.counts.positionClasses.unknown);
+    ok('the default position policy is strict', summary.positionPolicy === 'strict');
+    const proposed = JSON.parse(execFileSync(process.execPath, ['tools/darmc-hoards/import.mjs', '--dump', SAMPLE, '--position', 'proposed'], { encoding: 'utf8' }));
+    ok('--position proposed reclassifies the unsupported rows back to exact', (proposed.counts.positionClasses.unknown || 0) < (summary.counts.positionClasses.unknown || 0));
 
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'darmc-'));
     const report = path.join(tmp, 'review.md');
