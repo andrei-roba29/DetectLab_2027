@@ -26,6 +26,7 @@ const SANCTIONED = [
     path.join('test', 'fixtures', 'ariadne'),
     path.join('backend', 'migrations', 'manual') + path.sep + '019_apm_ariadne_gateway.sql',
     'ARIADNE_PROVIDER.md',
+    'DARMC_IMPORT_RUN_2026-11-09.md',   // records that 019 was NOT applied
     'test-apm-ariadne.mjs',
     'test-live-check-tools.mjs',
     'test-apm-source-guard.js',        // this file names the paths it allows

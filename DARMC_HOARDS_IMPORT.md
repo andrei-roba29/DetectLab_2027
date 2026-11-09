@@ -119,6 +119,10 @@ distances, clamped to 250–5000 m — on the real file expect several kilometre
 
 ## The real capture (2026-11-09)
 
+> **Imported into production on 2026-11-09** with the operator's explicit
+> authorisation. Counts, verification and cleanup: `DARMC_IMPORT_RUN_2026-11-09.md`.
+
+
 `data/hoards/darmc_hoards_layers.json`, 5.5 MB, fetched from the FeatureServer at
 `2026-11-09T08:45Z`, content fingerprint `04988b33...c4fe82`. Every layer matches its
 published count:
