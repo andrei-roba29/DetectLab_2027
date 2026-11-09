@@ -123,6 +123,7 @@
                     stats.dare = { ok: false, records: 0, error: 'not configured' };
                 }
 
+                var periodsSeen = {};
                 if (ariadne) {
                     var collected = [];
                     var tileErrors = [];
@@ -134,6 +135,9 @@
                             var hits = await ariadne.getSites(tile.centre, tile.radiusKm, { appMode: 'settlement', signal: opts.signal });
                             stats.ariadne.requests += (hits._meta && hits._meta.requests) || 0;
                             stats.ariadne.mode = (hits._meta && hits._meta.mode) || stats.ariadne.mode;
+                            ((hits._meta && hits._meta.periods) || []).forEach(function (p) {
+                                periodsSeen[p.label] = (periodsSeen[p.label] || 0) + p.count;
+                            });
                             (hits || []).forEach(function (record) {
                                 var mappedRecord = ariadneRecord(record);
                                 if (mappedRecord) collected.push(mappedRecord);
@@ -151,6 +155,10 @@
                     stats.ariadne.repeated = uniqueAriadne.dropped;
                     stats.ariadne.tiles = tileList.length;
                     if (tileErrors.length) stats.ariadne.error = tileErrors[0];
+                    // The portal's own period vocabulary for this area, largest first.
+                    stats.ariadne.periods = Object.keys(periodsSeen).map(function (label) {
+                        return { label: label, count: periodsSeen[label] };
+                    }).sort(function (a, b) { return b.count - a.count; });
                     groups.push({ source: 'ariadne', records: uniqueAriadne.records });
                 } else {
                     stats.ariadne = { ok: false, records: 0, requests: 0, error: 'not configured', mode: null };

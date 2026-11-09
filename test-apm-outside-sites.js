@@ -94,7 +94,7 @@ function mockAriadne(records, options = {}) {
         getSites: async () => {
             if (options.throw) throw new Error('portal unreachable (CORS)');
             const list = (options.perTile ? options.perTile : records).slice();
-            list._meta = { requests: 1, mode: 'browser' };
+            list._meta = { requests: 1, mode: 'browser', periods: options.periods || [] };
             return list;
         }
     };
@@ -112,7 +112,8 @@ function mockAriadne(records, options = {}) {
         { id: 'ariadne:c', ariadneId: 'c', name: 'Vindobona', lat: 48.2086, lon: 16.3741, positionKind: 'cell', type: 'Site/monument' }
     ];
 
-    const provider = outside.createProvider({ dare: mockDare(dareRecords), ariadne: mockAriadne(ariadneRecords) });
+    const periodMeta = [{ label: 'roman', count: 2 }, { label: 'medieval', count: 1 }];
+    const provider = outside.createProvider({ dare: mockDare(dareRecords), ariadne: mockAriadne(ariadneRecords, { periods: periodMeta }) });
     const merged = await provider.getSites(VIENNA, 50);
 
     ok('a place in both catalogues is returned once', merged.length === 4, `${merged.length} records`);
@@ -122,6 +123,9 @@ function mockAriadne(records, options = {}) {
     ok('the meta says one place was merged', merged._meta.merged === 1);
     ok('the meta reports each source separately', merged._meta.sources.dare.records === 3 && merged._meta.sources.ariadne.records === 2);
     ok('and marks the answer complete', merged._meta.incomplete === false);
+    ok('the portal\'s own period vocabulary travels with the answer, largest first',
+        Array.isArray(merged._meta.sources.ariadne.periods) && merged._meta.sources.ariadne.periods[0].label === 'roman',
+        JSON.stringify(merged._meta.sources.ariadne.periods));
     const filtered = sites.filterSites(merged, { center: VIENNA, radiusKm: 50, period: null, dedupeM: -1 });
     ok('the TRAIN filter keeps the sites inside the radius', filtered.sites.length === 2, `${filtered.sites.length} kept`);
     ok('and drops nothing for type or position quality', filtered.dropped.type === 0 && filtered.dropped.accuracy === 0, JSON.stringify(filtered.dropped));

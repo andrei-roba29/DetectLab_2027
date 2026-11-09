@@ -280,6 +280,85 @@ const withFilters = { ...config, filters: { siteType: 'subject=Site/monument', p
     ok('a 10 km search needs one split and fits the budget', small.requests === 4 && small.depth === 1 && small.withinBudget === true, JSON.stringify(small));
 }
 
+// ── 5c. the period facet and the period sweep (the probe's filtering) ──────
+{
+    // Shaped after the probe another implementation validated: the response carries
+    // aggregations.temporal.temporal.buckets whatever the filters are.
+    function withFacet(buckets, cells, total) {
+        const gc = cells.map(function (c) {
+            const lat = VIENNA.lat + c[0] / 111.32;
+            const lon = VIENNA.lon + c[1] / (111.32 * Math.cos(VIENNA.lat * Math.PI / 180));
+            return { key: tiles.encodeGeohash(lat, lon, 7), doc_count: c[2] };
+        });
+        return {
+            hits: [],
+            total: { value: total, relation: 'eq' },
+            aggregations: {
+                geogridCentroid: { grids: { doc_count: cells.reduce((n, c) => n + c[2], 0), buckets: gc } },
+                temporal: { temporal: { buckets: buckets } }
+            }
+        };
+    }
+    const baseline = withFacet([{ key: 'roman', doc_count: 60 }, { key: 'medieval', doc_count: 40 }],
+        [[0, 0, 30], [0.3, 0, 20], [0, 0.3, 10], [3, 0, 20], [0, 3, 20]], 100);
+    const roman = withFacet([{ key: 'roman', doc_count: 60 }], [[0, 0, 30], [0.3, 0, 20], [0, 0.3, 10]], 60);
+    const medieval = withFacet([{ key: 'medieval', doc_count: 40 }], [[3, 0, 20], [0, 3, 20]], 40);
+
+    const periodConfig = {
+        ...config, minSpacingMs: 0,
+        filters: { siteType: 'subject=Site/monument', period: '&when={P}' }
+    };
+    const facetProvider = provider.createProvider({
+        config: periodConfig,
+        transport: { mode: 'browser', call: async params => {
+            const body = !params.when ? baseline : params.when === 'roman' ? roman : medieval;
+            return { status: 200, ok: true, json: body, bytes: 400, ms: 5, via: 'browser' };
+        } }
+    });
+
+    const facet = await facetProvider.getPeriods(VIENNA, 20, { appMode: 'settlement' });
+    ok('the period facet is read from aggregations.temporal.temporal.buckets', facet.labels.length === 2, JSON.stringify(facet.labels));
+    ok('and is ordered largest first', facet.labels[0].label === 'roman' && facet.labels[0].count === 60);
+    ok('a configured site filter alone is enough for the positive role',
+        facetProvider.roleFor('settlement', VIENNA).role === 'positive' && facetProvider.roleFor('settlement', VIENNA).reason === undefined);
+    ok('the period template is recognised', facetProvider.roleFor('settlement', VIENNA).role === 'positive');
+
+    const sweep = await facetProvider.sweepPeriods(VIENNA, 20, ['roman', 'medieval'], { appMode: 'settlement' });
+    ok('the sweep asks once for the baseline and once per label', sweep.requests === 3, String(sweep.requests));
+    ok('the baseline is reported', sweep.baseline.total === 100 && sweep.baseline.cells === 5);
+    ok('every label gets its own row', sweep.labels.length === 2 && sweep.labels[0].total === 60 && sweep.labels[1].total === 40);
+    ok('the filter really narrows the result', sweep.labels.every(r => r.effect === 'narrows'));
+    ok('cells are attributed to the periods that returned them',
+        sweep.cells.find(c => c.periods.indexOf('roman') >= 0 && c.periods.length === 1) !== undefined);
+    ok('a filter that changes nothing is detected as ignored', sweep.ignored === false);
+    ok('the share of baseline cells is reported', sweep.labels[0].shareOfBaseline === 60, String(sweep.labels[0].shareOfBaseline));
+
+    const ignoredProvider = provider.createProvider({
+        config: periodConfig,
+        transport: { mode: 'browser', call: async () => ({ status: 200, ok: true, json: baseline, bytes: 400, ms: 5, via: 'browser' }) }
+    });
+    const ignoredSweep = await ignoredProvider.sweepPeriods(VIENNA, 20, ['roman', 'medieval'], { appMode: 'settlement' });
+    ok('a parameter the endpoint ignores is reported instead of trusted', ignoredSweep.ignored === true);
+
+    const noTemplate = provider.createProvider({ config: { ...periodConfig, filters: { siteType: 'subject=Site/monument', period: '' } }, transport: { mode: 'browser', call: async () => ({ status: 200, ok: true, json: baseline, bytes: 1, ms: 1 }) } });
+    const refused = await noTemplate.sweepPeriods(VIENNA, 20, ['roman'], { appMode: 'settlement' });
+    ok('without a period template the sweep refuses rather than guessing', refused.reason === 'period-template-missing' && refused.requests === 0);
+
+    const many = Array.from({ length: 30 }, (_, i) => 'p' + i);
+    const limited = provider.createProvider({
+        config: { ...periodConfig, periodSweep: { maxLabels: 4 } },
+        transport: { mode: 'browser', call: async () => ({ status: 200, ok: true, json: roman, bytes: 1, ms: 1 }) }
+    });
+    const cappedSweep = await limited.sweepPeriods(VIENNA, 20, many, { appMode: 'settlement' });
+    ok('the sweep is bounded by maxLabels', cappedSweep.requests === 5 && cappedSweep.labels.length === 4, String(cappedSweep.requests));
+
+    // The URL must not double-encode a label with a space or a slash.
+    const built = query.buildParams(periodConfig, { box: tiles.boxAround(VIENNA, 10), period: 'epoca bronzului' });
+    const url = query.buildUrl(periodConfig.baseUrl, periodConfig.searchPath, built);
+    ok('the period label is encoded exactly once', url.includes('when=epoca%20bronzului') && !url.includes('%2520'), url);
+    ok('a slash in the site fragment is encoded exactly once', url.includes('subject=Site%2Fmonument') && !url.includes('%252F'), url);
+}
+
 // ── 6. the edge function and its shared rules ──────────────────────────────
 {
     const src = fs.readFileSync(path.join(here, 'supabase/functions/ariadne/index.ts'), 'utf8');

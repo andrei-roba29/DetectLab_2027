@@ -77,11 +77,20 @@ export function buildParams({ baseParams, client, filters, filterOrder = ["siteT
   for (const name of filterOrder) {
     const fragment = String((filters && filters[name]) || "").trim().replace(/^[?&]+/, "");
     if (!fragment) continue;
+    // A captured fragment may be raw or already escaped; decode once, escape once.
     const eq = fragment.indexOf("=");
-    if (eq > 0) out[fragment.slice(0, eq)] = fragment.slice(eq + 1);
-    else out[fragment] = "";
+    if (eq > 0) out[decodeValue(fragment.slice(0, eq))] = decodeValue(fragment.slice(eq + 1));
+    else out[decodeValue(fragment)] = "";
   }
   return out;
+}
+
+export function decodeValue(value) {
+  try {
+    return decodeURIComponent(String(value));
+  } catch {
+    return String(value);
+  }
 }
 
 export function toQueryString(params) {

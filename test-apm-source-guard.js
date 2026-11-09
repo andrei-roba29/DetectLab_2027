@@ -35,6 +35,7 @@ const SANCTIONED = [
     path.join('test', 'fixtures', 'ariadne'),
     path.join('backend', 'migrations', 'manual') + path.sep + '019_apm_ariadne_gateway.sql',
     'ARIADNE_PROVIDER.md',
+    'OUTSIDE_ROMANIA_SOURCES.md',      // documents the DARE + provider merge outside Romania
     'DARMC_IMPORT_RUN_2026-11-09.md',   // records that 019 was NOT applied
     'test-apm-ariadne.mjs',
     'test-live-check-tools.mjs',

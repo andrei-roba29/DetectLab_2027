@@ -3,6 +3,11 @@
 Date: 2026-11-09. Requested: *"vreau si DARE si ARIADNE doar sa nu se suprapuna acelasi loc"* —
 both catalogues, one point per place.
 
+Each answer also carries the portal's own period vocabulary for the area
+(`_meta.sources.ariadne.periods`, largest first) taken from the temporal facet
+of the same response. It is a label list, not a filter: filtering by period
+needs an operator-captured `{P}` template — see `ARIADNE_PROVIDER.md`.
+
 ## What the two sources are
 
 | | DARE | ARIADNE |

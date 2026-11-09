@@ -73,6 +73,45 @@ the client is the only honest option until the portal offers a coarser grid. The
 provider reports `incomplete: true` rather than pretending a capped answer is
 complete.
 
+## Periods come from the portal's facet, not from a guessed fragment
+
+The portal's own `/api/search` response carries the period vocabulary of the
+result set in `aggregations.temporal.temporal.buckets`, and it carries it
+whether or not any filter is applied. That is the only period vocabulary this
+code will ever use — no period label is invented, translated or normalised
+here, and `config.filters.period` ships empty.
+
+Two things are therefore separate:
+
+- **Labelling (`getPeriods`)** — one baseline request, read the buckets, return
+  `{ label, count }[]` sorted largest first. This works today with no fragment
+  at all, and `search()` repeats the list in `_meta.periods` so a caller can see
+  which periods the area actually has. The outside-Romania merge aggregates it
+  per tile into `_meta.sources.ariadne.periods`.
+- **Filtering (`sweepPeriods`)** — only possible once an operator captures the
+  portal's real period parameter and writes it as a **template** with `{P}`
+  where the label goes, e.g. `filters.period = '&when={P}'`. The sweep then asks
+  once for the baseline and once per label (bounded by
+  `config.periodSweep.maxLabels`, default 8, at the usual 1500 ms spacing) and
+  reports per label: `total`, `cells`, `records`, `shareOfBaseline`, and an
+  `effect` of `narrows`, `none`, `different` or `unknown`.
+
+If no template is configured the sweep refuses with
+`reason: 'period-template-missing'` and makes no request — it never falls back
+to sending a literal `{P}`, which would silently return everything.
+
+**Encoding.** The label is inserted into the template *raw*; `toQueryString`
+encodes the whole query once. Doing both produced `when=epoca%2520bronzului`,
+which the portal reads as the literal text `%20`. Equally, a captured fragment
+may arrive already escaped (`subject=Site%2Fmonument`); fragments are decoded
+once before they become parameters, so the slash is not escaped twice.
+
+**A filter that changes nothing.** If a sweep label returns exactly the
+baseline total for every label, the parameter is being ignored by the endpoint:
+the result sets `ignored: true` rather than presenting a full result set as a
+successful period filter. This is the same lesson as the subject-only mode —
+never let an unfiltered search wear the label of a filtered one.
+
 ## Transport switch (unchanged in spirit)
 
 ```

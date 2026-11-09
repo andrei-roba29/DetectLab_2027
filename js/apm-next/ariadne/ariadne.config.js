@@ -39,10 +39,17 @@
         },
         // Raw query fragments, appended in this order after the base parameters.
         // Empty = not captured yet = settlement mode stays blocked.
+        // The site fragment is what makes a hit a settlement, and it is the one the
+        // positive role requires. The period fragment is a TEMPLATE: it carries {P}
+        // where the portal's own period label goes, e.g. '&when={P}'. The label is
+        // URL-encoded once, never twice, and a template without a label is skipped
+        // (a baseline request asks for every period).
         filters: {
-            siteType: '',                    // e.g. '<fragment captured in the portal>'
-            period: ''                       // e.g. '<fragment captured in the portal>'
+            siteType: '',                    // e.g. '&<param>=<value>' captured in the portal
+            period: ''                       // e.g. '&<param>={P}'
         },
+        // One request per label, so the sweep is bounded by the label count.
+        periodSweep: { maxLabels: 8 },
 
         // ── geometry ─────────────────────────────────────────────────────────
         maxSideKm: 120,                      // server-side bbox limit (about 120 km per side)
