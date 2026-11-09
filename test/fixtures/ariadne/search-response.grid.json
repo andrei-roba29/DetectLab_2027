@@ -1,0 +1,27 @@
+{
+  "notice": "SYNTHETIC large-box response in the verified shape: hits is empty and the data is the geohash-7 cell grid. Keys are real geohash-7 cells around Cluj-Napoca. Counts are invented. The 5000-cell cap case is generated in the test, not stored here.",
+  "total": { "value": 0, "relation": "eq" },
+  "hits": [],
+  "aggregations": {
+    "geogridCentroid": {
+      "doc_count": 19,
+      "grids": {
+        "buckets": [
+          { "key": "u82f0f1", "doc_count": 3 },
+          { "key": "u82f0f6", "doc_count": 2 },
+          { "key": "u82f0cb", "doc_count": 2 },
+          { "key": "u82f4pt", "doc_count": 1 },
+          { "key": "u82cj8t", "doc_count": 4 },
+          { "key": "u83hs2m", "doc_count": 7 }
+        ]
+      }
+    },
+    "ariadneSubject": {
+      "buckets": [
+        { "key": "Site/monument", "doc_count": 12 },
+        { "key": "Fieldwork archive", "doc_count": 7 }
+      ]
+    },
+    "temporal": { "doc_count": 19, "temporal": { "buckets": [{ "key": "roman", "doc_count": 9 }, { "key": "medieval", "doc_count": 10 }] } }
+  }
+}

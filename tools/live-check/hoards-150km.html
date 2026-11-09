@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DARMC hoards — 150 km live check</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 24px; background: #14161a; color: #e6e8eb; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.lead { color: #9aa4af; margin: 0 0 20px; max-width: 70ch; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  label { display: block; font-size: 12px; color: #9aa4af; margin-bottom: 4px; }
+  input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #2c3138; background: #1b1f25; color: inherit; }
+  button { padding: 10px 16px; border-radius: 8px; border: 0; background: #4f8cff; color: #fff; font-weight: 600; cursor: pointer; }
+  button.secondary { background: #2c3138; }
+  button:disabled { opacity: .5; cursor: progress; }
+  textarea { width: 100%; min-height: 340px; margin-top: 16px; padding: 12px; border-radius: 8px; border: 1px solid #2c3138; background: #0f1115; color: #d7dbe0; font: 12px/1.5 ui-monospace, monospace; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; font-size: 13px; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid #23272e; }
+  th { color: #9aa4af; font-weight: 500; }
+  .warn { color: #ffb454; }
+  .ok { color: #63d68a; }
+  .bad { color: #ff6b6b; }
+  #log { font: 12px/1.5 ui-monospace, monospace; color: #9aa4af; white-space: pre-wrap; margin-top: 12px; }
+</style>
+</head>
+<body>
+<h1>DARMC hoards — 150 km live check</h1>
+<p class="lead">
+  Runs the measurements that cannot be made offline: per-layer record counts over the 150 km envelope,
+  real response sizes, per-request timings, and the <code>exceededTransferLimit</code> flag.
+  Calculated quantities (DEM/UAT tile counts) are labelled as calculated, never measured.
+  Nothing is written anywhere; the report is text you can copy back.
+</p>
+
+<div class="grid">
+  <div><label>Centre latitude</label><input id="lat" value="46.77"></div>
+  <div><label>Centre longitude</label><input id="lon" value="23.59"></div>
+  <div><label>Radius (km)</label><input id="radius" value="150"></div>
+  <div><label>Record cap per layer</label><input id="cap" value="6000"></div>
+</div>
+<div class="grid">
+  <button id="run">Run live check</button>
+  <button id="copy" class="secondary">Copy report</button>
+</div>
+
+<div id="tables"></div>
+<div id="log"></div>
+<textarea id="out" readonly placeholder="Report appears here."></textarea>
+
+<script>
+(function () {
+  'use strict';
+  var BASE = 'https://services1.arcgis.com/qN3V93cYGMKQCOxL/arcgis/rest/services/DARMC_Archaeological_Studies/FeatureServer';
+  var LAYERS = [8, 9, 10, 11, 12, 15, 16];
+  var logEl = document.getElementById('log');
+  var outEl = document.getElementById('out');
+  var tablesEl = document.getElementById('tables');
+
+  function log(msg) { logEl.textContent += msg + '\n'; }
+  function num(id) { return Number(document.getElementById(id).value); }
+
+  function envelope(lat, lon, km) {
+    var dLat = km / 111.32;
+    var dLon = km / (111.32 * Math.max(Math.abs(Math.cos(lat * Math.PI / 180)), 0.05));
+    return { west: lon - dLon, south: lat - dLat, east: lon + dLon, north: lat + dLat };
+  }
+
+  function timed(url) {
+    var t0 = performance.now();
+    return fetch(url, { cache: 'no-store' }).then(function (res) {
+      return res.text().then(function (text) {
+        return { status: res.status, ok: res.ok, ms: Math.round(performance.now() - t0), bytes: new Blob([text]).size, text: text };
+      });
+    });
+  }
+
+  function countUrl(layer) {
+    var p = new URLSearchParams({ f: 'json', where: '1=1', returnCountOnly: 'true' });
+    return BASE + '/' + layer + '/query?' + p.toString();
+  }
+
+  function featureUrl(layer, box, cap) {
+    var p = new URLSearchParams({
+      f: 'geojson', where: '1=1', outFields: '*', outSR: '4326',
+      geometry: [box.west, box.south, box.east, box.north].join(','),
+      geometryType: 'esriGeometryEnvelope', inSR: '4326', spatialRel: 'esriSpatialRelIntersects',
+      resultRecordCount: String(cap)
+    });
+    return BASE + '/' + layer + '/query?' + p.toString();
+  }
+
+  function table(head, rows) {
+    if (!rows.length) return '<p class="warn">no rows</p>';
+    return '<table><thead><tr>' + head.map(function (h) { return '<th>' + h + '</th>'; }).join('') +
+      '</tr></thead><tbody>' + rows.map(function (r) {
+        return '<tr>' + r.map(function (c) { return '<td>' + c + '</td>'; }).join('') + '</tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  function run() {
+    var lat = num('lat'), lon = num('lon'), radius = num('radius'), cap = num('cap');
+    if (![lat, lon, radius, cap].every(Number.isFinite) || Math.abs(lat) > 90 || Math.abs(lon) > 180 || radius <= 0) {
+      alert('Check the inputs.');
+      return;
+    }
+    var button = document.getElementById('run');
+    button.disabled = true;
+    logEl.textContent = '';
+    tablesEl.innerHTML = '';
+    var box = envelope(lat, lon, radius);
+    var report = {
+      tool: 'hoards-150km', generatedAt: new Date().toISOString(),
+      centre: { lat: lat, lon: lon }, radiusKm: radius, envelope: box,
+      layers: {}, calculated: {}, notes: [
+        'Measured here: HTTP status, bytes, ms, record counts, exceededTransferLimit.',
+        'Calculated, not measured: tile counts.',
+        'Counts are of the layer as published at request time; a count is not a training-set size.'
+      ]
+    };
+    log('envelope ' + JSON.stringify(box));
+    var chain = Promise.resolve();
+    LAYERS.forEach(function (layer) {
+      chain = chain.then(function () {
+        return timed(countUrl(layer)).then(function (c) {
+          var entry = { countStatus: c.status, countMs: c.ms, countBytes: c.bytes, serviceCount: null };
+          try { entry.serviceCount = JSON.parse(c.text).count; } catch (e) { entry.countError = c.text.slice(0, 200); }
+          return timed(featureUrl(layer, box, cap)).then(function (f) {
+            entry.queryStatus = f.status;
+            entry.queryMs = f.ms;
+            entry.bytes = f.bytes;
+            entry.truncated = /exceededTransferLimit|"exceededTransferLimit":true/.test(f.text);
+            entry.features = (f.text.match(/"type"\s*:\s*"Feature"/g) || []).length || null;
+            var head = f.text.slice(0, 160);
+            if (!f.ok || /^\s*<|error/i.test(head)) entry.errorHead = head;
+            report.layers[layer] = entry;
+            log('layer ' + layer + ': ' + (entry.serviceCount == null ? '?' : entry.serviceCount) + ' records, ' + entry.bytes + ' bytes, ' + entry.queryMs + ' ms' + (entry.truncated ? ' (TRUNCATED)' : ''));
+          });
+        }).catch(function (e) {
+          report.layers[layer] = { error: String(e && e.message || e) };
+          log('layer ' + layer + ': FAILED — ' + (e && e.message));
+        });
+      });
+    });
+
+    chain.then(function () {
+      // Calculated workload for the same box: the numbers that need a real measurement.
+      var widthKm = (box.east - box.west) * 111.32 * Math.cos(lat * Math.PI / 180);
+      var heightKm = (box.north - box.south) * 111.32;
+      report.calculated = {
+        boxWidthKm: Math.round(widthKm),
+        boxHeightKm: Math.round(heightKm),
+        demTiles25m_1000px: Math.ceil(widthKm / 25) * Math.ceil(heightKm / 25),
+        demCells25m: Math.round((widthKm * 1000 / 25) * (heightKm * 1000 / 25)),
+        atProposed150m: Math.round(widthKm * 1000 / 150) + ' x ' + Math.round(heightKm * 1000 / 150),
+        note: 'Tile arithmetic only. The real tile count depends on the provider pyramid and on cache state.'
+      };
+      var rows = LAYERS.map(function (id) {
+        var e = report.layers[id] || {};
+        return [id, e.serviceCount == null ? '—' : e.serviceCount, e.features == null ? '—' : e.features,
+          e.bytes == null ? '—' : e.bytes, e.queryMs == null ? '—' : e.queryMs + ' ms',
+          e.error ? '<span class="bad">' + e.error + '</span>' : e.truncated ? '<span class="warn">truncated</span>' : '<span class="ok">ok</span>'];
+      });
+      tablesEl.innerHTML = table(['Layer', 'Service count', 'Features in box', 'Bytes', 'Query time', 'State'], rows) +
+        table(['Calculated', 'Value'], Object.keys(report.calculated).filter(function (k) { return k !== 'note'; }).map(function (k) {
+          return [k, report.calculated[k]];
+        }));
+      outEl.value = JSON.stringify(report, null, 2);
+      log('done');
+      button.disabled = false;
+    }).catch(function (e) {
+      log('fatal: ' + e.message);
+      button.disabled = false;
+    });
+  }
+
+  document.getElementById('run').addEventListener('click', run);
+  document.getElementById('copy').addEventListener('click', function () {
+    outEl.select();
+    document.execCommand('copy');
+    if (navigator.clipboard) navigator.clipboard.writeText(outEl.value);
+  });
+})();
+</script>
+</body>
+</html>
