@@ -129,8 +129,9 @@ filter fragments still uncaptured, a panel row would offer a role that cannot ru
 
 ## Tested on fixtures
 
-`node test-apm-ariadne.mjs` — 91 checks: parameter names and order; N,W,S,E bbox;
-filters appended last and never invented; request splitting under 120 km; geohash-7
+`node test-apm-ariadne.mjs` — 98 checks: parameter names and order; N,W,S,E bbox;
+filters appended last and never invented; request splitting under 120 km; the
+arithmetic cost estimate; geohash-7
 round-trip and cell centres; hits parsed only with a geopoint and the collection
 envelope rejected; the 5000-cell cap producing exactly four quadrants with dedupe
 and an honest `incomplete` flag; the grid as the large-box record source; the fixed
