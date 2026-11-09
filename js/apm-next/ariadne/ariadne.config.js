@@ -57,7 +57,11 @@
         // settlement mode + centre outside Romania → positive training sites
         // hoard mode      + centre outside Romania → known-site comparison only
         // any mode        + centre inside Romania  → never used
-        roles: { settlement: 'positive', hoard: 'comparison' },
+        // Settlement outside Romania may run with the subject filter only (Site/monument)
+    // while the captured URL fragments are still missing. Off by default; the merged
+    // outside-Romania provider turns it on and says so in its meta.
+    subjectOnlyPositive: false,
+    roles: { settlement: 'positive', hoard: 'comparison' },
         positiveSubjects: ['Site/monument'],   // the only subject that can train the model
 
         // Natural Earth Admin-0 1:110m outline of Romania, lon/lat pairs.

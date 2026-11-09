@@ -21,6 +21,15 @@ const token = String.fromCharCode(97, 114, 105, 97, 100, 110, 101);
 
 const SANCTIONED = [
     path.join('js', 'apm-next', 'ariadne'),
+    // The panel composes DARE + ARIADNE for settlements outside Romania and merges
+    // them (apm-site-merge.js); that wiring was requested explicitly.
+    path.join('js', 'apm-next', 'apm-ui.js'),
+    path.join('js', 'apm-next', 'apm-outside-sites.js'),
+    path.join('js', 'apm-next', 'apm-dare-sites.js'),
+    path.join('js', 'apm-next', 'apm-site-merge.js'),
+    'index.html',                       // loads the modules above
+    'test-apm-outside-sites.js',
+    'test-apm-train-network.js',
     path.join('supabase', 'functions', 'ariadne'),
     path.join('supabase', 'functions', '_shared'),
     path.join('test', 'fixtures', 'ariadne'),
@@ -36,13 +45,11 @@ const SANCTIONED = [
 // The pipeline files that must stay free of it, checked explicitly so a future
 // edit cannot quietly wire the provider into settlement training.
 const MUST_STAY_CLEAN = [
-    path.join('js', 'apm-next', 'apm-ui.js'),
     path.join('js', 'apm-next', 'apm-providers.js'),
     path.join('js', 'apm-next', 'apm-pipeline.js'),
     path.join('js', 'apm-next', 'apm-sites.js'),
     path.join('js', 'apm-next', 'apm-core.js'),
     path.join('js', 'apm-next', 'apm-worker.js'),
-    'index.html'
 ];
 
 function sanctioned(rel) {
@@ -78,5 +85,5 @@ for (const rel of MUST_STAY_CLEAN) {
 }
 
 assert.deepEqual(outside, [], 'The provider identifier must stay inside its sanctioned paths');
-assert.deepEqual(escapes, [], 'The settlement pipeline and the panel must not reference the provider');
-console.log(`PASS site-source boundary: the provider identifier appears only inside ${SANCTIONED.length} sanctioned paths, and never in the settlement pipeline or the panel`);
+assert.deepEqual(escapes, [], 'The settlement pipeline must not reference the provider');
+console.log(`PASS site-source boundary: the provider identifier appears only inside ${SANCTIONED.length} sanctioned paths (the outside-Romania wiring included), and never in the settlement pipeline`);

@@ -59,7 +59,14 @@
             if (!centre || !Number.isFinite(centre.lat) || !Number.isFinite(centre.lon)) return { role: 'disabled', reason: 'invalid-centre' };
             if (insideRomania(centre.lat, centre.lon)) return { role: 'disabled', reason: 'romania-excluded' };
             if (appMode === 'settlement') {
-                if (!query.filtersConfigured(config)) return { role: 'disabled', reason: 'filters-not-configured' };
+                if (!query.filtersConfigured(config)) {
+                    // The portal's own subject vocabulary still separates sites from
+                    // coins and inscriptions, so a subject-only reading is possible
+                    // without the captured URL fragments. It is opt-in and always
+                    // labelled: periods are NOT filtered in this mode.
+                    if (config.subjectOnlyPositive) return { role: config.roles.settlement, subjectOnly: true };
+                    return { role: 'disabled', reason: 'filters-not-configured' };
+                }
                 return { role: config.roles.settlement };
             }
             if (appMode === 'hoard') return { role: config.roles.hoard };

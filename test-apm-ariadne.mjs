@@ -317,7 +317,9 @@ const withFilters = { ...config, filters: { siteType: 'subject=Site/monument', p
     const files = ['js/apm-next/ariadne/ariadne-provider.js', 'js/apm-next/ariadne/ariadne-parse.js', 'js/apm-next/ariadne/ariadne-tiles.js', 'js/apm-next/ariadne/ariadne-query.js'];
     const wired = files.filter(f => /config\.transport|functionsUrl|transport\.mode/.test(fs.readFileSync(path.join(here, f), 'utf8')));
     ok('only the provider references the transport, and only to report it', wired.length === 1 && /ariadne-provider/.test(wired[0]), wired.join(','));
-    ok('the panel is untouched by this work', !/ariadne/i.test(fs.readFileSync(path.join(here, 'js/apm-next/apm-ui.js'), 'utf8')));
+    const panel = fs.readFileSync(path.join(here, 'js/apm-next/apm-ui.js'), 'utf8');
+    ok('the panel composes the provider for settlements outside Romania only', /subjectOnlyPositive: true/.test(panel) && /insideRomania\(centre\.lat, centre\.lon\)/.test(panel));
+    ok('and the settlement pipeline itself never mentions it', !/ariadne/i.test(fs.readFileSync(path.join(here, 'js/apm-next/apm-pipeline.js'), 'utf8')));
     ok('the old POST-body probe page is gone', !fs.existsSync(path.join(here, 'tools/live-check/ariadne-probe.html')));
 }
 

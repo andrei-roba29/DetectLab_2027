@@ -124,8 +124,10 @@ test/fixtures/ariadne/search-response.grid.json        synthetic large-box grid
 test-apm-ariadne.mjs                                   98 checks
 ```
 
-The panel (`js/apm-next/apm-ui.js`) is untouched and a test enforces it: with the
-filter fragments still uncaptured, a panel row would offer a role that cannot run.
+The panel now uses the provider outside Romania — composed with DARE and merged so a
+place attested by both appears once. That wiring, and the subject-only compromise it
+uses while the filter fragments are missing, is described in
+`OUTSIDE_ROMANIA_SOURCES.md`.
 
 ## Tested on fixtures
 
