@@ -563,9 +563,12 @@
      */
     function runTrain(session, params) {
         var isHoard = params.category === 'hoards';
-        if (isHoard && !hoards.ready()) return Promise.reject(core.keyedError('hoard.pending', {}, 'Hoard source review and live performance validation are pending.'));
+        if (isHoard && !hoards.trainingAllowed()) return Promise.reject(core.keyedError('hoard.pending', {}, 'Hoard source review and live performance validation are pending.'));
         if (isHoard && !(params.radiusKm >= 1 && params.radiusKm <= 10)) return Promise.reject(new Error('Hoard prediction radius must be 1–10 km'));
         var warnings = [];
+        // An operator override is never silent: it travels with the result.
+        if (isHoard && hoards.overridden()) warnings.push(M('warn.hoardOverride', { reviews: hoards.openReviews().length },
+            'Operator override: this hoard model ran while ' + hoards.openReviews().length + ' of 4 reviews are open. Treat it as provisional.'));
         var progress = params.onProgress || function () {};
         var centre = params.centre;
         var siteMeta = params.records && params.records._meta;

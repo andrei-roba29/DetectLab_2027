@@ -193,3 +193,52 @@ Added tests cover classifier traps/order/multiple periods, date conversion and f
 5. Verify the hosted frontend and signed-token browser entitlement flows. The completed backend migration and role/claim smoke checks do not substitute for those checks.
 
 The work deliberately deploys only a safe empty backend foundation and a non-running hoard mode. It does **not** claim the original full feature, ingestion, live validation or performance acceptance is complete.
+
+## Operator override (added 2026-11-09, at the operator's request)
+
+The hoard mode shipped with a fail-closed switch: `release` in
+`js/apm-next/hoards.config.js` holds four reviews (`sourceReviewed`,
+`licenceApproved`, `chronologyReviewed`, `performancePassed`), and TRAIN refused
+to start until all four were true. Two problems came out of that in practice:
+
+* the period note and the run button still spoke the settlement language
+  ("așezările cu perioada de locuire selectată") although hoards are deposits;
+* "Rulează modelul TRAIN" was disabled with no visible reason anywhere near it —
+  the explanation lived far below, inside the hoard options block.
+
+What changed:
+
+1. **Wording.** In TEZAURE the period note, the picker placeholder, the reload
+   button and the refusals inside `run()` use hoard strings
+   (`hoard.periodApplied`, `hoard.periodHelp`, `hoard.choosePeriod`,
+   `hoard.reload`). No settlement wording reaches the hoard flow.
+2. **The button explains itself.** The release gate no longer sits in the
+   `disabled` condition. The data gates still do (no area, no records, no period,
+   fewer than 10 usable hoards); the release gate answers the click and states
+   which reviews are open, before any terrain request.
+3. **`release.operatorOverride`** (default `false`). When the operator sets it to
+   `true`, hoard TRAIN runs while the four reviews stay open. This is a statement
+   by the operator, **not evidence**:
+   * `ready()` keeps its meaning — it reads the four reviews only, so
+     `tools/sync-hoards.mjs` still refuses data writes, and `openReviews()`
+     still lists exactly what is missing;
+   * the APM panel shows a permanent amber note (`hoard.override`) for as long
+     as the switch is on, and the run button carries the same text;
+   * every result carries `warn.hoardOverride` with the number of open reviews,
+     so an export can never be mistaken for a reviewed model.
+
+Turning it on:
+
+```js
+// js/apm-next/hoards.config.js
+release: { sourceReviewed: false, licenceApproved: false, chronologyReviewed: false, performancePassed: false,
+           operatorOverride: true }
+```
+
+Nothing else is required; the switch is read at call time. Turning it off
+restores the previous behaviour without touching any other code.
+
+Tests: `test-apm-hoards.js` covers the switch (`ready()`, `trainingAllowed()`,
+`overridden()`, `openReviews()`), and `test-apm-train-network.js` runs a real
+hoard TRAIN with the switch on, asserting the panel note, the clickable button,
+`params.category === 'hoards'` and `warn.hoardOverride` in the result.

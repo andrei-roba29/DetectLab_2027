@@ -99,6 +99,22 @@ function test(label,fn){fn();console.log('PASS '+label);n++;}
   console.log('PASS settlement exclusion switch and site/hoard RPC isolation');n++;
  }finally{config.excludeRomanianHoardSettlements=original;}
  await assert.rejects(pipeline.runTrain({}, {category:'hoards'}),/review|validation/i);console.log('PASS release gates prevent any terrain request before evidence/performance review');n++;
+ // The operator switch is separate from evidence: ready() stays false, imports stay shut,
+ // and only training is opened.
+ assert.equal(h.ready(),false);assert.equal(h.trainingAllowed(),false);assert.equal(h.overridden(),false);
+ assert.deepEqual(h.openReviews(),['sourceReviewed','licenceApproved','chronologyReviewed','performancePassed']);
+ const releaseSnapshot=Object.assign({},config.release);
+ try{
+  config.release.operatorOverride=true;
+  assert.equal(h.ready(),false,'the override is not evidence');
+  assert.equal(h.trainingAllowed(),true);assert.equal(h.overridden(),true);assert.equal(h.openReviews().length,4);
+  config.release.operatorOverride=false;
+  config.release.sourceReviewed=true;assert.equal(h.trainingAllowed(),false,'partial review alone opens nothing');
+  assert.deepEqual(h.openReviews(),['licenceApproved','chronologyReviewed','performancePassed']);
+  config.release.licenceApproved=true;config.release.chronologyReviewed=true;config.release.performancePassed=true;
+  assert.equal(h.ready(),true);assert.equal(h.trainingAllowed(),true);assert.equal(h.overridden(),false,'full review is not an override');
+  console.log('PASS operator switch: opens training only, stays out of ready() and the import guard, and names the open reviews');n++;
+ }finally{Object.keys(config.release).forEach(k=>{config.release[k]=releaseSnapshot[k];});}
  // Real UI execution with the existing mocked network harness is run separately.
  const csv=provider.fromCsv('id,lat,lon,type,positionAccuracy,periodStart,periodEnd\na,46,25,coin,50,2200 BC,2100 BC',{lat:46,lon:25},false);
  assert.equal(csv.length,1);assert.equal(csv[0].periodStart,-2199);assert.equal(csv[0].type,'hoard');

@@ -228,8 +228,12 @@
          * terrain request). The data gate itself is unchanged. */
         var trainBlocked = state.mode === 'train' && (!state.periodChosen || !state.records || (state.siteCount != null && state.siteCount < 10));
         els.run.disabled = !canRunNow || !state.centre || trainBlocked;
-        var hoardClosed = state.mode === 'train' && isHoard() && !root.DetectLabApmHoards.ready();
-        els.run.title = hoardClosed ? T('hoard.pending') : '';
+        var hoardModules = root.DetectLabApmHoards;
+        var hoardClosed = state.mode === 'train' && isHoard() && !(hoardModules && hoardModules.trainingAllowed());
+        els.run.title = hoardClosed ? T('hoard.pending') : (state.mode === 'train' && isHoard() && hoardModules.overridden() ? T('hoard.override') : '');
+        // The override is stated in the panel for as long as it is in force.
+        if (els.hoardPending) els.hoardPending.hidden = !isHoard() || !hoardClosed;
+        if (els.hoardOverride) els.hoardOverride.hidden = !isHoard() || !(hoardModules && hoardModules.overridden());
         els.run.textContent = state.mode === 'train' ? T('run.train') : T('run.manual');
         els.pickBtn.disabled = !premium || !on || state.busy;
         els.loadSites.disabled = !premium || !on || !state.centre || state.busy || state.sitesLoading;
@@ -673,7 +677,7 @@
         var params;
         try {
             if (mode === 'train') {
-                if (isHoard() && !root.DetectLabApmHoards.ready()) throw new Error(T('hoard.pending'));
+                if (isHoard() && !root.DetectLabApmHoards.trainingAllowed()) throw new Error(T('hoard.pending'));
                 if (!state.centre) throw new Error(T('status.noPoint'));
                 if (!state.records) throw new Error(T('train.loading'));
                 if (!state.periodChosen) throw new Error(T(isHoard() ? 'hoard.choosePeriod' : 'train.choosePeriod'));
@@ -1080,6 +1084,9 @@
             point: state.centre,
             radiusKm: state.mode === 'train' && !isHoard() ? TRAIN_AREA_KM : state.radiusKm,
             settings: collectSettings(),
+            // A support bundle must never hide an override in force.
+            hoards: root.DetectLabApmHoards ? { reviewed: root.DetectLabApmHoards.ready(), trainingAllowed: root.DetectLabApmHoards.trainingAllowed(),
+                override: root.DetectLabApmHoards.overridden(), openReviews: root.DetectLabApmHoards.openReviews() } : null,
             lastResult: res ? { mode: res.mode, provenance: res.provenance, warnings: res.warnings } : null,
             log: prov().getDebugLog()
         };
@@ -1215,7 +1222,9 @@
         els.approximate = h('input',{type:'checkbox',onchange:function(){state.includeApproximate=els.approximate.checked; if(state.siteInput==='csv'){ els.csvInput.value=''; state.records=null; state.periodChosen=false; loadPeriods(); updateGate(); setStatus(T('hoard.reupload'),'warn'); } else loadBuiltinSites();}});
         els.approximateRow = h('label',{class:'apm-field'},[els.approximate,h('span',{key:'hoard.approximate'})]);
         els.background = h('select',{class:'apm-select',onchange:function(){state.backgroundType=els.background.value;}},[h('option',{value:'random',key:'hoard.random'}),h('option',{value:'known-sites',key:'hoard.known'})]);
-        els.hoardOptions = h('div',{},[els.approximateRow,h('label',{class:'apm-field'},[h('span',{key:'hoard.background'}),els.background]),h('div',{class:'apm-note',key:'hoard.area'}),h('div',{class:'apm-note',key:'hoard.notice'}),h('div',{class:'apm-note',key:'hoard.attribution'}),h('div',{class:'apm-note',key:'hoard.objectDates'}),h('div',{class:'apm-note',key:'hoard.pending'})]);
+        els.hoardPending = h('div',{class:'apm-note',key:'hoard.pending'});
+        els.hoardOverride = h('div',{class:'apm-note apm-hoard-override',role:'status',key:'hoard.override',hidden:true});
+        els.hoardOptions = h('div',{},[els.approximateRow,h('label',{class:'apm-field'},[h('span',{key:'hoard.background'}),els.background]),h('div',{class:'apm-note',key:'hoard.area'}),h('div',{class:'apm-note',key:'hoard.notice'}),h('div',{class:'apm-note',key:'hoard.attribution'}),h('div',{class:'apm-note',key:'hoard.objectDates'}),els.hoardPending,els.hoardOverride]);
         els.loadSites = bind(h('button', { type: 'button', class: 'apm-btn apm-small', onclick: loadBuiltinSites }), 'train.reload');
         els.sitesCount = h('span', { class: 'apm-note' });
         els.csvInput = h('input', { type: 'file', accept: '.csv,text/csv', onchange: onCsvUpload });

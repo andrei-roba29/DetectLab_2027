@@ -1065,6 +1065,10 @@ const PRECACHE_URLS = [
   'js/apm-next/apm-ui.js?v=20261109-apm-hoard-wording',
   'js/apm-next/apm-worker.js?v=20261109-apm-hoard-wording',
   'js/apm-next/apm-loading-preview.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/hoards.config.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/apm-hoards.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/apm-hoard-provider.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/apm-hoard-scale.js?v=20261109-apm-hoard-wording',
 
   // v399: Romanian Heritage sublayers (reader dependencies are local).
   'js/map-app.js?v=20261102-ro-heritage',
