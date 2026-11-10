@@ -29,7 +29,8 @@
  *        Sites (triangulation)     produced by js/archeo-potential.js
  *     3. LIDAR Scanner           — scanner annotations from the CSV (bonus)
  *
- *   …returns up to 3 ranked candidates (blue circular rings + labels on the map)
+ *   …returns up to N ranked candidates (blue circular rings + labels on the map),
+ *   N chosen by the user in the window (1–10, default 3)
  *   and a downloadable, printable PDF explaining every score.
  *
  * MANDATORY EXCLUSIONS (a candidate failing any of these never appears)
@@ -88,7 +89,14 @@
         RADIUS_KM_MIN: 1,
         RADIUS_KM_MAX: 10,
         RADIUS_KM_DEFAULT: 3,
-        MAX_RESULTS: 3,               // "Cele 3 rezultate"
+        // How many places the report returns. 3 is the historical default; the
+        // window lets the user ask for any number from 1 to 10, and the result
+        // list is always "up to" that number — fewer when the filters leave
+        // fewer separated candidates.
+        RESULT_COUNT_DEFAULT: 3,
+        RESULT_COUNT_MIN: 1,
+        RESULT_COUNT_MAX: 10,
+        RESULT_COUNT_STORAGE_KEY: 'detectlab_arch_report_results',
         RESULT_RADIUS_M: 180,         // legacy circle helper
         FOCUS: { CELL_M: 50, HALF_WIDTH_M: 400, MAIN_MAX_M: 200, GRID_M: 100, MAIN_DROP: 0.10, SECONDARY_DROP: 0.25 },
         // Outline rounding (see buildFocusAreas.outline): sample size, the
@@ -313,6 +321,44 @@
     }
 
     function currentRadiusM() { return currentRadiusKm() * 1000; }
+
+    /* ── How many results the user asked for ────────────────────────────────
+     * Read from the window's select, clamped to what the engine can honour, and
+     * remembered between visits. Anything unreadable falls back to the default,
+     * so a headless call (tests, console) behaves like the classic 3-result
+     * report. */
+    function clampResultCount(v) {
+        var n = parseInt(v, 10);
+        if (!isFinite(n)) n = CONFIG.RESULT_COUNT_DEFAULT;
+        return Math.max(CONFIG.RESULT_COUNT_MIN, Math.min(CONFIG.RESULT_COUNT_MAX, n));
+    }
+
+    function storedResultCount() {
+        try {
+            if (typeof localStorage === 'undefined' || !localStorage) return null;
+            var raw = localStorage.getItem(CONFIG.RESULT_COUNT_STORAGE_KEY);
+            if (raw == null || raw === '') return null;
+            var n = parseInt(raw, 10);
+            return isFinite(n) ? clampResultCount(n) : null;
+        } catch (e) { return null; }
+    }
+
+    function storeResultCount(v) {
+        try {
+            if (typeof localStorage === 'undefined' || !localStorage) return;
+            localStorage.setItem(CONFIG.RESULT_COUNT_STORAGE_KEY, String(clampResultCount(v)));
+        } catch (e) { /* private mode / quota: the choice simply is not remembered */ }
+    }
+
+    function currentResultCount() {
+        var sel = el('archReportResultCount');
+        if (sel && sel.value != null && sel.value !== '') {
+            var v = parseInt(sel.value, 10);
+            if (isFinite(v)) return clampResultCount(v);
+        }
+        var stored = storedResultCount();
+        return stored == null ? CONFIG.RESULT_COUNT_DEFAULT : stored;
+    }
 
     // Circular analysis area in local meters, centred on the picked point.
     // min/max describe the axis-aligned bbox (used by rasters / roads);
@@ -2218,7 +2264,8 @@
                 ctx.rejected = rejected;
                 ctx.candidates = candidates;
 
-                var picked = selectResults(candidates, CONFIG.MAX_RESULTS, CONFIG.RESULT_MIN_SEPARATION_M);
+                var requestedResults = clampResultCount(settings.resultCount);
+                var picked = selectResults(candidates, requestedResults, CONFIG.RESULT_MIN_SEPARATION_M);
                 var results = picked.map(function (cand, idx) {
                     return buildResultModel(cand, ctx, idx + 1, picked.length);
                 });
@@ -2258,6 +2305,7 @@
                         romanRoadSegments: ctx.romanRoadsInArea || 0,
                         seeds: seeds.length,
                         candidates: candidates.length,
+                        requestedResults: requestedResults,
                         rejected: rejected,
                         uatAvailable: !!ctx.uatGrid.available,
                         apmAvailable: !!ctx.apmGrid.available,
@@ -3422,6 +3470,7 @@
         return {
             baseline: baseline,
             periodKey: periodKey,
+            resultCount: currentResultCount(),
             ignoreLidar: !!(el('archReportIgnoreLidar') && el('archReportIgnoreLidar').checked),
             bonuses: {
                 roads: checkedOr('archReportBonusRoads', CONFIG.BONUSES.roads),
@@ -3578,6 +3627,19 @@
         if (ignore && !ignore.dataset.archReportWired) {
             ignore.dataset.archReportWired = '1';
             ignore.addEventListener('change', function () {
+                if (_state.point && !_state.running) runReport();
+            });
+        }
+        // How many results: restored from the last visit, then any change
+        // re-runs the analysis in place (same contract as the bonus ticks).
+        var countSel = el('archReportResultCount');
+        if (countSel && !countSel.dataset.archReportWired) {
+            countSel.dataset.archReportWired = '1';
+            var storedCount = storedResultCount();
+            if (storedCount != null) countSel.value = String(storedCount);
+            else if (countSel.value == null || countSel.value === '') countSel.value = String(CONFIG.RESULT_COUNT_DEFAULT);
+            countSel.addEventListener('change', function () {
+                storeResultCount(currentResultCount());
                 if (_state.point && !_state.running) runReport();
             });
         }
@@ -3748,6 +3810,10 @@
         buildApmGrid: buildApmGrid,
         apmClassAt: apmClassAt,
         readSettings: readSettings,
+        currentResultCount: currentResultCount,
+        clampResultCount: clampResultCount,
+        storeResultCount: storeResultCount,
+        storedResultCount: storedResultCount,
         setBaseline: setBaseline,
         setPanelOpen: setPanelOpen,
         isBonusLidarPoint: isBonusLidarPoint,

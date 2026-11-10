@@ -649,8 +649,17 @@ section('Result selection');
         JSON.stringify(withAnnotated.map(c => [c.annotated, c.score])));
 
     const capped = R.selectResults([mk(0, 0.9), mk(1000, 0.8), mk(2000, 0.7), mk(3000, 0.6)], 3, 350);
-    check('at most 3 results are returned', capped.length === 3, capped.length);
+    check('a request for 3 results returns at most 3', capped.length === 3, capped.length);
     check('the 3 best are kept', capped.map(c => c.score).join(',') === '0.9,0.8,0.7');
+
+    // The window can ask for up to 10; the engine honours any count in range and
+    // never invents a place to fill a quota.
+    const twelve = Array.from({ length: 12 }, (_, i) => mk(i * 1000, 0.9 - i * 0.01));
+    check('a request for 10 results is honoured', R.selectResults(twelve, 10, 350).length === 10);
+    check('the ceiling is 10, not 3', R.clampResultCount(10) === 10 && CFG.RESULT_COUNT_MAX === 10);
+    check('fewer candidates than requested means fewer results, not padding',
+        R.selectResults(twelve.slice(0, 4), 10, 350).length === 4);
+    check('a single result can be requested', R.selectResults(twelve, 1, 350).length === 1);
 }
 
 /* ═══════════════ 6b. APM 2.0 figure polygons (Search Help style) ═══════════════ */
@@ -748,6 +757,39 @@ section('Report window: baseline, period, bonuses');
         s0.baseline === 'apm20' && s0.bonuses.roads === true && s0.bonuses.potential === true &&
         s0.bonuses.lidar === true && s0.ignoreLidar === false && s0.periodKey === null,
         JSON.stringify(s0));
+    check('the default number of results is 3', s0.resultCount === 3, s0.resultCount);
+    check('index.html offers every count from 1 to 10',
+        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].every(n => html.indexOf('<option value="' + n + '"') !== -1) &&
+        html.indexOf('id="archReportResultCount"') !== -1);
+    check('3 is the pre-selected option in the markup', /<option value="3" selected>/.test(html));
+    const counted = v => { fakeEl('archReportResultCount').value = String(v); return R.readSettings().resultCount; };
+    check('the user\u2019s count is read from the window', counted(7) === 7, counted(7));
+    check('a count above the ceiling is clamped to 10', counted(50) === 10, counted(50));
+    check('a count below the floor is clamped to 1', counted(0) === 1, counted(0));
+    check('nonsense falls back to the default', R.clampResultCount('abc') === 3 && R.clampResultCount(null) === 3);
+    fakeEl('archReportResultCount').value = '6';
+    check('the choice is remembered in localStorage when available',
+        (function () {
+            const store = {};
+            const real = Object.getOwnPropertyDescriptor(sandbox, 'localStorage');
+            try {
+                Object.defineProperty(sandbox, 'localStorage', { configurable: true,
+                    value: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } } });
+                R.storeResultCount(9);
+                const remembered = R.storedResultCount();
+                fakeEl('archReportResultCount').value = '';   // nothing chosen in this session
+                const readBack = R.currentResultCount();
+                fakeEl('archReportResultCount').value = '6';
+                return remembered === 9 && readBack === 9 && R.currentResultCount() === 6;
+            } finally {
+                if (real) Object.defineProperty(sandbox, 'localStorage', real);
+                else delete sandbox.localStorage;
+            }
+        })());
+    fakeEl('archReportResultCount').value = '3';
+    check('switching the count re-runs a finished analysis',
+        fakeEl('archReportResultCount')._handlers.change.length === 1);
+
     R.setBaseline('nextgen_train', false);
     check('setBaseline records the train mode',
         fakeEl('archReportBaseline').value === 'nextgen_train' &&
@@ -1173,6 +1215,37 @@ section('End-to-end analysis (runReport)');
     check('the layer switch is wired', !!(layerBox._handlers.change || []).length);
     layerBox.checked = false; layerBox.fire('change');
     check('switching the layer off clears the results', !fakeMap.hasLayer(rendered));
+
+    // The user asks for 10: the engine must answer with ten separate places
+    // (or fewer, if the filters leave fewer) — never more than the ceiling.
+    sandbox.toggleArcheoReportLayer(true);      // the previous test switched it off
+    sandbox._archeoReportSetPoint(C.lat, C.lng);
+    fakeEl('archReportResultCount').value = '10';
+    const model10 = await sandbox.runArcheoReport();
+    check('the window count reaches the engine as requestedResults',
+        model10 && model10.meta.requestedResults === 10, model10 && model10.meta.requestedResults);
+    console.log('  [info] asking for 10 returned ' + model10.results.length + ' separated places');
+    check('asking for 10 really returns more than the old 3',
+        model10.results.length > 3 && model10.results.length <= 10, model10.results.length);
+    check('labels count to the number actually returned',
+        model10.results.every(r => r.label.endsWith('/' + model10.results.length)),
+        model10.results.map(r => r.label).join(' | '));
+    check('every returned place keeps the 350 m separation', (function () {
+        const local = model10.results.map(r => R.projectToLocalMeters(r.lat, r.lng, C.lat));
+        for (let i = 0; i < local.length; i++) for (let j = i + 1; j < local.length; j++) {
+            const dx = local[i].x - local[j].x, dy = local[i].y - local[j].y;
+            if (Math.sqrt(dx * dx + dy * dy) < 350) return false;
+        }
+        return true;
+    })());
+    check('each extra result still carries a focus polygon and a period estimate',
+        model10.results.every(r => r.focus.main.length > 0 && r.period && 'key' in r.period));
+    fakeEl('archReportResultCount').value = '12';
+    const clamped10 = await sandbox.runArcheoReport();
+    check('a count above 10 is clamped instead of rejected',
+        clamped10 && clamped10.meta.requestedResults === 10 && clamped10.results.length <= 10,
+        clamped10 && clamped10.meta.requestedResults);
+    fakeEl('archReportResultCount').value = '3';
 
     /* ═══════════════ 11. end-to-end PDF ═══════════════ */
     section('End-to-end PDF');

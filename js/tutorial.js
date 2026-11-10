@@ -656,8 +656,8 @@
             {
                 name: { ro: 'Raport arheologic', en: 'Archaeological Report' }, // reproduces existing UI button spelling (Archeological)
                 desc: {
-                    ro: 'Returnează până la 3 zone cu potențial arheologic, făcând o medie ponderată între rezultatele straturilor APM 2.0, Zone cu potențial arheologic, LIDAR Scanner și Imperiul Roman. Rezultatul final poate fi descărcat ca PDF cu explicații detaliate.',
-                    en: 'Returns up to 3 zones with archaeological potential by computing a weighted average of the results from the APM 2.0, Archaeological Potential Sites, LIDAR Scanner and Roman Empire layers. The final result can be downloaded as a PDF with detailed explanations.'
+                    ro: 'Returnează un număr ales de tine (1–10, implicit 3) de zone cu potențial arheologic, făcând o medie ponderată între rezultatele straturilor APM 2.0, Zone cu potențial arheologic, LIDAR Scanner și Imperiul Roman. Rezultatul final poate fi descărcat ca PDF cu explicații detaliate.',
+                    en: 'Returns as many zones with archaeological potential as you ask for (1–10, 3 by default) by computing a weighted average of the results from the APM 2.0, Archaeological Potential Sites, LIDAR Scanner and Roman Empire layers. The final result can be downloaded as a PDF with detailed explanations.'
                 }
             }
         ]
