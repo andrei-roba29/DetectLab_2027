@@ -320,7 +320,7 @@ test('the band-based polygoniser is what the phone actually downloads', () => {
     const sw = read('sw.js');
     const src = read('js/apm-next/apm-polygonise.js');
     assert.ok(worker.includes("'apm-polygonise.js?v=" + BAND_TAG + "'"), 'worker imports the re-tagged polygoniser');
-    assert.ok(ui.includes('apm-worker.js?v=20261105-apm-loading-preview'), 'panel starts the re-tagged worker');
+    assert.ok(ui.includes('apm-worker.js?v=20261109-apm-hoard-wording'), 'panel starts the re-tagged worker');
     assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + BAND_TAG), 'new worker precached');
     assert.ok(sw.includes('js/apm-next/apm-polygonise.js?v=' + BAND_TAG), 'new polygoniser precached');
     // Older tags stay precached so shells that have not refreshed keep working.

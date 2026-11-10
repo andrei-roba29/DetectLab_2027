@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261105-apm-loading-preview';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261109-apm-hoard-wording';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
@@ -140,6 +140,18 @@
         if (b.attr === 'text') b.el.textContent = s;
         else b.el.setAttribute(b.attr, s);
     }
+    /* Re-point an existing i18n binding, so a control that loads a different
+     * category is renamed for that category and still follows language changes. */
+    function rebind(node, key) {
+        for (var i = 0; i < i18nBindings.length; i++) {
+            if (i18nBindings[i].el !== node) continue;
+            i18nBindings[i].key = key;
+            applyBinding(i18nBindings[i]);
+            return;
+        }
+        bind(node, key);
+    }
+
     function refreshI18n() {
         i18nBindings.forEach(applyBinding);
         renderPoint();
@@ -210,8 +222,14 @@
         els.gate.hidden = premium && on;
         els.gate.textContent = !premium ? T('gate.premium') : T('gate.off');
         var canRunNow = premium && on && !state.busy;
-        var trainBlocked = state.mode === 'train' && (!state.periodChosen || !state.records || (state.siteCount != null && state.siteCount < 10) || (isHoard() && !root.DetectLabApmHoards.ready()));
+        /* The hoard release gate is deliberately NOT part of `disabled`: a dead
+         * button explains nothing. The button stays clickable and the click
+         * states exactly which reviews are still open (run() refuses before any
+         * terrain request). The data gate itself is unchanged. */
+        var trainBlocked = state.mode === 'train' && (!state.periodChosen || !state.records || (state.siteCount != null && state.siteCount < 10));
         els.run.disabled = !canRunNow || !state.centre || trainBlocked;
+        var hoardClosed = state.mode === 'train' && isHoard() && !root.DetectLabApmHoards.ready();
+        els.run.title = hoardClosed ? T('hoard.pending') : '';
         els.run.textContent = state.mode === 'train' ? T('run.train') : T('run.manual');
         els.pickBtn.disabled = !premium || !on || state.busy;
         els.loadSites.disabled = !premium || !on || !state.centre || state.busy || state.sitesLoading;
@@ -521,7 +539,7 @@
             }
             if (!(records._meta && records._meta.outsideRomania) && !(records._meta && records._meta.region === 'outside-romania')) {
                 var meta = records._meta || {};
-                setStatus(T(isHoard() && meta.insufficient ? 'hoard.countBlock' : 'train.periodApplied', { n: meta.usable || 0 }), isHoard() && meta.insufficient ? 'error' : 'ok');
+                setStatus(T(isHoard() && meta.insufficient ? 'hoard.countBlock' : periodNoteKey(true), { n: meta.usable || 0 }), isHoard() && meta.insufficient ? 'error' : 'ok');
                 // A zero because the toggle is off is not the same as a zero because
                 // there is nothing here: say which one it is.
                 if (isHoard() && meta.insufficient && !state.includeApproximate && Number(meta.approximate_available) > 0) {
@@ -578,10 +596,18 @@
         renderSiteCount();
     }
 
+    /* The period note must speak about what was actually loaded: hoards are
+     * deposits, not settlements, and the same window serves both. */
+    function periodNoteKey(chosen) {
+        if (isHoard()) return chosen ? 'hoard.periodApplied' : 'hoard.periodHelp';
+        return chosen ? 'train.periodApplied' : 'train.periodHelp';
+    }
+
     function renderPeriods() {
         if (!els.period) return;
+        if (els.loadSites) rebind(els.loadSites, isHoard() ? 'hoard.reload' : 'train.reload');
         els.period.textContent = '';
-        els.period.appendChild(h('option', { value: '', disabled: true, text: T('train.choosePeriod') }));
+        els.period.appendChild(h('option', { value: '', disabled: true, text: T(isHoard() ? 'hoard.choosePeriod' : 'train.choosePeriod') }));
         els.period.appendChild(h('option', { value: 'all', text: T('train.allPeriods') }));
         state.periods.forEach(function (g, i) {
             var dates = g.start != null && g.end != null ? ' · ' + formatYear(g.start) + ' – ' + formatYear(g.end) : '';
@@ -595,7 +621,7 @@
         }
         els.period.value = sel;
         els.period.disabled = !state.records || state.busy;
-        els.periodHint.textContent = state.records ? T(state.periodChosen ? 'train.periodApplied' : 'train.periodHelp') : '';
+        els.periodHint.textContent = state.records ? T(periodNoteKey(state.periodChosen)) : '';
         els.periodRow.hidden = !state.records;
         els.sitesCount.textContent = state.records ? T(isHoard() ? 'hoard.loaded' : 'train.loaded', { n: state.records.length }) : '';
         var meta = state.records && state.records._meta;
@@ -633,7 +659,7 @@
                 state.periodChosen = true;
             }
         }
-        els.periodHint.textContent = T(state.periodChosen ? 'train.periodApplied' : 'train.periodHelp');
+        els.periodHint.textContent = T(periodNoteKey(state.periodChosen));
         renderSiteCount();
     }
 
@@ -650,8 +676,8 @@
                 if (isHoard() && !root.DetectLabApmHoards.ready()) throw new Error(T('hoard.pending'));
                 if (!state.centre) throw new Error(T('status.noPoint'));
                 if (!state.records) throw new Error(T('train.loading'));
-                if (!state.periodChosen) throw new Error(T('train.choosePeriod'));
-                if (state.siteCount != null && state.siteCount < 10) throw new Error(T('train.countBlock', { n: state.siteCount, min: 10 }));
+                if (!state.periodChosen) throw new Error(T(isHoard() ? 'hoard.choosePeriod' : 'train.choosePeriod'));
+                if (state.siteCount != null && state.siteCount < 10) throw new Error(T(isHoard() ? 'hoard.countBlock' : 'train.countBlock', { n: state.siteCount, min: 10 }));
                 params = {
                     centre: state.centre,
                     records: state.records,
