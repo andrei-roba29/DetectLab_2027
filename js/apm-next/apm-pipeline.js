@@ -564,7 +564,11 @@
     function runTrain(session, params) {
         var isHoard = params.category === 'hoards';
         if (isHoard && !hoards.trainingAllowed()) return Promise.reject(core.keyedError('hoard.pending', {}, 'Hoard source review and live performance validation are pending.'));
-        if (isHoard && !(params.radiusKm >= 1 && params.radiusKm <= 10)) return Promise.reject(new Error('Hoard prediction radius must be 1–10 km'));
+        // The hoard run uses the same prediction window as settlements (50 km);
+        // the report may ask for less, never for more than the trained window.
+        if (isHoard && !(params.radiusKm > 0 && params.radiusKm <= TRAIN_AREA_KM)) {
+            return Promise.reject(new Error('Hoard prediction radius must be between 1 and 50 km'));
+        }
         var warnings = [];
         // An operator override is never silent: it travels with the result.
         if (isHoard && hoards.overridden()) warnings.push(M('warn.hoardOverride', { reviews: hoards.openReviews().length },

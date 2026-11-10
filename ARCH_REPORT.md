@@ -28,12 +28,26 @@ What the window asks for, before every run:
      the report's own grid** (5 / 4.5 / 4), so the allowed-class filter, focus
      polygons, score popup and PDF figure behave exactly like the APM 2.0 path;
    * **APM Next-Gen — train mode** — the same engine in `runTrain` mode,
-     trained on the known-site pool (50 km, `DetectLabRomaniaApmSites`) for a
-     **period of time** the window asks for. The period `<select>` is filled
-     from `sitePool().periods` for the current report point (plus "All
-     periods"); groups with < 10 selectable sites are disabled, exactly like
-     the APM panel's own gate. A failed or unavailable engine fails **closed**
-     (status `arch_report_baseline_failed`, 0 results).
+     trained for a **period of time** the window asks for, on either of the two
+     categories the engine knows:
+     * **Settlements** (default) — the known-site pool (50 km,
+       `DetectLabRomaniaApmSites`); the period `<select>` is filled from
+       `sitePool().periods` for the current report point;
+     * **Treasures / hoards** — the hoard pool (`DetectLabHoardProvider`, the
+       150 km training window and the `apm_hoards_within` RPC the APM panel's
+       TEZAURE mode uses); the period list is `DetectLabHoardProvider.groups()`,
+       i.e. deposit periods, and the settlement repertory is never queried.
+
+     In both cases the list also carries "All periods" and groups with < 10
+     selectable records are disabled, exactly like the APM panel's own gate, and
+     the chosen category/period are handed to the engine
+     (`report.run({mode:'train', category, periodKey})`). The training-category
+     row (`#archReportTrainCategory`) is visible only for the trained baseline;
+     outside it the category falls back to settlements. Without the hoard
+     release gate (`DetectLabApmHoards.trainingAllowed()`) a hoard baseline
+     refuses with the same `hoard.pending` message the panel shows. A failed or
+     unavailable engine fails **closed** (status `arch_report_baseline_failed`,
+     0 results).
 2. **Bonus scoring** — three ticks, each optional:
    * **Roman road proximity** (`+0.12 × (1 − d/1500 m)`);
    * **Archaeological potential site score** (bubble score / attenuated);
@@ -249,7 +263,7 @@ _archeoReportDebug.parseCenturyRange('sec. II-III p.Chr.')
 _archeoReportDebug.periodKey('sec. II-III p.Chr.')   // → 'roman'
 _archeoReportSetPdfLang('ro')      // or 'en' — PDF language override
 _archeoReportPdfLang()             // → the effective PDF language
-_archeoReportDebug.readSettings()  // → { baseline, periodKey, ignoreLidar, bonuses }
+_archeoReportDebug.readSettings()  // → { baseline, periodKey, category, ignoreLidar, bonuses }
 _archeoReportDebug.setBaseline('nextgen_train', false)   // window tab, no re-run
 _archeoReportDebug.rasterizeNextGenGrid(geojson, bbox, cellM)  // class polygons → grid
 _archeoReportDebug.isBonusLidarPoint({ category: 'fortificație' })  // → true

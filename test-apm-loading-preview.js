@@ -161,8 +161,10 @@ function domHarness(reduced = false) {
         // that it is a real const, not a frozen snapshot of an older build.
         assert(/const CACHE_NAME = 'detectlab-v\d+-[a-z0-9-]+';/.test(sw));
         assert(html.indexOf('<script src="js/apm-next/apm-loading-preview.js') < html.indexOf('<script src="js/apm-next/apm-ui.js'));
-        for (const f of ['apm-raster', 'apm-worker', 'apm-loading-preview', 'apm-ui', 'apm-i18n', 'apm-pipeline'])
+        for (const f of ['apm-raster', 'apm-worker', 'apm-loading-preview'])
             assert(sw.includes('js/apm-next/' + f + '.js?v=20261109-apm-run-overlay'));
+        for (const f of ['apm-ui', 'apm-i18n', 'apm-pipeline'])
+            assert(sw.includes('js/apm-next/' + f + '.js?v=20261109-apm-train-parity'));
         for (const k of ['preview.title', 'preview.method.water', 'preview.method.relief', 'preview.method.soil'])
             for (const lang of ['en', 'ro']) assert.notEqual(i18n.t(k, lang), k);
     });
