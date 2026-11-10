@@ -204,10 +204,10 @@ function pipeline(idb){
     await test('PWA cache module ordering and worker version are coherent',()=>{
         const html=read('index.html'),sw=read('sw.js'),ui=read('js/apm-next/apm-ui.js');
         for(const asset of ['apm-train-cache','apm-pipeline','apm-ui']){
-            const tag=`js/apm-next/${asset}.js?v=${asset==='apm-train-cache'?'20261105-apm-mobile-train':'20261109-apm-hoard-wording'}`;assert(html.includes(tag)&&sw.includes(tag));
+            const tag=`js/apm-next/${asset}.js?v=${asset==='apm-train-cache'?'20261105-apm-mobile-train':'20261109-apm-run-overlay'}`;assert(html.includes(tag)&&sw.includes(tag));
         }
         assert(html.indexOf('apm-train-cache.js')<html.indexOf('apm-pipeline.js'));
-        assert(/const CACHE_NAME = 'detectlab-v\d+-[a-z0-9-]+';/.test(sw));assert(ui.includes('apm-worker.js?v=20261109-apm-hoard-wording'));
+        assert(/const CACHE_NAME = 'detectlab-v\d+-[a-z0-9-]+';/.test(sw));assert(ui.includes('apm-worker.js?v=20261109-apm-run-overlay'));
     });
     console.log(`${checks} mobile TRAIN regressions passed.`);
 })().catch(e=>{console.error(e);process.exitCode=1;});
