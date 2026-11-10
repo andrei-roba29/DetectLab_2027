@@ -6,11 +6,12 @@
     var config = {
         // Fail closed until real source evidence, licence, chronology and live timing review.
         release: { sourceReviewed: false, licenceApproved: false, chronologyReviewed: false, performancePassed: false,
-            // The operator's own decision, NOT evidence of review. When true, TRAIN
-            // runs on hoards while the four reviews above stay open: the panel shows
-            // a permanent warning, every result carries it, and data imports still
-            // refuse (`ready()` ignores this switch on purpose).
-            operatorOverride: false },
+            // The operator's own decision, NOT evidence of review. ON at the
+            // operator's request (2026-11-09): TRAIN runs on hoards while the four
+            // reviews above stay open. The panel shows a permanent warning, every
+            // result carries it, and data imports still refuse because `ready()`
+            // reads the four reviews only and ignores this switch on purpose.
+            operatorOverride: true },
         trainingRadiusKm: 150,
         resolutionM: 150, // proposal, NOT a measured optimum; also used for prediction
         maxRequests: 120,

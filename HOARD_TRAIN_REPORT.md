@@ -189,10 +189,10 @@ Added tests cover classifier traps/order/multiple periods, date conversion and f
 1. Complete the partial source inspection: obtain full snapshots, quality-code meanings, whole-layer coordinate-field agreement, remaining pagination metadata, and archaeological overlap analysis (15/16, 8–11, 12/15). Verified counts, schemas/quality frequencies and three real projections are recorded above; do not mistake them for a completed sync.
 2. **OPEN QUESTION: licence/terms of use**, including redistribution and model-training use. No permission was inferred from an empty layer copyright field.
 3. Review the proposed chronology, class/accuracy mapping and centroid treatment. Complete sync retirement policy and reviewed mappings, then inspect dry-run output before population.
-4. Validate affordable complete request planning, cold/warm full-runtime measurements, cancellation, and both background modes on a real test area. All release flags remain false until then.
+4. Validate affordable complete request planning, cold/warm full-runtime measurements, cancellation, and both background modes on a real test area. All four release flags remain false until then; since 2026-11-09 the operator switch (see below) lets training run anyway, always labelled provisional.
 5. Verify the hosted frontend and signed-token browser entitlement flows. The completed backend migration and role/claim smoke checks do not substitute for those checks.
 
-The work deliberately deploys only a safe empty backend foundation and a non-running hoard mode. It does **not** claim the original full feature, ingestion, live validation or performance acceptance is complete.
+The work deploys a safe backend foundation and, since 2026-11-09, a hoard mode that trains **under an explicit operator override** — every panel and every result says the reviews are open. It does **not** claim the original full feature, ingestion, live validation or performance acceptance is complete.
 
 ## Operator override (added 2026-11-09, at the operator's request)
 
@@ -216,9 +216,10 @@ What changed:
    `disabled` condition. The data gates still do (no area, no records, no period,
    fewer than 10 usable hoards); the release gate answers the click and states
    which reviews are open, before any terrain request.
-3. **`release.operatorOverride`** (default `false`). When the operator sets it to
-   `true`, hoard TRAIN runs while the four reviews stay open. This is a statement
-   by the operator, **not evidence**:
+3. **`release.operatorOverride`** — **currently `true`**, at the operator's
+   explicit request on 2026-11-09 (hoard TRAIN must actually run). With it on,
+   hoard TRAIN runs while the four reviews stay open. This is a statement by the
+   operator, **not evidence**:
    * `ready()` keeps its meaning — it reads the four reviews only, so
      `tools/sync-hoards.mjs` still refuses data writes, and `openReviews()`
      still lists exactly what is missing;
@@ -227,16 +228,18 @@ What changed:
    * every result carries `warn.hoardOverride` with the number of open reviews,
      so an export can never be mistaken for a reviewed model.
 
-Turning it on:
+To turn it off again, flip that one field — nothing else changes:
 
 ```js
 // js/apm-next/hoards.config.js
 release: { sourceReviewed: false, licenceApproved: false, chronologyReviewed: false, performancePassed: false,
-           operatorOverride: true }
+           operatorOverride: false }
 ```
 
-Nothing else is required; the switch is read at call time. Turning it off
-restores the previous behaviour without touching any other code.
+The switch is read at call time. With it off, TRAIN refuses before any terrain
+request and the panel says which reviews are still open. Completing the four
+reviews and setting them to `true` makes the override unnecessary; the warning
+disappears on its own because `overridden()` is false once `ready()` is true.
 
 Tests: `test-apm-hoards.js` covers the switch (`ready()`, `trainingAllowed()`,
 `overridden()`, `openReviews()`), and `test-apm-train-network.js` runs a real
