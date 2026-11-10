@@ -24,7 +24,7 @@ const sites = require('./js/apm-next/apm-sites.js');
 const prov = require('./js/apm-next/apm-providers.js');
 
 const LAT = 46.77, LON = 23.59, RADIUS_M = 50000;
-const TAG = '20261105-apm-loading-preview';
+const TAG = '20261109-apm-hoard-wording';
 let passed = 0;
 function test(name, fn) {
     try { fn(); passed++; console.log('  ok  ' + name); }
@@ -286,18 +286,18 @@ function redTileData(size, alpha = 255) {
         }
         // Later fixes re-tag the UI, worker and mask under the newer HEAT_TAG.
         const HEAT_TAG = '20261102-apm-continuous-heat';
-        const uiTag = 'js/apm-next/apm-ui.js?v=20261105-apm-loading-preview';
+        const uiTag = 'js/apm-next/apm-ui.js?v=20261109-apm-hoard-wording';
         assert.ok(html.includes(uiTag) && sw.includes(uiTag), uiTag);
         assert.ok(sw.includes('js/apm-next/apm-ui.js?v=20261102-apm-train-bounded-grid'), 'older UI tag stays precached for older shells');
         assert.ok(html.includes('js/archeo-potential.js?v=' + HEAT_TAG));
         assert.ok(sw.includes('js/archeo-potential.js?v=' + HEAT_TAG));
         assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + HEAT_TAG));
         // The worker URL follows the newest worker re-tag (band-based mask).
-        assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=20261105-apm-loading-preview'));
+        assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=20261109-apm-hoard-wording'));
         assert.ok(sw.includes('js/apm-next/apm-worker.js?v=20261102-apm-mask-band'));
         // Latest fix: the pipeline's DEM/water/UAT-mask fetches run in parallel
         // instead of in sequence (TRAIN's "run" step no longer sums their times).
-        const PREVIEW_TAG = '20261105-apm-loading-preview';
+        const PREVIEW_TAG = '20261109-apm-hoard-wording';
         const pipelineTag = 'js/apm-next/apm-pipeline.js?v=' + PREVIEW_TAG;
         assert.ok(html.includes(pipelineTag) && sw.includes(pipelineTag), pipelineTag);
         assert.ok(sw.includes('js/apm-next/apm-pipeline.js?v=20261105-apm-mobile-train'), 'older pipeline tag stays precached for older shells');

@@ -98,7 +98,28 @@ function test(label,fn){fn();console.log('PASS '+label);n++;}
   config.excludeRomanianHoardSettlements=false;assert.equal((await ran.createProvider({client:siteClient}).getSites({lat:46,lon:25},50)).length,2);
   console.log('PASS settlement exclusion switch and site/hoard RPC isolation');n++;
  }finally{config.excludeRomanianHoardSettlements=original;}
- await assert.rejects(pipeline.runTrain({}, {category:'hoards'}),/review|validation/i);console.log('PASS release gates prevent any terrain request before evidence/performance review');n++;
+ // The operator switch is separate from evidence: ready() stays false, imports stay
+ // shut, and only training is opened. It ships ON at the operator's request.
+ assert.equal(h.ready(),false);assert.equal(h.trainingAllowed(),true);assert.equal(h.overridden(),true);
+ assert.deepEqual(h.openReviews(),['sourceReviewed','licenceApproved','chronologyReviewed','performancePassed']);
+ const releaseSnapshot=Object.assign({},config.release);
+ try{
+  // Switch off: the release gate refuses before anything is prepared.
+  config.release.operatorOverride=false;
+  await assert.rejects(pipeline.runTrain({}, {category:'hoards'}),/review|validation/i);
+  assert.equal(h.trainingAllowed(),false);assert.equal(h.overridden(),false);
+  // Switch on: the pending refusal is gone and the next guard is reached instead.
+  config.release.operatorOverride=true;
+  await assert.rejects(pipeline.runTrain({}, {category:'hoards'}),/1–10 km/i);
+  assert.equal(h.ready(),false,'the override is not evidence');
+  console.log('PASS release gate: refuses with the switch off, gets past it with the switch on, and never claims a review');n++;
+  config.release.operatorOverride=false;
+  config.release.sourceReviewed=true;assert.equal(h.trainingAllowed(),false,'partial review alone opens nothing');
+  assert.deepEqual(h.openReviews(),['licenceApproved','chronologyReviewed','performancePassed']);
+  config.release.licenceApproved=true;config.release.chronologyReviewed=true;config.release.performancePassed=true;
+  assert.equal(h.ready(),true);assert.equal(h.trainingAllowed(),true);assert.equal(h.overridden(),false,'full review is not an override');
+  console.log('PASS operator switch: opens training only, stays out of ready() and the import guard, and names the open reviews');n++;
+ }finally{Object.keys(config.release).forEach(k=>{config.release[k]=releaseSnapshot[k];});}
  // Real UI execution with the existing mocked network harness is run separately.
  const csv=provider.fromCsv('id,lat,lon,type,positionAccuracy,periodStart,periodEnd\na,46,25,coin,50,2200 BC,2100 BC',{lat:46,lon:25},false);
  assert.equal(csv.length,1);assert.equal(csv[0].periodStart,-2199);assert.equal(csv[0].type,'hoard');

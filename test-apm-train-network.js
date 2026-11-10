@@ -31,6 +31,7 @@ function harness(mode='ok') {
         const u=new URL(url);
         if(u.host==='project.supabase.example') {
             if(u.pathname.endsWith('apm_hoards_within')) {
+                if(mode==='hoardsMany') return {data:{rows:Array.from({length:14},(_,i)=>({id:'h'+i,lat:46.75+i*0.0008,lon:25+i*0.0004,position_class:'exact',period_groups:[]})),usable:14,total_in_area:14,truncated:false,period_counts:{}}};
                 if(mode==='approximate') return {data:{rows:[],usable:3,total_in_area:3,truncated:false,period_counts:{},approximate_available:12,excluded_approximate:12}};
                 return {data:{rows:Array.from({length:9},(_,i)=>({id:String(i),lat:46.75,lon:25,position_class:'exact',period_groups:[]})),usable:9,total_in_area:9,truncated:false,period_counts:{}}};
             }
@@ -200,9 +201,64 @@ function harness(mode='ok') {
         assert(!hoard.w.document.querySelector('input[type=file]').parentElement.hidden);
         assert(hoard.w.document.querySelector('.apm-primary').disabled);
         assert.equal(hoard.w.document.querySelector('.apm-period-picker').value,'all');
-        assert(!hoard.ops.includes('sampleTile'),'review gate prevents terrain requests');
-        console.log('PASS hoard UI: isolated hoard RPC only, <10 blocks and offers CSV, All periods default, release gate prevents terrain requests.');
+        assert(!hoard.ops.includes('sampleTile'),'fewer than 10 usable hoards never start a terrain request');
+        console.log('PASS hoard UI: isolated hoard RPC only, <10 blocks and offers CSV, All periods default, the record count prevents terrain requests.');
     } finally {hoard.dom.window.close();}
+    const hoardGate=harness('hoardsMany');
+    try {
+        hoardGate.w.DetectLabHoardConfig.release.operatorOverride=false; // the closed-gate state
+        await hoardGate.pick(46.75,25);
+        const selector=hoardGate.w.document.querySelector('.apm-category-picker');
+        selector.value='hoards';selector.dispatchEvent(new hoardGate.w.Event('change'));
+        await until(()=>/hoards with the selected deposit period|tezaurele cu perioada/.test(hoardGate.w.document.querySelector('.apm-status').textContent),'hoard-ready load');
+        const hint=hoardGate.w.document.querySelector('.apm-period-hint').textContent;
+        assert(/hoards/.test(hint) && !/settlements/.test(hint),'the period note speaks about hoards: '+hint);
+        const loadBtn=[].slice.call(hoardGate.w.document.querySelectorAll('.apm-btn.apm-small')).filter(b=>/hoard/i.test(b.textContent))[0];
+        assert(loadBtn,'the reload button names what it loads: '+[].slice.call(hoardGate.w.document.querySelectorAll('.apm-btn')).map(b=>b.textContent).join(' | '));
+        assert(!/repertory|settlement/i.test(loadBtn.textContent),'and it no longer claims to reload Romanian repertory sites');
+        const status=hoardGate.w.document.querySelector('.apm-status').textContent;
+        assert(!/settlements|așezări/i.test(status),'the green status names hoards, not settlements: '+status);
+        const run=hoardGate.w.document.querySelector('.apm-primary');
+        assert(!run.disabled,'with enough hoards the button is clickable, so the gate can explain itself');
+        assert(/not activated/i.test(run.title),'the button carries the pending-review reason: '+run.title);
+        const before=hoardGate.ops.length;
+        run.click();
+        await until(()=>/not activated/i.test(hoardGate.w.document.querySelector('.apm-status').textContent),'hoard release gate message');
+        assert(hoardGate.ops.slice(before).every(op=>op!=='sampleTile'),'the closed gate starts no terrain request');
+        assert(!hoardGate.completed,'and produces no result');
+        const i18n=hoardGate.w.DetectLabApmI18n;
+        for(const key of ['hoard.periodApplied','hoard.periodHelp','hoard.choosePeriod']){
+            assert(/tezaur/.test(i18n.t(key,'ro')),key+' is written for hoards in Romanian: '+i18n.t(key,'ro'));
+            assert(!/așezăr|asezar/i.test(i18n.t(key,'ro')),key+' does not borrow settlement wording in Romanian');
+            assert(!/settlement/i.test(i18n.t(key,'en')),key+' does not borrow settlement wording in English');
+        }
+        console.log('PASS hoard gate: the period note and status talk about hoards, the release gate answers a click with its reason instead of a dead button, and both languages name tezaure.');
+    } finally {hoardGate.dom.window.close();}
+    // Operator override: the switch is the operator's, not evidence. It must let
+    // TRAIN run, name itself in the panel, and travel with the result.
+    const ovr=harness('hoardsMany');
+    try {
+        assert.equal(ovr.w.DetectLabHoardConfig.release.operatorOverride,true,'the operator switch ships ON at the operator request');
+        ovr.w.DetectLabHoardConfig.resolutionM=1000;ovr.w.DetectLabHoardConfig.trainingRadiusKm=20; // synthetic window, same code path
+        await ovr.pick(46.75,25);
+        const selector=ovr.w.document.querySelector('.apm-category-picker');
+        selector.value='hoards';selector.dispatchEvent(new ovr.w.Event('change'));
+        await until(()=>/hoards with the selected deposit period/.test(ovr.w.document.querySelector('.apm-status').textContent),'override hoard load');
+        const run=ovr.w.document.querySelector('.apm-primary');
+        assert(!run.disabled,'operator override makes the button runnable');
+        assert(/Operator override is ON/.test(run.title),'the button says why it is runnable: '+run.title);
+        const pending=ovr.w.document.querySelector('.apm-note[role=status].apm-hoard-override');
+        assert(pending && !pending.hidden,'the panel states the override while it is in force');
+        assert(ovr.w.document.querySelector('.apm-train .apm-note')&&[...ovr.w.document.querySelectorAll('.apm-train .apm-note')].filter(n=>/not activated/.test(n.textContent)).every(n=>n.hidden),'the closed-gate note is gone');
+        run.click();
+        await until(()=>ovr.completed||ovr.runError,'override hoard run: status='+ovr.w.document.querySelector('.apm-status').textContent);
+        assert(!ovr.runError,'operator override trains hoards: '+(ovr.runError&&ovr.runError.message));
+        assert.equal(ovr.params.category,'hoards');
+        const warns=(ovr.completed.warnings||[]).map(x=>x&&x.key);
+        assert(warns.includes('warn.hoardOverride'),'the override travels with the result: '+warns.join(','));
+        assert(/Operator override/.test(ovr.w.document.querySelector('.apm-warnings').textContent),'and it is listed in the result panel');
+        console.log('PASS operator override: hoard TRAIN runs with the switch on, the panel and the result both say so.');
+    } finally {ovr.dom.window.close();}
     const approx=harness('approximate');
     try {
         await approx.pick(46.75,25);

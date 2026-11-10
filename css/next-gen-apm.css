@@ -91,6 +91,8 @@
 .apm-warnings { margin: 6px 0 0; padding-left: 18px; font-size: 11px; color: #ffd27f; }
 .apm-warnings[hidden] { display: none; }
 .apm-info-note { list-style: none; margin-left: -18px; color: #cfe8ff; font-style: italic; }
+.apm-hoard-override { color: #ffd27f; opacity: 1; border-left: 3px solid #ffd27f; padding-left: 8px; }
+.apm-hoard-override[hidden] { display: none; }
 .apm-note { font-size: 11px; opacity: 0.6; margin-top: 10px; }
 .apm-popup { font: 12px/1.4 'Outfit', system-ui, sans-serif; }
 

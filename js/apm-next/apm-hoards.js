@@ -112,7 +112,21 @@
             if(match){r.duplicate_of=match.id;pairs.push({id:r.id,duplicate_of:match.id,distance_m:distanceM(r,match)});}else kept.push(r);
         });return pairs;
     }
-    function ready() { return Object.keys(config.release).every(function(k){return config.release[k] === true;}); }
+    // The four reviews that must be evidenced before hoard training is trustworthy.
+    var REVIEW_KEYS = ['sourceReviewed','licenceApproved','chronologyReviewed','performancePassed'];
+    function ready() {
+        return REVIEW_KEYS.every(function (k) { return config.release[k] === true; });
+    }
+    // Training may run when the reviews are done, or when the operator has
+    // explicitly accepted them being open. Data imports only ever use ready().
+    function trainingAllowed() {
+        return ready() || config.release.operatorOverride === true;
+    }
+    function openReviews() {
+        return REVIEW_KEYS.filter(function (k) { return config.release[k] !== true; });
+    }
+    function overridden() { return trainingAllowed() && !ready(); }
     return { normalise:normalise,descriptivePart:descriptivePart,classifyRomanian:classifyRomanian,periodsRomanian:periodsRomanian,position:position,year:year,
-        groupsFor:groupsFor,normaliseDarmc:normaliseDarmc,deriveRomanian:deriveRomanian,distanceM:distanceM,similarity:similarity,markDuplicates:markDuplicates,ready:ready };
+        groupsFor:groupsFor,normaliseDarmc:normaliseDarmc,deriveRomanian:deriveRomanian,distanceM:distanceM,similarity:similarity,markDuplicates:markDuplicates,
+        ready:ready,trainingAllowed:trainingAllowed,openReviews:openReviews,overridden:overridden };
 });

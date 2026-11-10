@@ -311,8 +311,8 @@ function assertTextureMasked(heatmap, sourceMask, label) {
     const TAG = '20261102-apm-continuous-heat', BOUNDED = '20261102-apm-train-bounded-grid';
     const PARALLEL = '20261102-apm-parallel-fetch';
     for (const [file, version] of [['apm-heatmap', TAG],
-        ['apm-raster', '20261105-apm-loading-preview'], ['apm-i18n', '20261105-apm-loading-preview'], ['apm-pipeline', '20261105-apm-loading-preview'],
-        ['apm-ui', '20261105-apm-loading-preview']]) {
+        ['apm-raster', '20261109-apm-hoard-wording'], ['apm-i18n', '20261109-apm-hoard-wording'], ['apm-pipeline', '20261109-apm-hoard-wording'],
+        ['apm-ui', '20261109-apm-hoard-wording']]) {
         const tag = 'js/apm-next/' + file + '.js?v=' + version;
         assert.ok(html.includes(tag) && sw.includes(tag), file + ' is versioned and precached');
     }
@@ -325,7 +325,7 @@ function assertTextureMasked(heatmap, sourceMask, label) {
     // v396: the worker now imports the band-based polygoniser and apm-ui
     // points at the matching worker URL; the older tags above stay precached.
     const BAND_TAG = '20261102-apm-mask-band';
-    assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=20261105-apm-loading-preview'));
+    assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=20261109-apm-hoard-wording'));
     assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + BAND_TAG));
     assert.ok(sw.includes('js/apm-next/apm-polygonise.js?v=' + BAND_TAG));
     assert.ok(read('js/apm-next/apm-worker.js').includes("'apm-polygonise.js?v=" + BAND_TAG + "'"));

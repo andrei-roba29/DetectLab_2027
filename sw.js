@@ -1016,7 +1016,7 @@
 //   din vecinii pe care îi acoperă fereastra mutată, iar image-overlay-urile
 //   își mută cele patru colțuri cu aceiași metri. O poziție aliniată o dată
 //   e aceeași în ambele vizualizări. Vezi HISTORICAL_MAP_SHIFT.md §5.
-const CACHE_NAME = 'detectlab-v414-arch-report-zone';
+const CACHE_NAME = 'detectlab-v415-apm-hoard-wording';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1058,13 +1058,17 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 //   and js/map3d-terrain.js.
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
-  'css/next-gen-apm.css?v=20261105-apm-loading-preview',
-  'js/apm-next/apm-raster.js?v=20261105-apm-loading-preview',
-  'js/apm-next/apm-i18n.js?v=20261105-apm-loading-preview',
-  'js/apm-next/apm-pipeline.js?v=20261105-apm-loading-preview',
-  'js/apm-next/apm-ui.js?v=20261105-apm-loading-preview',
-  'js/apm-next/apm-worker.js?v=20261105-apm-loading-preview',
-  'js/apm-next/apm-loading-preview.js?v=20261105-apm-loading-preview',
+  'css/next-gen-apm.css?v=20261109-apm-hoard-wording',
+  'js/apm-next/apm-raster.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/apm-i18n.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/apm-pipeline.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/apm-ui.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/apm-worker.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/apm-loading-preview.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/hoards.config.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/apm-hoards.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/apm-hoard-provider.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/apm-hoard-scale.js?v=20261109-apm-hoard-wording',
 
   // v399: Romanian Heritage sublayers (reader dependencies are local).
   'js/map-app.js?v=20261102-ro-heritage',
@@ -1103,6 +1107,13 @@ const PRECACHE_URLS = [
   'js/apm-next/apm-pipeline.js?v=20261105-apm-mobile-train',
   'js/apm-next/apm-ui.js?v=20261105-apm-hotspot-explain',
   'js/apm-next/apm-ui.js?v=20261105-apm-mobile-train',
+  'css/next-gen-apm.css?v=20261105-apm-loading-preview',
+  'js/apm-next/apm-raster.js?v=20261105-apm-loading-preview',
+  'js/apm-next/apm-i18n.js?v=20261105-apm-loading-preview',
+  'js/apm-next/apm-pipeline.js?v=20261105-apm-loading-preview',
+  'js/apm-next/apm-ui.js?v=20261105-apm-loading-preview',
+  'js/apm-next/apm-worker.js?v=20261105-apm-loading-preview',
+  'js/apm-next/apm-loading-preview.js?v=20261105-apm-loading-preview',
   'js/apm-next/apm-explain.js?v=20261105-apm-hotspot-explain',
   'js/apm-next/apm-worker.js?v=20261105-apm-hotspot-explain',
   'js/apm-next/apm-worker.js?v=20261105-apm-mobile-train',
