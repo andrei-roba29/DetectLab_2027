@@ -447,3 +447,20 @@ change, `category` handed to the engine, `baselineCategory` in the model),
 `detectlab-v417-apm-train-parity`, asset tag `20261109-apm-train-parity`.
 **Not measured:** wall-clock and network cost of a real hoard run at 150 m
 resolution — the tests use synthetic DEM/hoard fixtures, never live services.
+
+## Panel copy removed from TEZAURE TRAIN (2026-11-09, operator request)
+
+The hoard TRAIN settings used to carry four explanatory paragraphs and an
+operator-override note under the controls: the radius/resolution sentence
+(`hoard.area`), the discovery-bias paragraph (`hoard.notice`), the
+sources/licence line (`hoard.attribution`), the "periods describe the objects"
+paragraph (`hoard.objectDates`) and the override statement (`hoard.override`).
+All five are gone — the elements, the run-button tooltip and the i18n keys in
+both languages. What stays in that block is controls only: *Include approximate
+positions*, *Background comparison points*, and the closed-gate note
+(`hoard.pending`) that explains a disabled button.
+
+Nothing about safety moved out of the data: `warn.hoardOverride` still travels
+in every result produced under the operator switch, and the result panel lists
+it, so an export cannot be mistaken for a reviewed model. `test-apm-train-network.js`
+asserts the panel no longer contains those texts and that the result still does.
