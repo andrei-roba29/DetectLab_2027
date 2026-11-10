@@ -228,6 +228,32 @@
         if (typeof pot.POLYGON_GUARD_STEP_M === 'number') CONFIG.SITE.POLYGON_GUARD_STEP_M = pot.POLYGON_GUARD_STEP_M;
     }
 
+    /* ── Regiunea raportului ────────────────────────────────────────────────
+     * RO — situri RAN, mască UAT (fail-closed, 500 m clearance), APM 2.0 sau
+     *      Next-Gen ca baseline.
+     * DK — situri Fund og Fortidsminder (js/archeo-dk-source.js), FĂRĂ mască
+     *      UAT (nu există raster de intravilan danez), iar APM 2.0 nu acoperă
+     *      Danemarca: baseline-ul trebuie să fie Next-Gen.
+     * Restul lanțului (scoruri, bonusuri, PDF) e identic. */
+    function sourceApi() { return window.DetectLabArcheoRegions || null; }
+
+    function regionFor(lat, lng) {
+        var api = sourceApi();
+        if (api && typeof api.regionFor === 'function') return api.regionFor(lat, lng);
+        return null;
+    }
+
+    function regionSiteRadii(region) {
+        return {
+            radiusM: (region && typeof region.siteRadiusM === 'number') ? region.siteRadiusM : CONFIG.SITE.RADIUS_M,
+            bufferM: (region && typeof region.siteBufferM === 'number') ? region.siteBufferM : CONFIG.SITE.BUFFER_M
+        };
+    }
+
+    function regionUatApplied(region) {
+        return !(region && region.uat === false);
+    }
+
     /* ═══════════════════════════════════════════════════════════════════════
      * 2. i18n — every user-facing string lives in js/translations.js under an
      *    `arch_report_*` key (RO + EN). The built-in English fallback keeps the
@@ -237,7 +263,11 @@
         arch_report_title: 'Archaeological Report',
         arch_report_result: 'Result',
         arch_report_score: 'Score',
-        arch_report_site_unknown: 'Unnamed site'
+        arch_report_site_unknown: 'Unnamed site',
+        arch_report_sites_note_dk: 'Distances are measured to the site geometry; for polygon sites, to the nearest point of their boundary. Links open the Fund og Fortidsminder record (Slots- og Kulturstyrelsen, CC0).',
+        arch_report_apm20_outside: 'APM 2.0 covers Romania only — pick a Next-Gen baseline for this point.',
+        arch_report_region_dk: 'Denmark edition · sites from Fund og Fortidsminder (CC0); no built-up (UAT) exclusion applies here.',
+        arch_report_step_dk: 'Reading the Fund og Fortidsminder register…'
     };
 
     function lang() {
@@ -630,8 +660,56 @@
         commune: ['COMUNA', 'Comuna', 'UAT', 'Comuna_1']
     };
 
+    /* Fund og Fortidsminder (DK) are alte atribute: `anlaegstype` e tipul
+     * monumentului, `datering` datarea (text liber), `frednr` numărul de
+     * protecție, iar serviciul livrează deja un `url` către fișă. Nu există
+     * „cod RAN”, deci nici link ran.cimec.ro. */
+    var DK_PROP_NAMES = {
+        name: ['betegnelse', 'navn', 'titel', 'anlaegstype'],
+        type: ['anlaegstype', 'kategori'],
+        period: ['datering', 'periode'],
+        locality: ['sogn', 'kommune'],
+        county: ['region', 'kommune'],
+        id: ['frednr', 'stednr']
+    };
+
+    function siteInfoDk(rec) {
+        var p = rec.props || {};
+        var id = pickProp(p, DK_PROP_NAMES.id);
+        var kind = pickProp(p, DK_PROP_NAMES.type);
+        var name = pickProp(p, DK_PROP_NAMES.name) || (id ? 'Fortidsminde ' + id : null);
+        var period = pickProp(p, DK_PROP_NAMES.period);
+        var periodFromProperty = periodKey(period);
+        var periodFromName = name ? periodKey(name) : null;
+        var url = pickProp(p, ['url']);
+        if (!url && id) {
+            url = 'https://www.kulturarv.dk/fundogfortidsminder/Lokalitet/detaljer/?id=' +
+                encodeURIComponent(id);
+        }
+        return {
+            layerId: rec.layerId,
+            oid: rec.oid,
+            isPolygon: rec.isPolygon,
+            region: 'DK',
+            name: name || tr('arch_report_site_unknown'),
+            ran: null,
+            dkId: id,
+            period: period,
+            periodKey: periodFromProperty || periodFromName || null,
+            datingFromName: !periodFromProperty && !!periodFromName,
+            type: kind,
+            locality: pickProp(p, DK_PROP_NAMES.locality),
+            commune: pickProp(p, ['kommune']),
+            county: pickProp(p, DK_PROP_NAMES.county),
+            lat: rec.lat,
+            lng: rec.lng,
+            url: url
+        };
+    }
+
     function siteInfo(rec) {
         var p = rec.props || {};
+        if (p.__dk === true) return siteInfoDk(rec);
         var ran = pickProp(p, PROP_NAMES.ran);
         var rawName = pickProp(p, PROP_NAMES.name);
         var name = rawName || (ran ? 'RAN ' + ran : null);
@@ -733,6 +811,10 @@
      *          nearest non-red pixel (Infinity when the whole disc is red).
      */
     function uatVerdict(grid, x, y, maxM) {
+        // Fără grid nu există confirmare de „teren liber” → fail closed, nu
+        // excepție (un apelant care uită grid-ul primește zero rezultate,
+        // exact ca un raster necitit).
+        if (!grid || !grid.red || !(grid.cellM > 0)) return { red: false, clearanceM: 0 };
         var cx = Math.floor((x - grid.x0) / grid.cellM);
         var cy = Math.floor((y - grid.y0) / grid.cellM);
         if (cx < 0 || cy < 0 || cx >= grid.cols || cy >= grid.rows) return { red: false, clearanceM: 0 };
@@ -1234,6 +1316,15 @@
         return seeds;
     }
 
+    // Razele de protecție vin din regiune (RO 600 + 100 m, DK 100 + 25 m),
+    // setate pe ctx la începutul rulării.
+    function siteRadiusM(ctx) {
+        return (ctx && typeof ctx.siteRadiusM === 'number') ? ctx.siteRadiusM : CONFIG.SITE.RADIUS_M;
+    }
+    function siteBufferM(ctx) {
+        return (ctx && typeof ctx.siteBufferM === 'number') ? ctx.siteBufferM : CONFIG.SITE.BUFFER_M;
+    }
+
     // Mandatory spatial exclusions (site radii + polygons). Mirrors
     // archeo-potential.js: same radius, same perimeter guard points.
     function passesSiteFilters(x, y, ctx) {
@@ -1243,7 +1334,7 @@
                 if (pointInPolygon(x, y, rings[r])) return { ok: false, reason: 'site_polygon' };
             }
         }
-        var minDist = CONFIG.SITE.RADIUS_M + CONFIG.SITE.BUFFER_M;
+        var minDist = siteRadiusM(ctx) + siteBufferM(ctx);
         for (var i = 0; i < ctx.siteRecords.length; i++) {
             if (distanceToSite(x, y, ctx.siteRecords[i]) < minDist) {
                 return { ok: false, reason: 'site_radius' };
@@ -1260,17 +1351,21 @@
         var area = ctx.square;
         var dx = x - area.cx, dy = y - area.cy;
         if (Math.hypot(dx, dy) + diagonal > area.radiusM) return false;
-        var grid = ctx.uatGrid;
-        if (!grid || !grid.red || !(grid.cellM > 0)) return false;
-        var x0 = Math.floor((x - half - grid.x0) / grid.cellM);
-        var x1 = Math.floor((x + half - grid.x0) / grid.cellM);
-        var y0 = Math.floor((y - half - grid.y0) / grid.cellM);
-        var y1 = Math.floor((y + half - grid.y0) / grid.cellM);
-        if (x0 < 0 || y0 < 0 || x1 >= grid.cols || y1 >= grid.rows) return false;
-        for (var row = y0; row <= y1; row++) for (var col = x0; col <= x1; col++) {
-            if (!grid.red[row * grid.cols + col]) return false;
+        // Fără mască UAT (Danemarca) nu există „celulă roșie” de respectat;
+        // tot restul (raze de protecție, contururi, marginea ariei) rămâne.
+        if (ctx.uatApplied !== false) {
+            var grid = ctx.uatGrid;
+            if (!grid || !grid.red || !(grid.cellM > 0)) return false;
+            var x0 = Math.floor((x - half - grid.x0) / grid.cellM);
+            var x1 = Math.floor((x + half - grid.x0) / grid.cellM);
+            var y0 = Math.floor((y - half - grid.y0) / grid.cellM);
+            var y1 = Math.floor((y + half - grid.y0) / grid.cellM);
+            if (x0 < 0 || y0 < 0 || x1 >= grid.cols || y1 >= grid.rows) return false;
+            for (var row = y0; row <= y1; row++) for (var col = x0; col <= x1; col++) {
+                if (!grid.red[row * grid.cols + col]) return false;
+            }
         }
-        var radius = CONFIG.SITE.RADIUS_M + CONFIG.SITE.BUFFER_M;
+        var radius = siteRadiusM(ctx) + siteBufferM(ctx);
         for (var i = 0; i < ctx.siteRecords.length; i++) {
             var points = ctx.siteRecords[i].points;
             for (var j = 0; j < points.length; j++) {
@@ -1335,9 +1430,14 @@
         var bonus = ctx.bonus || CONFIG.BONUSES;
 
         // ── exclusion A: UAT red + 500 m clearance ──
-        var uat = uatVerdict(ctx.uatGrid, x, y, CONFIG.UAT.CLEARANCE_M);
-        if (!uat.red) return { ok: false, reason: 'uat_not_red' };
-        if (uat.clearanceM < CONFIG.UAT.CLEARANCE_M) return { ok: false, reason: 'uat_too_close' };
+        // Doar în regiunile care au raster de intravilan. În Danemarca
+        // excluderea nu se aplică deloc — nu e „raster necitit”, e absența
+        // stratului, iar raportul o declară în meta (`uatApplied: false`).
+        if (ctx.uatApplied !== false) {
+            var uat = uatVerdict(ctx.uatGrid, x, y, CONFIG.UAT.CLEARANCE_M);
+            if (!uat.red) return { ok: false, reason: 'uat_not_red' };
+            if (uat.clearanceM < CONFIG.UAT.CLEARANCE_M) return { ok: false, reason: 'uat_too_close' };
+        }
 
         // ── exclusion B: site radii / polygons ──
         var site = passesSiteFilters(x, y, ctx);
@@ -1441,7 +1541,7 @@
                 lidarIgnored: !!ctx.ignoreLidar,
                 lidarDistM: lidar ? Math.round(lidar.distM) : null,
                 lidarPoint: lidar ? lidar.point : null,
-                uatClearanceM: isFinite(uat.clearanceM) ? Math.round(uat.clearanceM) : null,
+                uatClearanceM: (uat && isFinite(uat.clearanceM)) ? Math.round(uat.clearanceM) : null,
                 romanRoadApplied: roadNearby,
                 romanRoadBonus: !!bonus.roads,
                 romanRoadComp: roadComp,
@@ -2177,12 +2277,43 @@
 
         return (async function main() {
             try {
-                setStatus('arch_report_step_sites');
-                var siteData = await waitForSiteData();
-                if (myVersion !== _state.version) return null;
-                if (!siteData || window._detectlabApiFailed) {
-                    setStatus('arch_report_heritage_unavailable', true);
+                // Regiunea decide sursa siturilor și ce excluderi se aplică.
+                // În Danemarca APM 2.0 nu acoperă zona: cerem explicit un
+                // baseline Next-Gen, fără să comutăm în tăcere.
+                var region = regionFor(center.lat, center.lng);
+                var isDK = !!(region && region.id === 'DK');
+                setStatus(isDK ? 'arch_report_step_dk' : 'arch_report_step_sites');
+                if (isDK && settings.baseline === 'apm20') {
+                    setStatus('arch_report_apm20_outside', true);
                     return null;
+                }
+                var radii = regionSiteRadii(region);
+
+                if (isDK) {
+                    var prep = window._archeoPotentialDebug &&
+                        window._archeoPotentialDebug.prepareRegionSites;
+                    if (typeof prep !== 'function') {
+                        setStatus('arch_report_heritage_unavailable', true);
+                        return null;
+                    }
+                    await prep(center.lat, center.lng, CONFIG.POTENTIAL.SEARCH_RADIUS_M, {
+                        skipDataWait: true,
+                        isCancelled: function () { return myVersion !== _state.version; }
+                    });
+                    if (myVersion !== _state.version) return null;
+                    var meta = window._archeoPotentialDebug.externalMeta
+                        ? window._archeoPotentialDebug.externalMeta() : null;
+                    if (!meta || (meta.sources.length && meta.failed === meta.sources.length)) {
+                        setStatus('arch_report_heritage_unavailable', true);
+                        return null;
+                    }
+                } else {
+                    var siteData = await waitForSiteData();
+                    if (myVersion !== _state.version) return null;
+                    if (!siteData || window._detectlabApiFailed) {
+                        setStatus('arch_report_heritage_unavailable', true);
+                        return null;
+                    }
                 }
 
                 var radiusKm = currentRadiusKm();
@@ -2198,11 +2329,18 @@
                     baselineCategory: settings.category,
                     radiusM: radiusM,
                     areaKm2: Math.PI * radiusM * radiusM / 1e6,
-                    square: analysisArea(center.lat, center.lng, radiusM)
+                    square: analysisArea(center.lat, center.lng, radiusM),
+                    region: region ? region.id : null,
+                    regionMeta: isDK && window._archeoPotentialDebug && window._archeoPotentialDebug.externalMeta
+                        ? window._archeoPotentialDebug.externalMeta() : null,
+                    // Fără raster de intravilan (DK) excluderea A nu se aplică.
+                    uatApplied: regionUatApplied(region),
+                    siteRadiusM: radii.radiusM,
+                    siteBufferM: radii.bufferM
                 };
 
                 // ── known sites (radii + polygons) via archeo-potential.js ──
-                var collected = collectSites(center.lat, center.lng, Math.max(CONFIG.POTENTIAL.SEARCH_RADIUS_M, radiusM + CONFIG.SITE.RADIUS_M + CONFIG.SITE.BUFFER_M + CONFIG.FOCUS.CELL_M), ctx.lat0);
+                var collected = collectSites(center.lat, center.lng, Math.max(CONFIG.POTENTIAL.SEARCH_RADIUS_M, radiusM + radii.radiusM + radii.bufferM + CONFIG.FOCUS.CELL_M), ctx.lat0);
                 ctx.sites = collected.sites || [];
                 ctx.polygons = collected.polygons || [];
                 ctx.siteRecords = buildSiteRecords(ctx.sites);
@@ -2268,7 +2406,12 @@
                 setStatus('arch_report_step_uat');
                 var bbox = buildBbox(ctx.square, CONFIG.UAT.CLEARANCE_M + CONFIG.UAT.CELL_M * 2, ctx.lat0);
                 ctx.bbox = bbox;
-                var uatPromise = buildUatGrid(bbox, uatCellM(ctx.radiusM));
+                // Fără regiune cu intravilan nu se descarcă nimic: ctx.uatGrid
+                // rămâne un grid „inactiv”, ca restul codului (meta, PDF) să
+                // nu vadă null.
+                var uatPromise = ctx.uatApplied
+                    ? buildUatGrid(bbox, uatCellM(ctx.radiusM))
+                    : Promise.resolve({ applied: false, available: false, red: null, cellM: 0 });
                 if (ctx.baseline === 'apm20') {
                     setStatus('arch_report_step_apm');
                     var grids = await Promise.all([
@@ -2359,7 +2502,11 @@
                         candidates: candidates.length,
                         requestedResults: requestedResults,
                         rejected: rejected,
-                        uatAvailable: !!ctx.uatGrid.available,
+                        region: ctx.region,
+                        uatApplied: ctx.uatApplied !== false,
+                        uatAvailable: !!(ctx.uatGrid && ctx.uatGrid.available),
+                        siteRadiusM: siteRadiusM(ctx),
+                        siteBufferM: siteBufferM(ctx),
                         apmAvailable: !!ctx.apmGrid.available,
                         apmUnreadable: !!ctx.apmGrid.unreadable,
                         ms: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0)
@@ -2367,9 +2514,10 @@
                     results: results,
                     weights: scoringWeights(!ctx.ignoreLidar && ctx.bonus.lidar, ctx.bonus),
                     thresholds: {
-                        uatClearanceM: CONFIG.UAT.CLEARANCE_M,
-                        siteRadiusM: CONFIG.SITE.RADIUS_M,
-                        siteBufferM: CONFIG.SITE.BUFFER_M,
+                        uatClearanceM: ctx.uatApplied === false ? null : CONFIG.UAT.CLEARANCE_M,
+                        uatApplied: ctx.uatApplied !== false,
+                        siteRadiusM: siteRadiusM(ctx),
+                        siteBufferM: siteBufferM(ctx),
                         lidarHitM: CONFIG.LIDAR.HIT_M,
                         lidarProximityM: CONFIG.LIDAR.PROXIMITY_M,
                         potentialProximityM: CONFIG.POTENTIAL.PROXIMITY_M,
@@ -2385,7 +2533,7 @@
                     rejected);
 
                 if (!results.length) setStatus('arch_report_no_results', true);
-                else setStatus('arch_report_done');
+                else setStatus(ctx.region === 'DK' ? 'arch_report_region_dk' : 'arch_report_done');
                 return _state.model;
             } catch (err) {
                 console.error('[ArcheoReport] analysis failed:', err);
@@ -3863,9 +4011,18 @@
      * 16. PUBLIC API
      * ═══════════════════════════════════════════════════════════════════════ */
     window.showArcheoReportInfo = function () {
-        if (typeof window.showLayerInfo === 'function') {
-            window.showLayerInfo(tr('layer_arch_report'), '© DetectLab 2026 · APM 2.0 + RAN CIMEC + LIDAR', tr('arch_report_hint_bottom'));
-        }
+        if (typeof window.showLayerInfo !== 'function') return;
+        // Fereastra de info urmează regiunea punctului curent: în Danemarca
+        // siturile vin din Fund og Fortidsminder, APM 2.0 nu există și nu se
+        // aplică nicio excludere de intravilan.
+        var pt = _state && _state.point;
+        var region = pt ? regionFor(pt.lat, pt.lng) : null;
+        var isDK = !!(region && region.id === 'DK');
+        window.showLayerInfo(
+            tr('layer_arch_report'),
+            isDK ? '© DetectLab 2026 · APM Next-Gen + Fund og Fortidsminder (CC0) + LIDAR'
+                 : '© DetectLab 2026 · APM 2.0 + RAN CIMEC + LIDAR',
+            tr(isDK ? 'arch_report_region_dk' : 'arch_report_hint_bottom'));
     };
     window.toggleArcheoReportLayer = setActive;
     window.runArcheoReport = runReport;
@@ -3930,6 +4087,11 @@
         buildFocusAreas: buildFocusAreas,
         buildSiteRecords: buildSiteRecords,
         siteInfo: siteInfo,
+        regionFor: regionFor,
+        regionSiteRadii: regionSiteRadii,
+        regionUatApplied: regionUatApplied,
+        siteRadiusM: siteRadiusM,
+        siteBufferM: siteBufferM,
         distanceToSite: distanceToSite,
         classifyApmPixel: classifyApmPixel,
         isRedUatPixel: isRedUatPixel,

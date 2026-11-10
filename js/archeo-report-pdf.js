@@ -884,7 +884,11 @@
             [148, 96, 86, 52, CONTENT_W - 382],
             { size: 8, rowHeight: 15 }
         );
-        pt.para(tr('arch_report_sites_note'), { size: 8, color: C.muted });
+        // Nota despre linkuri diferă: în RO duce la RAN / CIMEC, în DK la
+        // fișa Fund og Fortidsminder (CC0).
+        pt.para(tr(model && model.meta && model.meta.region === 'DK'
+            ? 'arch_report_sites_note_dk' : 'arch_report_sites_note'),
+            { size: 8, color: C.muted });
         return pt.finishPage();
     }
 

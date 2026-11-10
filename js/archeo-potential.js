@@ -96,6 +96,19 @@
                                      //   6 = RAN site boundaries (polygons)
         INCLUDE_APPROXIMATE_SITES: true,  // layer 0 sites with COORD !== 'DA' (locality-level precision)
 
+        // Regiuni -------------------------------------------------------------
+        // Logica (triangulare, punctaj, bule, heat) e identică peste graniță;
+        // doar sursa siturilor și excluderea de intravilan diferă:
+        //   RO — straturile RAN din window._localLayerData (0/5/6) + raster UAT
+        //   DK — Fund og Fortidsminder (WFS, CC0) prin js/archeo-dk-source.js,
+        //        fără UAT (nu există raster de intravilan danez în aplicație)
+        // `REGION.OVERRIDE` forțează o regiune din consolă ('RO' / 'DK').
+        REGION: { OVERRIDE: null },
+        REGIONS: {                   // valori implicite când modulul de surse lipsește
+            RO: { id: 'RO', siteRadiusM: 600, siteBufferM: 100, polygonGuardStepM: 400, uat: true },
+            DK: { id: 'DK', siteRadiusM: 100, siteBufferM: 25, polygonGuardStepM: 200, uat: false }
+        },
+
         // Site protection radii (distance filter) ---------------------------
         SITE_RADIUS_M: 600,          // each known site's protection/search radius (matches app circles)
         SITE_BUFFER_M: 100,          // mandatory clearance OUTSIDE the radius: dist > radius + buffer
@@ -372,6 +385,49 @@
 
     var _siteIndexCache = null; // { key, pointIndex, polygons }
 
+    /* ── Regiunea activă + sursa externă de situri ─────────────────────────
+     * Pentru România sursa rămâne `window._localLayerData` (identic cu
+     * înainte). Pentru Danemarca, `_externalSiteData` ține FeatureCollections
+     * aduse de js/archeo-dk-source.js în EXACT aceeași formă ({0: puncte,
+     * 6: poligoane}), deci restul lanțului (index global, raze, triangulare,
+     * bule, heat) rulează neatins. */
+    var _activeRegion = null;      // null = fără regiune explicită (comportament RO)
+    var _externalSiteData = null;  // setat doar pentru DK
+    var _externalMeta = null;      // { sources[], points, polygons, truncated, failed, attribution }
+
+    function sourceApi() {
+        return window.DetectLabArcheoRegions || null;
+    }
+
+    function regionDefaults(id) {
+        var api = sourceApi();
+        if (api && api.REGIONS && api.REGIONS[id]) return api.REGIONS[id];
+        return CONFIG.REGIONS[id] || null;
+    }
+
+    // Regiunea unui punct, ținând cont de override-ul din consolă.
+    function regionFor(lat, lng) {
+        var forced = CONFIG.REGION && CONFIG.REGION.OVERRIDE;
+        if (forced) return regionDefaults(String(forced).toUpperCase());
+        var api = sourceApi();
+        if (api && typeof api.regionFor === 'function') return api.regionFor(lat, lng);
+        // Fallback fără modulul de surse: doar cutia României (comportamentul vechi).
+        if (typeof lat === 'number' && typeof lng === 'number' &&
+            lat >= 43.4 && lat <= 48.5 && lng >= 20.0 && lng <= 29.9) return regionDefaults('RO');
+        return null;
+    }
+
+    // Efectivul folosit de motor: razele regiunii, nu constantele românești.
+    function regionRadii(region) {
+        var r = region || null;
+        return {
+            siteRadiusM: (r && typeof r.siteRadiusM === 'number') ? r.siteRadiusM : CONFIG.SITE_RADIUS_M,
+            siteBufferM: (r && typeof r.siteBufferM === 'number') ? r.siteBufferM : CONFIG.SITE_BUFFER_M,
+            polygonGuardStepM: (r && typeof r.polygonGuardStepM === 'number')
+                ? r.polygonGuardStepM : CONFIG.POLYGON_GUARD_STEP_M
+        };
+    }
+
     // Wait until the app's layer data has been fetched (it loads on page
     // load asynchronously). Resolves with the raw layer data object.
     function waitForSiteData() {
@@ -392,6 +448,48 @@
         });
     }
 
+    // Pregătește sursa de situri pentru o rulare:
+    //   DK → descarcă Fund og Fortidsminder (WFS) și o pune în `_externalSiteData`
+    //   RO → așteaptă straturile RAN ca până acum și golește sursa externă
+    // Rezolvă cu regiunea folosită (sau null când punctul e în afara zonelor).
+    function prepareRegionSites(centerLat, centerLng, radiusM, opts) {
+        opts = opts || {};
+        var region = regionFor(centerLat, centerLng);
+        var api = sourceApi();
+
+        if (region && region.id === 'DK' && api && typeof api.loadDanishSites === 'function') {
+            // Raportul pregătește sursa o dată, apoi stratul de potențial o
+            // cere din nou cu raza lui: dacă zona cerută e deja acoperită de
+            // ce s-a descărcat, nu mai pleacă un al doilea val de request-uri.
+            if (!opts.forceReload && _externalSiteData && _externalMeta && _externalMeta.bbox &&
+                typeof api.bboxFor === 'function') {
+                var need = api.bboxFor(centerLat, centerLng, radiusM);
+                var have = _externalMeta.bbox;
+                if (need[0] >= have[0] - 1e-9 && need[2] <= have[2] + 1e-9 &&
+                    need[1] >= have[1] - 1e-9 && need[3] <= have[3] + 1e-9) {
+                    _activeRegion = region;
+                    return Promise.resolve(region);
+                }
+            }
+            return api.loadDanishSites(centerLat, centerLng, radiusM, {
+                force: !!opts.forceReload,
+                isCancelled: opts.isCancelled
+            }).then(function (res) {
+                _activeRegion = region;
+                _externalSiteData = (res && res.data) || null;
+                _externalMeta = (res && res.meta) || null;
+                _siteIndexCache = null;   // sursă nouă → index nou
+                return region;
+            });
+        }
+
+        _activeRegion = region;
+        _externalSiteData = null;
+        _externalMeta = null;
+        if (opts.skipDataWait) return Promise.resolve(region);
+        return waitForSiteData().then(function () { return region; });
+    }
+
     // Build (once) the global spatial cache over all heritage features.
     // Returns { pointIndex, polygons }.
     //
@@ -400,7 +498,12 @@
     // is only a culling structure — exact distances are recomputed in local
     // meters per analysis run.
     function buildGlobalSiteIndex(data) {
-        var key = CONFIG.SITE_LAYERS.join(',') + '|' + (CONFIG.INCLUDE_APPROXIMATE_SITES ? 1 : 0);
+        // `external` = sursa daneză (Fund og Fortidsminder). Filtrul românesc
+        // `props.COORD !== 'DA'` nu are sens acolo: serviciul danez nu are
+        // coloana COORD, iar aplicarea lui ar arunca toate siturile.
+        var external = !!(data && data === _externalSiteData);
+        var key = CONFIG.SITE_LAYERS.join(',') + '|' + (CONFIG.INCLUDE_APPROXIMATE_SITES ? 1 : 0) +
+            '|' + (external ? 'ext' : 'local');
         // Individual asynchronous downloads replace layer values in the same
         // container; the container identity alone does not detect that change.
         var layerRefs = CONFIG.SITE_LAYERS.map(function (id) { return data[id]; });
@@ -420,7 +523,7 @@
                 if (!f.geometry) return;
                 var props = f.properties || {};
 
-                if (lid === 0 && !CONFIG.INCLUDE_APPROXIMATE_SITES && props.COORD !== 'DA') return;
+                if (lid === 0 && !external && !CONFIG.INCLUDE_APPROXIMATE_SITES && props.COORD !== 'DA') return;
 
                 if (f.geometry.type === 'Point') {
                     var c = f.geometry.coordinates;
@@ -470,7 +573,8 @@
     // Collect every site inside the search circle, projected into local meters.
     // Returns { sites: [{x,y,lat,lng,layerId,oid}], polygons: [{rings(local), bboxLocal}] }
     function collectSitesInRadius(centerLat, centerLng, radiusM, lat0, preserveSites) {
-        var cache = buildGlobalSiteIndex(window._localLayerData || {});
+        var cache = buildGlobalSiteIndex(_externalSiteData || window._localLayerData || {});
+        var guardStepM = regionRadii(_activeRegion).polygonGuardStepM;
         var c = projectToLocalMeters(centerLat, centerLng, lat0);
         var DEG_R = radiusM / 111320; // latitude radius for coarse culling
         var DEG_LNG_R = DEG_R / Math.max(0.01, Math.abs(Math.cos(centerLat * Math.PI / 180)));
@@ -531,7 +635,7 @@
                 for (var j = 0; j < ring.length - 1; j++) {
                     var a = ring[j], b = ring[j + 1];
                     var len = Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y));
-                    var steps = Math.max(1, Math.ceil(len / CONFIG.POLYGON_GUARD_STEP_M));
+                    var steps = Math.max(1, Math.ceil(len / guardStepM));
                     for (var s = 0; s < steps; s++) {
                         guards.push({
                             x: a.x + (b.x - a.x) * s / steps,
@@ -1132,6 +1236,10 @@
     // Rămâne async pentru pipeline-ul vechi de candidați (Raportul arheologic),
     // care păstrează politica „fail closed" a aplicației pentru acel flux.
     function uatPixelAt(lat, lng) {
+        // Regiune fără raster de intravilan (Danemarca): nu există „roșu UAT”,
+        // deci fiecare pixel e considerat teren liber. Aici NU e o eroare de
+        // citire — e absența stratului, tratată explicit, nu prin fail-open.
+        if (_activeRegion && _activeRegion.uat === false) return Promise.resolve(true);
         if (typeof window._uatGetTile !== 'function' && typeof Image === 'undefined') {
             return Promise.resolve(null);
         }
@@ -1705,16 +1813,32 @@
         // goală, exact simptomul „uneori nu generează nimic, în mod aleator".
         var failOpen = (uatCfg().FAIL_OPEN_WHEN_UNREADABLE !== false);
 
+        var region = null;
+
         return (async function main() {
-            if (!opts.skipDataWait) await waitForSiteData();
+            region = await prepareRegionSites(centerLat, centerLng, radius, {
+                skipDataWait: !!opts.skipDataWait,
+                isCancelled: isCancelled,
+                forceReload: !!opts.forceReload
+            });
+            if (isCancelled()) {
+                return { status: 'cancelled', results: [], bubbles: [], stats: { sites: 0 }, region: region ? region.id : null };
+            }
+            if (region && region.id === 'DK' && _externalMeta &&
+                _externalMeta.sources.length && _externalMeta.failed === _externalMeta.sources.length) {
+                return { status: 'heritage_unavailable', results: [], bubbles: [],
+                         stats: { sites: 0 }, region: region.id, meta: _externalMeta };
+            }
+            var radii = regionRadii(region);
 
             var ctx = collectSitesInRadius(centerLat, centerLng, radius, lat0);
             ctx.center = projectToLocalMeters(centerLat, centerLng, lat0);
             ctx.centerLat = centerLat;
             ctx.centerLng = centerLng;
             ctx.radius = radius;
-            ctx.siteRadius = CONFIG.SITE_RADIUS_M;
-            ctx.siteBuffer = CONFIG.SITE_BUFFER_M;
+            ctx.region = region ? region.id : null;
+            ctx.siteRadius = radii.siteRadiusM;
+            ctx.siteBuffer = radii.siteBufferM;
             ctx.mode = mode;
             ctx.triangles = [];
             ctx.triIndex = null;
@@ -1737,9 +1861,24 @@
                 heat: null,
                 uat: {
                     available: false, active: false, failOpen: failOpen,
+                    // Regiunile fără raster de intravilan (DK) nu au deloc
+                    // excludere de intravilan — `applied: false` o spune
+                    // explicit, ca UI-ul să nu raporteze „raster necitit”.
+                    applied: !(region && region.uat === false),
                     total: 0, ok: 0, failed: 0,
                     unknownCells: 0, minRedFraction: uatMinRedFraction()
                 },
+                region: region ? region.id : null,
+                regionMeta: _externalMeta ? {
+                    provider: _externalMeta.provider,
+                    attribution: _externalMeta.attribution,
+                    points: _externalMeta.points,
+                    polygons: _externalMeta.polygons,
+                    lines: _externalMeta.lines,
+                    truncated: _externalMeta.truncated,
+                    failed: _externalMeta.failed,
+                    sources: _externalMeta.sources
+                } : null,
                 ctx: ctx,
                 stats: {
                     sites: ctx.sites.length, cells: grid.cells.length,
@@ -1784,7 +1923,12 @@
             }
 
             // ── UAT: pre-încărcarea tile-urilor (0–30% din progres) ──────────
-            if (!opts.skipUatPrewarm) {
+            // Doar în regiunile care au un astfel de raster (RO). Pentru DK
+            // nu există nimic de descărcat și nimic de exclus.
+            var uatCompulsory = field.uat.applied !== false;
+            if (!uatCompulsory) {
+                field.uat.available = false;
+            } else if (!opts.skipUatPrewarm) {
                 var prewarm = await prewarmUatTiles(grid.bbox, function (ratio) {
                     if (onProgress) onProgress(0.3 * ratio);
                 });
@@ -1798,7 +1942,7 @@
             } else {
                 field.uat.available = false;
             }
-            var uatActive = field.uat.available || !failOpen;
+            var uatActive = uatCompulsory && (field.uat.available || !failOpen);
             field.uat.active = uatActive;
 
             var cells = grid.cells;
@@ -1826,7 +1970,7 @@
                         }
                     } else if (!reason) {
                         cell.uatRed = null;
-                        field.stats.uatUnknown++;
+                        if (uatCompulsory) field.stats.uatUnknown++;
                     }
 
                     if (reason === 'uat' || reason === 'heritage') {
@@ -3463,10 +3607,20 @@
             summary_field: '{n} bubbles ({h} High · {m} Medium · {l} Low) covering {c}% of the free ground · {s} scored cells · {x} excluded (red)',
             summary_heat: '{n} scored cells in the heatmap ({h} High · {m} Medium · {l} Low) · {x} excluded (red)',
             pin_set: 'Pin at {lat}, {lng} · radius {r} km — press “Detect”.',
+            // Danemarca (Fund og Fortidsminder): aceleași scoruri, altă sursă.
+            running_source_dk: 'Reading the Fund og Fortidsminder records…',
+            done_dk: 'Analysis complete · {n} sites from Fund og Fortidsminder (CC0){t}.',
+            done_dk_truncated: ', {t} source type(s) truncated at the service cap',
+            no_sites_dk: 'Not enough sites in the Fund og Fortidsminder area (need at least 3).',
+            no_candidates_dk: 'No cell passed the filters (site protection radii). Try a different area.',
+            no_bubbles_dk: 'Every scored cell sits too close to a site protection radius for a whole bubble to fit — switch to Heatmap to read the scores.',
+            sparse_sites_dk: 'Only {n} site(s) from Fund og Fortidsminder in the area — the scores come from the site distances alone (no triangulation).',
+            heritage_unavailable_dk: 'The Fund og Fortidsminder register could not be read — try again or check the connection.',
             // Titlul + explicația afișate în fereastra de info a stratului
             // (butonul „i” din panou) — aceleași valori ca layer_archeo_potential /
             // archeo_hint din translations.js, mutate aici odată cu fereastra.
             info_title: 'Archeological Potential Sites',
+            info_hint_dk: 'The same triangulation logic, but the sites come from Fund og Fortidsminder (Slots- og Kulturstyrelsen, CC0): protected points and areas, plus the protected-line features reduced to their midpoint. Red = the 100 m protection radius + 25 m clearance and the site outlines. Denmark has no built-up (UAT) raster in the app, so no built-up exclusion is applied here.',
             info_hint: 'Searches for locations with archaeological potential reported to the marked archaeological sites, based on a triangulation logic — colour = score, on one absolute scale shared with the bubbles and with the legend. Red = the UAT built-up area and the protection radii of the sites, where nothing is generated.'
         },
         ro: {
@@ -3503,6 +3657,16 @@
             summary_field: '{n} bule ({h} Ridicat · {m} Mediu · {l} Scăzut) care acoperă {c}% din terenul liber · {s} celule cu scor · {x} excluse (roșu)',
             summary_heat: '{n} celule în heatmap ({h} Ridicat · {m} Mediu · {l} Scăzut) · {x} excluse (roșu)',
             pin_set: 'Pin la {lat}, {lng} · rază {r} km — apasă „Detectează”.',
+            // Danemarca (Fund og Fortidsminder): aceleași scoruri, altă sursă.
+            running_source_dk: 'Se citesc siturile din Fund og Fortidsminder…',
+            done_dk: 'Analiză finalizată · {n} situri din Fund og Fortidsminder (CC0){t}.',
+            done_dk_truncated: ', {t} tip(uri) de sursă trunchiate la plafonul serviciului',
+            no_sites_dk: 'Nu sunt suficiente situri în zona din Fund og Fortidsminder (e nevoie de cel puțin 3).',
+            no_candidates_dk: 'Nicio celulă nu a trecut filtrele (razele de protecție ale siturilor). Încearcă altă zonă.',
+            no_bubbles_dk: 'Fiecare celulă cu scor e prea aproape de o rază de protecție ca să încapă o bulă întreagă — treci pe Heatmap ca să vezi scorurile.',
+            sparse_sites_dk: 'Doar {n} sit(uri) din Fund og Fortidsminder în zonă — scorurile vin numai din distanțele față de situri (fără triangulare).',
+            heritage_unavailable_dk: 'Registrul Fund og Fortidsminder nu a putut fi citit — încearcă din nou sau verifică conexiunea.',
+            info_hint_dk: 'Aceeași logică de triangulare, dar siturile vin din Fund og Fortidsminder (Slots- og Kulturstyrelsen, CC0): puncte și areale protejate, plus liniile de protecție reduse la mijlocul lor. Roșu = raza de protecție de 100 m + 25 m siguranță și contururile siturilor. Danemarca nu are strat de intravilan (UAT) în aplicație, deci nu se exclude terenul construit.',
             // Titlul + explicația afișate în fereastra de info a stratului.
             info_title: 'Zone cu potențial arheologic',
             info_hint: 'Se cauta locatii cu potential arheologic raportate la siturile arheologice marcate, pe baza unei logici de triangulare — culoarea = scorul, pe o scară absolută comună cu bulele și cu legenda. Roșu = intravilanul UAT și razele de protecție ale siturilor, unde nu se generează nimic.'
@@ -4061,18 +4225,32 @@
         var yieldModulo = opts.yieldModulo === undefined ? 4 : opts.yieldModulo;
 
         return (async function main() {
-            // Callers that already waited for window._localLayerData (e.g. the
-            // Archeological Report layer) pass skipDataWait so an unreachable
-            // heritage API is not waited on twice.
-            if (!opts.skipDataWait) await waitForSiteData();
+            // Sursa de situri depinde de regiune: RAN (RO) sau Fund og
+            // Fortidsminder (DK). `prepareRegionSites` așteaptă straturile
+            // românești doar când e nevoie — apelantul care a așteptat deja
+            // (raportul) trimite skipDataWait.
+            var region = await prepareRegionSites(centerLat, centerLng, radius, {
+                skipDataWait: !!opts.skipDataWait,
+                isCancelled: isCancelled,
+                forceReload: !!opts.forceReload
+            });
+            if (isCancelled()) return { status: 'cancelled', results: [], ctx: null, stats: { sites: 0 } };
+            if (region && region.id === 'DK' && _externalMeta &&
+                _externalMeta.sources.length && _externalMeta.failed === _externalMeta.sources.length) {
+                // Niciun tip de geometrie nu a răspuns: raportăm, nu inventăm.
+                return { status: 'heritage_unavailable', results: [], ctx: null,
+                         stats: { sites: 0 }, meta: _externalMeta };
+            }
+            var radii = regionRadii(region);
 
             var ctx = collectSitesInRadius(centerLat, centerLng, radius, lat0);
             ctx.center = projectToLocalMeters(centerLat, centerLng, lat0);
             ctx.centerLat = centerLat;
             ctx.centerLng = centerLng;
             ctx.radius = radius;
-            ctx.siteRadius = CONFIG.SITE_RADIUS_M;
-            ctx.siteBuffer = CONFIG.SITE_BUFFER_M;
+            ctx.region = region ? region.id : null;
+            ctx.siteRadius = radii.siteRadiusM;
+            ctx.siteBuffer = radii.siteBufferM;
             ctx.triangles = [];
             ctx.seeds = [];
 
@@ -4173,8 +4351,12 @@
         var center = _pinLatLng ? { lat: _pinLatLng.lat, lng: _pinLatLng.lng } : map.getCenter();
         var radiusM = currentRadiusM();
         var mode = outputMode();
+        var runRegion = regionFor(center.lat, center.lng);
+        var isDK = !!(runRegion && runRegion.id === 'DK');
         setRunning(true);
-        setStatus(_pinLatLng ? 'running_pin' : 'running_center', false, { r: radiusKm() });
+        // În DK prima etapă e descărcarea registrului, nu rasterul UAT.
+        setStatus(isDK ? 'running_source_dk'
+            : (_pinLatLng ? 'running_pin' : 'running_center'), false, { r: radiusKm() });
         setSummary({ scored: 0 }, mode);
 
         return (async function main() {
@@ -4195,8 +4377,13 @@
                 if (myVersion !== _runVersion) return; // superseded by a newer run
 
                 if (field.status === 'cancelled') { setStatus('cancelled'); return; }
+                if (field.status === 'heritage_unavailable') {
+                    setStatus('heritage_unavailable_dk', true);
+                    setSummary({ scored: 0 }, mode);
+                    return;
+                }
                 if (field.status === 'no_sites') {
-                    setStatus('no_sites', true);
+                    setStatus(isDK ? 'no_sites_dk' : 'no_sites', true);
                     setSummary(field.stats, mode);
                     return;
                 }
@@ -4217,15 +4404,20 @@
 
                 // Rasterul UAT necitit (offline / CORS / fără acoperire) nu mai
                 // golește harta: excluderea de intravilan e sărită și spunem asta.
+                var fieldDK = field.region === 'DK';
                 var uatFailed = field.uat && field.uat.total ? field.uat.total - field.uat.ok : 0;
-                if (!field.results.length) setStatus('no_candidates', true);
-                else if (mode !== 'heat' && !field.bubbles.length) setStatus('no_bubbles', true);
-                else if (!field.uat.available) setStatus('uat_unavailable', true, { n: field.uat.total || 0 });
-                else if (uatFailed > 0) setStatus('uat_partial', false, {
+                var trunc = (field.regionMeta && field.regionMeta.truncated) || 0;
+                if (!field.results.length) setStatus(fieldDK ? 'no_candidates_dk' : 'no_candidates', true);
+                else if (mode !== 'heat' && !field.bubbles.length) setStatus(fieldDK ? 'no_bubbles_dk' : 'no_bubbles', true);
+                else if (!fieldDK && !field.uat.available) setStatus('uat_unavailable', true, { n: field.uat.total || 0 });
+                else if (!fieldDK && uatFailed > 0) setStatus('uat_partial', false, {
                     n: uatFailed,
                     p: Math.round(uatFailed / Math.max(1, field.uat.total) * 100)
                 });
-                else if (field.status === 'sparse_sites') setStatus('sparse_sites', false, { n: st.sites });
+                else if (field.status === 'sparse_sites')
+                    setStatus(fieldDK ? 'sparse_sites_dk' : 'sparse_sites', false, { n: st.sites });
+                else if (fieldDK)
+                    setStatus('done_dk', false, { n: st.sites, t: trunc ? tr('done_dk_truncated').replace('{t}', trunc) : '' });
                 else setStatus('done');
                 setSummary(st, mode);
             } catch (err) {
@@ -4436,9 +4628,17 @@
     // Explicația stratului (mutată din bara de sub legendă în fereastra de
     // info) — textul urmează limba curentă a interfeței la momentul clicului.
     window.showArcheoPotInfo = function () {
-        if (typeof window.showLayerInfo === 'function') {
-            window.showLayerInfo(tr('info_title'), '© DetectLab 2026 · date RAN CIMEC', tr('info_hint'));
-        }
+        if (typeof window.showLayerInfo !== 'function') return;
+        // Sursa afișată e cea a regiunii relevante: ultima rulare, altfel
+        // centrul hărții. Aceeași fereastră, altă proveniență a siturilor.
+        var map = window._dlMap;
+        var c = _pinLatLng || (map && typeof map.getCenter === 'function' ? map.getCenter() : null);
+        var region = (_currentField && _currentField.region)
+            ? regionDefaults(_currentField.region)
+            : (c ? regionFor(c.lat, c.lng) : null);
+        var isDK = !!(region && region.id === 'DK');
+        var attribution = (region && region.attribution) || '© DetectLab 2026 · date RAN CIMEC';
+        window.showLayerInfo(tr('info_title'), attribution, tr(isDK ? 'info_hint_dk' : 'info_hint'));
     };
     window.setArcheoPotentialMode = setOutputMode;
     window.setArcheoPotentialPinMode = setPinMode;
@@ -4479,7 +4679,18 @@
     window._archeoPotentialResetCache = function () {
         _siteIndexCache = null;
         resetUatTileCache();
+        var api = sourceApi();
+        if (api && typeof api.clearCache === 'function') api.clearCache();
     };
+    // Regiunea ultimei rulări (sau a unui punct), pentru UI/raport/consolă.
+    window._archeoPotentialRegion = function (lat, lng) {
+        if (typeof lat === 'number' && typeof lng === 'number') return regionFor(lat, lng);
+        if (_currentField && _currentField.region) return regionDefaults(_currentField.region);
+        return _activeRegion;
+    };
+    // Pregătește sursa de situri a regiunii (raportul o apelează înainte de
+    // collectSitesInRadius, ca să nu aștepte degeaba straturile românești).
+    window._archeoPotentialPrepareRegion = prepareRegionSites;
     window._archeoPotentialDebug = {
         config: CONFIG,
         collectSitesInRadius: collectSitesInRadius,
@@ -4510,6 +4721,10 @@
         resetUatTileCache: resetUatTileCache,
         _uatTileStates: _uatTileStates,
         computeCandidates: computeCandidates,
+        prepareRegionSites: prepareRegionSites,
+        regionFor: regionFor,
+        regionRadii: regionRadii,
+        externalMeta: function () { return _externalMeta; },
         projectToLocalMeters: projectToLocalMeters,
         localMetersToLatLng: localMetersToLatLng,
         haversineM: haversineM,

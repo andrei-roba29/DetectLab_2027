@@ -5385,7 +5385,7 @@
     </footer>
 
     <script src="js/ios-input-focus.js?v=20261102-ios-viewport-settle"></script>
-    <script src="js/translations.js?v=20261109-apm-train-parity"></script>
+    <script src="js/translations.js?v=20261110-arch-dk"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
     <script src="js/leaflet.js"></script>
@@ -5621,15 +5621,19 @@
     <script src="js/apm-next/apm-loading-preview.js?v=20261109-apm-run-overlay"></script>
     <script src="js/apm-next/apm-run-overlay.js?v=20261109-apm-run-overlay"></script>
     <script src="js/apm-next/apm-ui.js?v=20261109-apm-ariadne-grid"></script>
-    <script src="js/archeo-potential.js?v=20261102-apm-continuous-heat"></script>
+    <!-- Sursa de patrimoniu pe regiuni (RO: RAN în memorie, DK: Fund og
+         Fortidsminder prin WFS). Trebuie încărcată ÎNAINTE de
+         archeo-potential.js, care o întreabă ce regiune are la un punct. -->
+    <script src="js/archeo-dk-source.js?v=20261110-arch-dk"></script>
+    <script src="js/archeo-potential.js?v=20261110-arch-dk"></script>
     <script src="js/lidar-geo.js?v=20260811-latlon"></script>
     <script src="js/lidar-scanner.js?v=20261104-remove-fortification-45-90249"></script>
     <script src="js/library-of-babel.js?v=20261101-ios-flow-keyboard"></script>
     <!-- Premium "Archeological Report" / "Raport arheologic": PDF writer →
          PDF layout → the analysis layer itself (this order matters). -->
     <script src="js/pdf-writer.js?v=20260827-arch-report"></script>
-    <script src="js/archeo-report-pdf.js?v=20261109-apm-train-parity"></script>
-    <script src="js/archeo-report.js?v=20261109-apm-train-parity"></script>
+    <script src="js/archeo-report-pdf.js?v=20261110-arch-dk"></script>
+    <script src="js/archeo-report.js?v=20261110-arch-dk"></script>
     <script src="js/tutorial.js?v=20261109-arch-report-zone"></script>
 
     <!-- AUTH MODAL -->
