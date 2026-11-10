@@ -203,7 +203,7 @@ function pipeline(idb){
     });
     await test('PWA cache module ordering and worker version are coherent',()=>{
         const html=read('index.html'),sw=read('sw.js'),ui=read('js/apm-next/apm-ui.js');
-        const tags={ 'apm-train-cache':'20261105-apm-mobile-train','apm-pipeline':'20261109-apm-train-parity','apm-ui':'20261109-apm-clean-panel' };
+        const tags={ 'apm-train-cache':'20261105-apm-mobile-train','apm-pipeline':'20261109-apm-ariadne-grid','apm-ui':'20261109-apm-ariadne-grid' };
         for(const asset of ['apm-train-cache','apm-pipeline','apm-ui']){
             const tag=`js/apm-next/${asset}.js?v=${tags[asset]}`;assert(html.includes(tag)&&sw.includes(tag));
         }

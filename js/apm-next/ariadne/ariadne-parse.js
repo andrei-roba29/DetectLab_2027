@@ -147,14 +147,38 @@
         };
     }
 
+    /* The portal's own subject vocabulary is not perfectly stable: the same idea is
+     * published as "Site/monument", "Archaeological site", "Monument", "site"…
+     * The rule stays the same (a published subject that says site or monument) but is
+     * matched on words, not on one exact string, and the record's resource type counts
+     * as a subject when the hit carries no subject list. Coins and inscriptions never
+     * match, so they still cannot become settlement positives. */
+    function subjectWords(value) {
+        return String(value == null ? '' : value)
+            .toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .split(/[^a-z]+/).filter(Boolean);
+    }
+
+    function saysSite(value) {
+        var words = subjectWords(value);
+        for (var i = 0; i < words.length; i++) {
+            if (words[i] === 'site' || words[i] === 'monument' || words[i] === 'monuments') return true;
+        }
+        return false;
+    }
+
     /** A positive training site: a point, and a published subject that says it is a site. */
     function isPositive(record, subjects) {
-        if (!record || !Array.isArray(subjects) || !subjects.length) return false;
-        if (!record.subjects || !record.subjects.length) return false;
-        for (var i = 0; i < record.subjects.length; i++) {
-            for (var j = 0; j < subjects.length; j++) {
-                if (String(record.subjects[i]).toLowerCase() === String(subjects[j]).toLowerCase()) return true;
+        if (!record) return false;
+        var wanted = Array.isArray(subjects) ? subjects : [];
+        var published = (record.subjects || []).concat(record.type ? [record.type] : []);
+        if (!published.length) return false;
+        for (var i = 0; i < published.length; i++) {
+            for (var j = 0; j < wanted.length; j++) {
+                if (String(published[i]).toLowerCase() === String(wanted[j]).toLowerCase()) return true;
             }
+            if (wanted.length && saysSite(published[i])) return true;
         }
         return false;
     }

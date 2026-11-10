@@ -128,6 +128,10 @@
                 if (shared.length) { match = k; why = 'identifier'; continue; }
                 var d = distanceM(r, k);
                 if (d > opts.distanceM) continue;
+                // A grid cell is a 152 m bucket of records, not a named place: only an
+                // identifier can merge it, otherwise two neighbouring cells with the
+                // same stem would swallow each other and lose real positives.
+                if (r.positionKind === 'cell' || k.positionKind === 'cell') continue;
                 var s = bestNameSimilarity(r, k);
                 if (s >= opts.nameSimilarity) { match = k; why = 'proximity+name'; }
             }
@@ -167,6 +171,9 @@
                 repeatedInSource: repeatedInSource,
                 merged: input.length - kept.length,
                 overlaps: overlaps,
+                // Only these are "a place attested by two catalogues": the rest are
+                // repeats inside one source (tiles, or a cell grid).
+                crossSource: overlaps.filter(function (o) { return o.keptSource !== o.mergedSource; }).length,
                 sources: kept.reduce(function (acc, r) {
                     r.sources.forEach(function (s) { acc[s] = (acc[s] || 0) + 1; });
                     return acc;

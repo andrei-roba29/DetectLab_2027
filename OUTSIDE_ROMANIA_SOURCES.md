@@ -83,8 +83,41 @@ The portal returns `hits: []` for boxes of ~50 km and up, and the training area 
 (each with a 6 % overlap so nothing falls between them). That is nine requests at
 300 ms spacing, about three seconds, on the user's own connection.
 
-The **density grid is refused**: a 152 m cell is not a site, and
-`ariadneRecord()` drops every record with `positionKind: 'cell'`.
+The **density grid is used, but never disguised as a site** (changed 2026-11-09).
+The portal answers a small box two ways, and which one you get is not under our
+control: hits, or `hits: []` plus `aggregations.geogridCentroid.grids.buckets`.
+Refusing the second answer meant ARIADNE contributed nothing at all in a large
+part of Europe — and the panel said nothing about it.
+
+What happens now, per bucket:
+
+- one point per cell, at the cell centre, named **`ARIADNE grid cell <key>`** and
+  carrying `cellKey` / `cellCount`; never one point per underlying record, which
+  we cannot see;
+- `positionAccuracy: 110 m` — half the diagonal of a 152 m geohash-7 cell — so the
+  position quality says how approximate the point is. The record is not marked
+  `approximatePosition` (that flag means "only a locality is known");
+- a cell that sits within 400 m of a DARE point is dropped (`droppedNearDare`),
+  because DARE already places that place precisely; DARE points are never dropped;
+- the list is budgeted at **1500** points (`maxAriadnePoints`) before the O(n²)
+  dedupe; anything left out is counted (`droppedOverBudget`) and said in the panel;
+- a cell answers only identifier-based merging (`apm-site-merge.js`): neighbouring
+  cells with the same stem must not swallow each other.
+
+Because 110 m is above the shared 100 m ceiling, the two TRAIN filters are told
+the ceiling these records were published for: `apm-ui.js` (site count) and
+`apm-pipeline.js` (the positives that train the model) pass
+`maxAccuracyM: outside.CONFIG.acceptAccuracyM` (**150 m**) for
+`region: 'outside-romania'` records only. Inside Romania nothing changes.
+
+**ARIADNE is always named.** The status line now reads like
+`24 site(s) outside Romania (DARE 3 + ARIADNE 21 (21 grid-cell point(s)))…`, and
+when the portal contributes nothing it says why instead of dropping out of the
+line: `ARIADNE 0 (answered, nothing usable: 0 hit(s), 0 grid cell(s), 9
+request(s) without a usable answer)`. Notes follow for capped tiles, budget cuts
+and cells already covered by DARE. `attestedByBoth` counts only real
+cross-catalogue overlaps, so cell-cell dedupe is not reported as "a place in both
+catalogues".
 
 ## ARIADNE without the captured filter fragments
 

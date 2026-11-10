@@ -1016,7 +1016,7 @@
 //   din vecinii pe care îi acoperă fereastra mutată, iar image-overlay-urile
 //   își mută cele patru colțuri cu aceiași metri. O poziție aliniată o dată
 //   e aceeași în ambele vizualizări. Vezi HISTORICAL_MAP_SHIFT.md §5.
-const CACHE_NAME = 'detectlab-v418-apm-clean-panel';
+const CACHE_NAME = 'detectlab-v419-apm-ariadne-grid';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1056,6 +1056,12 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 //   scale bar (measured as --m3d-basemap-lift) — instead of disappearing with
 //   the rest of the Leaflet control container. Re-tags css/map3d-terrain.css
 //   and js/map3d-terrain.js.
+// v419: outside Romania, the ARIADNE portal's density-grid answer is no longer
+//   thrown away: one point per 152 m cell (110 m error, named as a cell), always
+//   named next to DARE in the status, with the portal's own counts. The six
+//   ariadne modules are precached for the first time. Re-tags apm-ui.js,
+//   apm-i18n.js, apm-pipeline.js, apm-outside-sites.js, apm-site-merge.js and
+//   ariadne/*.js.
 // v418: the TEZAURE TRAIN panel carries controls only — the radius/resolution,
 //   discovery-bias, sources/licence, name-keyword-period and operator-override
 //   paragraphs are gone (the override still travels with every result).
@@ -1069,9 +1075,9 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 const PRECACHE_URLS = [
   'css/next-gen-apm.css?v=20261109-apm-run-overlay',
   'js/apm-next/apm-raster.js?v=20261109-apm-run-overlay',
-  'js/apm-next/apm-i18n.js?v=20261109-apm-clean-panel',
-  'js/apm-next/apm-pipeline.js?v=20261109-apm-train-parity',
-  'js/apm-next/apm-ui.js?v=20261109-apm-clean-panel',
+  'js/apm-next/apm-i18n.js?v=20261109-apm-ariadne-grid',
+  'js/apm-next/apm-pipeline.js?v=20261109-apm-ariadne-grid',
+  'js/apm-next/apm-ui.js?v=20261109-apm-ariadne-grid',
   'js/apm-next/apm-worker.js?v=20261109-apm-run-overlay',
   'js/apm-next/apm-loading-preview.js?v=20261109-apm-run-overlay',
   'js/apm-next/apm-run-overlay.js?v=20261109-apm-run-overlay',
@@ -1079,6 +1085,15 @@ const PRECACHE_URLS = [
   'js/apm-next/apm-hoards.js?v=20261109-apm-run-overlay',
   'js/apm-next/apm-hoard-provider.js?v=20261109-apm-run-overlay',
   'js/apm-next/apm-hoard-scale.js?v=20261109-apm-run-overlay',
+  'js/apm-next/ariadne/ariadne.config.js?v=20261109-apm-ariadne-grid',
+  'js/apm-next/ariadne/ariadne-tiles.js?v=20261109-apm-ariadne-grid',
+  'js/apm-next/ariadne/ariadne-parse.js?v=20261109-apm-ariadne-grid',
+  'js/apm-next/ariadne/ariadne-query.js?v=20261109-apm-ariadne-grid',
+  'js/apm-next/ariadne/ariadne-upstream.js?v=20261109-apm-ariadne-grid',
+  'js/apm-next/ariadne/ariadne-provider.js?v=20261109-apm-ariadne-grid',
+  'js/apm-next/apm-site-merge.js?v=20261109-apm-ariadne-grid',
+  'js/apm-next/apm-dare-sites.js?v=20261109-apm-ariadne-grid',
+  'js/apm-next/apm-outside-sites.js?v=20261109-apm-ariadne-grid',
   'js/archeo-report.js?v=20261109-apm-train-parity',
   'js/archeo-report-pdf.js?v=20261109-apm-train-parity',
   'js/translations.js?v=20261109-apm-train-parity',

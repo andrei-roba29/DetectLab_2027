@@ -286,7 +286,7 @@ function redTileData(size, alpha = 255) {
         }
         // Later fixes re-tag the UI, worker and mask under the newer HEAT_TAG.
         const HEAT_TAG = '20261102-apm-continuous-heat';
-        const uiTag = 'js/apm-next/apm-ui.js?v=20261109-apm-clean-panel';
+        const uiTag = 'js/apm-next/apm-ui.js?v=20261109-apm-ariadne-grid';
         assert.ok(html.includes(uiTag) && sw.includes(uiTag), uiTag);
         assert.ok(sw.includes('js/apm-next/apm-ui.js?v=20261102-apm-train-bounded-grid'), 'older UI tag stays precached for older shells');
         assert.ok(html.includes('js/archeo-potential.js?v=' + HEAT_TAG));
@@ -297,7 +297,7 @@ function redTileData(size, alpha = 255) {
         assert.ok(sw.includes('js/apm-next/apm-worker.js?v=20261102-apm-mask-band'));
         // Latest fix: the pipeline's DEM/water/UAT-mask fetches run in parallel
         // instead of in sequence (TRAIN's "run" step no longer sums their times).
-        const PREVIEW_TAG = '20261109-apm-train-parity';
+        const PREVIEW_TAG = '20261109-apm-ariadne-grid';
         const pipelineTag = 'js/apm-next/apm-pipeline.js?v=' + PREVIEW_TAG;
         assert.ok(html.includes(pipelineTag) && sw.includes(pipelineTag), pipelineTag);
         assert.ok(sw.includes('js/apm-next/apm-pipeline.js?v=20261105-apm-mobile-train'), 'older pipeline tag stays precached for older shells');

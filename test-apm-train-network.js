@@ -14,6 +14,17 @@ const scripts=['apm-core','apm-raster','apm-heatmap','apm-sites','apm-providers'
     'apm-site-merge','apm-dare-sites','apm-outside-sites','apm-i18n','apm-train-cache','apm-pipeline','apm-loading-preview','apm-run-overlay','apm-ui'];
 const wcs='<wcs:Capabilities><wcs:ServiceMetadata><wcs:formatSupported>image/tiff</wcs:formatSupported><wcs:Extension><wcs:crsSupported>http://www.opengis.net/def/crs/EPSG/0/4326</wcs:crsSupported></wcs:Extension><wcs:MaxPixels>4000000</wcs:MaxPixels></wcs:ServiceMetadata><wcs:Contents><wcs:CoverageSummary><wcs:CoverageId>DEM_v11</wcs:CoverageId></wcs:CoverageSummary></wcs:Contents></wcs:Capabilities>';
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
+// geohash-7 encoder: the portal answers a small box with a grid of these keys.
+function geohash(lat,lon,precision=7){
+    const B='0123456789bcdefghjkmnpqrstuvwxyz';let even=true,bit=0,ch=0,out='',la=[-90,90],lo=[-180,180];
+    while(out.length<precision){
+        const r=even?lo:la,m=(r[0]+r[1])/2;const up=even?lon>=m:lat>=m;
+        if(up)r[0]=m;else r[1]=m;
+        ch=(ch<<1)|(up?1:0);even=!even;
+        if(++bit===5){out+=B[ch];bit=0;ch=0;}
+    }
+    return out;
+}
 async function until(fn,label){for(let i=0;i<1000;i++){if(fn())return;await delay(10);}throw Error('Timeout: '+label);}
 // Minimal 2D context so the preview widget can draw; jsdom ships none.
 function canvas2d(){
@@ -69,6 +80,16 @@ function harness(mode='ok', opts={}) {
                 hit('b1','Place 0',51.0001,10.0001),
                 hit('b2','Place 3',51.0002,10.0902)
             ],total:{value:2},aggregations:{}})};
+            if(mode==='outsideGrid'){
+                // The portal answered a small box with its 152 m density grid and no hits
+                // at all — the case that used to make ARIADNE disappear without a word.
+                const buckets=[];
+                for(let i=0;i<24;i++) buckets.push({key:geohash(51.0+(i%5)*0.003,10.0+Math.floor(i/5)*0.003),doc_count:2+i});
+                return {ok:true,status:200,headers:{get:()=>'application/json'},text:async()=>JSON.stringify({
+                    hits:[],total:{value:buckets.reduce((n,b)=>n+b.doc_count,0)},
+                    aggregations:{geogridCentroid:{grids:{doc_count:buckets.reduce((n,b)=>n+b.doc_count,0),buckets}}}})};
+            }
+            if(mode==='outsideEmpty') return {ok:true,status:200,headers:{get:()=>'application/json'},text:async()=>JSON.stringify({hits:[],total:{value:0},aggregations:{}})};
             return {ok:true,status:200,headers:{get:()=>'application/json'},text:async()=>JSON.stringify({hits:[
                 hit('a1','Gotinga',51.0005,10.0005),
                 hit('a2','Other place',51.02,9.98)
@@ -176,6 +197,37 @@ function harness(mode='ok', opts={}) {
         assert(out.requests.slice(beforeRun).every(u=>['image.discomap.eea.europa.eu','overpass-api.de'].includes(new URL(u).host)),'the run itself touches nothing but DEM and hydro');
         console.log('PASS outside Romania: DARE and ARIADNE queried and merged (one place attested by both appears once), no Romania database call, explicit CSV upload completes as before.');
     } finally {out.dom.window.close();}
+    // The portal answers a small box with its density grid, not hits. ARIADNE must
+    // still name itself in the panel, and each cell must arrive as one labelled point.
+    const grid=harness('outsideGrid');
+    try {
+        await grid.pick(51,10);
+        await until(()=>/outside Romania/.test(grid.w.document.querySelector('.apm-status').textContent),'grid load');
+        const text=grid.w.document.querySelector('.apm-status').textContent;
+        assert(/ARIADNE/.test(text),'ARIADNE is named next to DARE even when it answers with a grid: '+text);
+        assert(/grid-cell point/.test(text),'and the cell points are named as cells: '+text);
+        assert(/DARE 3 \+ ARIADNE [1-9]/.test(text),'both catalogues contribute: '+text);
+        // The cell points must survive the TRAIN filter and reach the model.
+        grid.w.document.querySelector('.apm-primary').click();
+        await until(()=>grid.completed||grid.runError,'outside grid TRAIN completion');
+        if(grid.runError)throw grid.runError;
+        const cellPoints=(grid.params.records||[]).filter(r=>r.positionKind==='cell');
+        assert(cellPoints.length>=1,'the grid cells reach the trainer as points: '+cellPoints.length);
+        assert.equal(cellPoints[0].positionAccuracy,110,'with the cell accuracy, not an invented exact position');
+        assert(grid.completed.diagnostics.sitesUsed>3,'and the model trains on DARE + cells: '+grid.completed.diagnostics.sitesUsed);
+        console.log('PASS outside Romania grid: '+text.slice(0,180)+' → '+grid.completed.diagnostics.sitesUsed+' sites used');
+    } finally {grid.dom.window.close();}
+
+    const none=harness('outsideEmpty');
+    try {
+        await none.pick(51,10);
+        await until(()=>/outside Romania/.test(none.w.document.querySelector('.apm-status').textContent),'empty ARIADNE load');
+        const text=none.w.document.querySelector('.apm-status').textContent;
+        assert(/ARIADNE 0/.test(text),'an ARIADNE that answers with nothing is named, not dropped: '+text);
+        assert(/nothing usable/.test(text),'and says so in words: '+text);
+        console.log('PASS outside Romania empty: '+text.slice(0,180));
+    } finally {none.dom.window.close();}
+
     const many=harness('outsideMany');
     try {
         await many.pick(51,10);
