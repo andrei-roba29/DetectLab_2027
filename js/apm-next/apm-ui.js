@@ -753,7 +753,9 @@
         setBusyUi(true);
         setProgress(T('status.starting'), 2);
         stopLoadingPreview();
-        var wantsPreview = mode === 'train' && !isHoard() && els.previewCb.checked && root.DetectLabApmLoadingPreview;
+        // The variable analysis is the animation: real training samples, their
+        // terrain values and how water/relief/soil are measured for them.
+        var wantsPreview = mode === 'train' && els.previewCb.checked && root.DetectLabApmLoadingPreview;
         // TRAIN is the long run: put the animation on screen, blur the page and
         // hang the loading bar underneath it.
         if (mode === 'train') {
@@ -770,7 +772,11 @@
                     onCancel: cancelRun, onSkip: stopLoadingPreview, onStop: function () { params.onPreview = null; } });
                 var view = loadingPreview;
                 // Only now is the widget real: hand it to the overlay as the animation.
-                if (runOverlay && runOverlay.setAnimation) runOverlay.setAnimation(els.previewHost);
+                if (runOverlay && runOverlay.setAnimation) {
+                    runOverlay.setAnimation(els.previewHost);
+                    // New host, new width: let the widget re-measure its canvas.
+                    try { root.document.dispatchEvent(new root.Event('detectlab:hostchange')); } catch (ignore) {}
+                }
                 params.onPreview = function (event) { if (state.token === runToken && !runToken.cancelled) view.update(event); };
                 ui.panel.scrollTop = 0;
             } catch (ignore) { stopLoadingPreview(); els.previewHost.replaceChildren(); }
@@ -1547,10 +1553,33 @@
         var reportOverlay = openRunOverlay({ titleKey: opts.mode === 'train' ? 'run.overlayReportTrain' : 'run.overlayReportCustom' });
         var reportLabel = T(opts.mode === 'train' ? 'run.overlayReportTrain' : 'run.overlayReportCustom');
         if (reportOverlay) reportOverlay.update({ pct: 1, label: reportLabel });
+        // The report gets the same variable analysis: the panel's preview widget
+        // is borrowed into the window and handed back when the run ends.
+        var reportPreview = null, reportPreviewParams = null;
+        function stopReportPreview() {
+            if (reportPreviewParams) reportPreviewParams.onPreview = null;
+            if (reportPreview) { try { reportPreview.stop(); } catch (ignore) {} }
+            reportPreview = null; reportPreviewParams = null;
+            if (reportOverlay && reportOverlay.clearAnimation) reportOverlay.clearAnimation();
+        }
+        function startReportPreview(params) {
+            if (opts.mode !== 'train' || !reportOverlay || !els.previewCb || !els.previewCb.checked || !root.DetectLabApmLoadingPreview) return;
+            try {
+                reportPreviewParams = params;
+                reportPreview = root.DetectLabApmLoadingPreview.create({ host: els.previewHost, t: T,
+                    onCancel: function () { if (opts.token) opts.token.cancelled = true; },
+                    onSkip: stopReportPreview,
+                    onStop: function () { if (reportPreviewParams) reportPreviewParams.onPreview = null; } });
+                reportOverlay.setAnimation(els.previewHost);
+                try { root.document.dispatchEvent(new root.Event('detectlab:hostchange')); } catch (ignore) {}
+                params.onPreview = function (event) { if (reportPreview) reportPreview.update(event); };
+            } catch (ignore) { stopReportPreview(); els.previewHost.replaceChildren(); }
+        }
         function closeReportOverlay() {
-            if (!reportOverlay) return;
-            try { reportOverlay.close(); } catch (ignore) {}
-            if (runOverlay === reportOverlay) runOverlay = null;
+            stopReportPreview();
+            // closeRunOverlay() removes the window and puts the preview host back.
+            if (runOverlay === reportOverlay) closeRunOverlay();
+            else if (reportOverlay) { try { reportOverlay.close(); } catch (ignore) {} }
             reportOverlay = null;
         }
         function release(value) { state.reportBusy = false; closeReportOverlay(); return value; }
@@ -1581,6 +1610,7 @@
                     token: opts.token,
                     onProgress: reportProgress
                 };
+                startReportPreview(params);
                 return pipe().runTrain(state.trainSession, params).then(function (res) {
                     res.mode = 'train';
                     res.period = period;

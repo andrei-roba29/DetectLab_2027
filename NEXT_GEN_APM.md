@@ -332,37 +332,47 @@ Asset tag `20261102-apm-parallel-fetch` (apm-pipeline.js only), shell cache `det
 
 **Verification.** `node test-apm-exclusions.js`, `test-apm-train-performance.js`, `test-apm-next.js`, `test-apm-train-network.js`, `test-apm-robust-train.js` and `test-apm-romania-contract.js` pass, including the "both prediction modes use the shared mask before sending data to the worker" contract test. **Not measured:** real-world wall-clock improvement against the production UAT/DEM endpoints (the automated tests use mocked network providers); the saving is proportional to how much the mask/water fetches previously added on top of the DEM fetch, which varies with connection speed and site density.
 
-## Run overlay — animation on screen, loading bar underneath (2026-11-09)
+## Run window — the variable analysis on screen, loading bar underneath (2026-11-09)
 
 A TRAIN run takes tens of seconds and the panel's progress bar is 6 px tall,
-inside a panel the user has usually scrolled away from. The run now puts the
-animation **on screen**: a full-viewport overlay (`js/apm-next/apm-run-overlay.js`,
-`.apm-run-overlay` in `css/next-gen-apm.css`) with the page blurred behind it
-(`backdrop-filter: blur(7px)`, opaque fallback where unsupported) and the
-loading bar directly under the animation.
+inside a panel the user has usually scrolled away from. The run now opens a
+**window** (`.apm-run-overlay` / `.apm-run-card`, `js/apm-next/apm-run-overlay.js`,
+styled in `css/next-gen-apm.css`): the page behind is blurred, the window itself
+is translucent glass, and the loading bar sits directly under the animation.
 
-Layout inside the card, in DOM order: the animation (the panel's own real-site
-preview canvas when it started, otherwise three pulsing rings plus a rotating
-sweep), the title, the step text, the bar + percentage, and a cancel button when
-the caller supplied one. `prefers-reduced-motion: reduce` stops the motion and
-keeps the geometry.
+What is in the window, in DOM order:
 
-Who shows it:
+1. a title bar — what is running (panel TRAIN, hoard model, or the report's
+   Next-Gen baseline) and a Cancel button when the caller can cancel;
+2. the animation: the **existing loading preview**, i.e. the real variable
+   analysis for up to four training sites — altitude, slope, aspect, curvature,
+   the nearest water distance with its class, and the water / relief / soil
+   diagrams, exactly as the panel showed it before. It is mounted inside the
+   window and re-measures its canvas there (`detectlab:hostchange`). Where it
+   cannot start (no 2D canvas, or the user unticked the preview) the window falls
+   back to three pulsing rings and a sweep, so it is never an empty card;
+3. the step text (the same progress message as the panel's status line);
+4. the loading bar and the percentage.
 
-* **the panel**, for every TRAIN run (`run()`), including hoard runs — the title
-  says which model is being built;
-* **the archaeological report**, while it asks this engine for its baseline —
-  i.e. when the report window's baseline is *APM Next-Gen custom* or
-  *APM Next-Gen train*. The bar follows the engine's own progress; the title says
-  the report is running the Next-Gen model.
+The analysis is now offered for **hoards** too — the sampling work is the same
+`sampleTile` call, so `apm-pipeline.js` no longer excludes hoard runs from the
+preview.
 
-The overlay mirrors state, it never owns it: `update({pct, label})` and `close()`
-are the whole API, there are no timers, no requests and no map access, and only
-one overlay can exist at a time. If the module is absent the panel behaves
-exactly as before (panel bar only), and if the preview widget fails to start the
-rings stay instead of an empty card.
+The report path is identical: while the archaeological report asks this engine
+for its baseline (*APM Next-Gen custom* or *APM Next-Gen train*), the same window
+opens, the same widget is borrowed from the panel, and the bar follows the
+engine's progress. The report's own status line keeps its per-stage text.
+
+Accessibility and cost: the window is a `role="dialog"`, the bar is a
+`role="progressbar"` with `aria-valuenow`/`aria-valuetext`, the decoration is
+`aria-hidden`, and `prefers-reduced-motion: reduce` stops the motion while keeping
+the geometry. The module mirrors state — `update({pct,label})`, `close()`,
+`setAnimation(node)`, `clearAnimation()` — with no timers, no requests and no map
+access, and only one window can exist at a time.
 
 **Verification.** `node test-apm-run-overlay.js` (layout order, bar semantics and
 clamping, single instance, borrowed animation host, cancel contract, CSS blur and
-reduced motion, no I/O) and `test-apm-train-network.js` (a real TRAIN run and a
-real report `report.run({mode:'train'})` both show the overlay and remove it).
+reduced motion, no I/O) and `test-apm-train-network.js`: a real settlement TRAIN
+shows the widget with real sample values and the bar under it, a hoard TRAIN shows
+the hoard title and the same widget, a run without a 2D canvas keeps the rings, and
+a real `report.run({mode:'train'})` shows and removes the same window.

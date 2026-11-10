@@ -346,8 +346,10 @@ no results; UAT raster failures are also treated as excluded. The raster is a
 sampled representation and cannot guarantee that every small feature is visible.
 
 **Progress on screen.** When the baseline is *APM Next-Gen custom* or *APM Next-Gen
-train*, the report's wait is shown the same way the APM panel shows its own run:
-a full-screen overlay with the animation in the middle, the page blurred behind
-it and the loading bar under the animation (`js/apm-next/apm-run-overlay.js`). The
-bar follows the Next-Gen engine's progress; the title states that the report is
-running that model. The report's own status line keeps its per-stage text.
+train*, the report's wait is shown the same way the APM panel shows its own run: a
+translucent window over a blurred page (`js/apm-next/apm-run-overlay.js`), with the
+variable analysis for the training sites (the panel's loading preview: altitude,
+slope, aspect, curvature, water distance and the water/relief/soil diagrams) above
+the loading bar. The bar follows the Next-Gen engine's progress; the title states
+that the report is running that model. The report's own status line keeps its
+per-stage text.

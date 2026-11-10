@@ -48,8 +48,10 @@ check('the animation comes first, the loading bar directly under it', () => {
     assert.equal(box.getAttribute('aria-label'), EN['run.overlayTitle']);
     const card = box.querySelector('.apm-run-card');
     const order = Array.from(card.children).map(n => n.className);
-    assert.deepEqual(order, ['apm-run-visual', 'apm-run-live', 'apm-run-title', 'apm-run-step', 'apm-run-bar', 'apm-run-meta'],
-        'animation → title → bar → meta: ' + order.join(', '));
+    assert.deepEqual(order, ['apm-run-head', 'apm-run-visual', 'apm-run-live', 'apm-run-step', 'apm-run-bar', 'apm-run-meta'],
+        'window title → animation → bar → meta: ' + order.join(', '));
+    assert.equal(card.querySelector('.apm-run-head .apm-run-title').textContent, EN['run.overlayTitle'],
+        'the title is the window title bar');
     const visual = card.querySelector('.apm-run-visual');
     assert.equal(visual.querySelectorAll('.apm-run-ring').length, 3, 'three pulsing rings');
     assert(visual.querySelector('.apm-run-sweep'), 'and a rotating sweep');
@@ -59,7 +61,7 @@ check('the animation comes first, the loading bar directly under it', () => {
     assert.equal(bar.getAttribute('aria-valuemin'), '0');
     assert.equal(bar.getAttribute('aria-valuemax'), '100');
     assert.equal(bar.getAttribute('aria-valuenow'), '0');
-    assert.equal(w.document.querySelector('.apm-run-title').textContent, EN['run.overlayTitle']);
+    assert.equal(w.document.querySelectorAll('.apm-run-title').length, 1);
     assert.equal(O.isOpen(), true);
     view.close();
     assert.equal(w.document.querySelector('.apm-run-overlay'), null, 'closing removes it');
@@ -119,6 +121,7 @@ check('a widget that stops on its own gives the animation back', () => {
     const view = O.create({t});
     view.setAnimation(host);
     assert.equal(w.document.querySelector('.apm-run-visual').hidden, true);
+    assert.equal(w.document.querySelector('.apm-run-card').classList.contains('is-live'), true);
     view.clearAnimation();
     assert.equal(host.parentNode, null, 'the dead widget is detached');
     assert.equal(w.document.querySelector('.apm-run-visual').hidden, false, 'the rings return');

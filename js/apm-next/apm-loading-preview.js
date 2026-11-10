@@ -175,6 +175,7 @@
             root.removeEventListener('resize', resize); root.removeEventListener('pagehide', stop);
             doc.removeEventListener('visibilitychange', visibility);
             doc.removeEventListener('detectlab:langchange', refresh);
+            doc.removeEventListener('detectlab:hostchange', resize);
             if (reduce && reduce.removeEventListener) reduce.removeEventListener('change', visibility);
             samples.length = 0; box.remove();
             // Release the backing store, not just the DOM node.
@@ -193,6 +194,9 @@
         root.addEventListener('resize', resize); root.addEventListener('pagehide', stop);
         doc.addEventListener('visibilitychange', visibility);
         doc.addEventListener('detectlab:langchange', refresh);
+        // The panel can move this widget into a wider window (the run overlay);
+        // it re-measures instead of drawing at the old width.
+        doc.addEventListener('detectlab:hostchange', resize);
         if (reduce && reduce.addEventListener) reduce.addEventListener('change', visibility);
         renderText(); resize();
         return { update: update, stop: stop, setStage: function (key, vars) { if (!stopped) { stageKey = key; stageVars = vars; stage.textContent = T(key, vars); } } };
