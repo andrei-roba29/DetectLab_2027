@@ -1016,7 +1016,7 @@
 //   din vecinii pe care îi acoperă fereastra mutată, iar image-overlay-urile
 //   își mută cele patru colțuri cu aceiași metri. O poziție aliniată o dată
 //   e aceeași în ambele vizualizări. Vezi HISTORICAL_MAP_SHIFT.md §5.
-const CACHE_NAME = 'detectlab-v413-arch-report-results';
+const CACHE_NAME = 'detectlab-v414-arch-report-zone';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1906,6 +1906,14 @@ const PRECACHE_URLS = [
   'js/window-resize.js?v=20261102-report-lidar-window',
   // v413: the Archaeological Report asks the user how many results to return
   // (1–10, 3 by default) instead of a fixed three.
+  // v414: the report window asks for the search area first, offers a move
+  // button and keeps 'Generate report' inside the window.
+  'js/archeo-report.js?v=20261109-arch-report-zone',
+  'js/archeo-report-pdf.js?v=20261109-arch-report-zone',
+  'js/translations.js?v=20261109-arch-report-zone',
+  'js/tutorial.js?v=20261109-arch-report-zone',
+  'js/vertical-opacity-control.js?v=20261109-arch-report-zone',
+  'css/styles.css?v=20261109-arch-report-zone',
   'js/archeo-report.js?v=20261109-arch-report-results',
   'js/archeo-report-pdf.js?v=20261109-arch-report-results',
   'js/translations.js?v=20261109-arch-report-results',

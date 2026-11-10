@@ -6278,6 +6278,25 @@
         .arch-report-panel .apm-actions .arch-report-button { flex: 1; }
         .arch-report-panel .apm-note { line-height: 1.35; }
         .arch-report-panel .layer-info-btn[aria-expanded="true"] { background: rgba(200,169,110,0.30); border-color: rgba(200,169,110,0.60); color: #ffcf8a; }
+        /* Zone first: the window asks for the area before anything else and the
+           groups below stay locked until one exists. */
+        .arch-report-zone-group { border:1px solid rgba(102,200,255,.22); border-radius:8px; padding:8px 9px 6px; }
+        .arch-report-zone { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+        .arch-report-zone-btn {
+            display:flex; align-items:center; gap:6px; padding:6px 10px;
+            border:1px solid rgba(102,200,255,.55); border-radius:6px;
+            background:linear-gradient(135deg,rgba(41,182,246,.24),rgba(10,58,120,.22));
+            color:#d6f0ff; font:600 .74rem 'Outfit',sans-serif; cursor:pointer; transition:.2s;
+        }
+        .arch-report-zone-btn:hover:not(:disabled) { background:rgba(41,182,246,.36); box-shadow:0 0 14px rgba(41,182,246,.2); }
+        .arch-report-zone-btn:disabled { opacity:.45; cursor:not-allowed; }
+        .arch-report-zone-btn.is-move { border-color:rgba(255,200,80,.5); color:#ffe6b0; background:rgba(255,200,80,.12); }
+        .arch-report-zone-value { font-size:.7rem; color:rgba(245,240,235,.62); font-variant-numeric:tabular-nums; }
+        .arch-report-zone-value.is-set { color:#9ad8ff; }
+        .arch-report-panel.is-awaiting-zone .arch-report-config { opacity:.4; }
+        .arch-report-panel.is-awaiting-zone .arch-report-config .apm-group-title { color:rgba(245,240,235,.35); }
+        /* Picking: the window steps aside and the map says what the next tap does. */
+        body.arch-zone-picking .leaflet-container { cursor:crosshair !important; }
         .arch-report-control { display:flex; justify-content:space-between; align-items:center; font-size:.7rem; color:rgba(245,240,235,.6); margin:8px 0 6px; }
         .arch-report-control strong { color:#66c8ff; font-family:'Cinzel',serif; font-size:.74rem; }
         .arch-report-button {

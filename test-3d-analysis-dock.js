@@ -34,9 +34,18 @@ context.syncAnalysisDock(); assert.equal(props['--m3d-analysis-dock-bottom'],'28
 context.bar=box(0,0,0); context.syncAnalysisDock(); assert.equal(props['--m3d-analysis-dock-bottom'],'243px');
 classNames.delete('is-3d'); context.syncAnalysisDock(); assert(!('--m3d-analysis-dock-bottom' in props));
 assert(/body\.is-3d \.layer-action-dock,\s*body\.is-pwa\.is-3d \.layer-action-dock\s*\{[^}]*--m3d-analysis-dock-bottom[^}]*!important/s.test(css), '3D rule beats the PWA inline override');
-for (const id of ['lidarScannerRun','archeoPotRunBtn','archReportRunBtn']) assert(vo.includes("actions: ['"+id+"']"));
+for (const id of ['lidarScannerRun','archeoPotRunBtn']) assert(vo.includes("actions: ['"+id+"']"));
+// The Archeological Report keeps "Generate report" in its own window: the user
+// asked for it not to float on screen, so its distance slider docks nothing.
+assert(/\{ id: 'archReportDistance'[^}]*actions: \[\]/.test(vo), 'the report run button is never docked');
 assert(script.includes('watchAnalysisControl(toggleGroup)') && script.includes('watchAnalysisControl(bar)'));
 assert(script.includes('syncToggleAnchor(); syncAnalysisDock();'));
-for(const tag of ['css/map3d-terrain.css?v=20261030-3d-analysis-dock','js/map3d-terrain.js?v=20261030-3d-analysis-dock']) assert(html.includes(tag)&&sw.includes("'"+tag+"'"));
+// The tag is re-cut by every later release, so read the live one from the page
+// and require the service worker to pre-cache exactly what the page requests.
+for (const file of ['css/map3d-terrain.css','js/map3d-terrain.js']) {
+    const live = (html.match(new RegExp(file.replace(/[.\/]/g, m => '\\' + m) + '\\?v=([^\"]+)')) || [])[1];
+    assert(live, file + ' is versioned on the page');
+    assert(sw.includes("'" + file + '?v=' + live + "'"), file + ' is pre-cached under the tag the page requests');
+}
 assert(Number(/const CACHE_NAME = 'detectlab-v(\d+)-/.exec(sw)[1])>=316);
 console.log('OK — 3D analysis actions clear the control stack in PWA and web; 2D is unchanged.');
