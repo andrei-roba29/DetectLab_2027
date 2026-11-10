@@ -313,3 +313,109 @@ body.apm-picking .leaflet-apmHotspots-pane * { pointer-events: none !important; 
 .apm-preview-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .apm-loading-preview button:focus-visible { outline: 3px solid #eeeaf7; outline-offset: 1px; }
 .apm-preview-head { position: sticky; top: 0; z-index: 2; background: #191c2b; padding-bottom: 4px; }
+
+/* ── Run overlay: the animation on screen, the loading bar under it ─────────
+ * Shared by the panel's TRAIN run and by the archaeological report when it asks
+ * this engine for its Next-Gen baseline. The page behind is blurred, and where
+ * backdrop-filter is unavailable the scrim simply becomes opaque. */
+.apm-run-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(8, 10, 18, 0.55);
+    -webkit-backdrop-filter: blur(7px) saturate(0.85);
+    backdrop-filter: blur(7px) saturate(0.85);
+    animation: apmRunFade 0.18s ease-out;
+}
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+    .apm-run-overlay { background: rgba(8, 10, 18, 0.88); }
+}
+.apm-run-card {
+    width: min(520px, 100%);
+    max-height: calc(100vh - 32px);
+    overflow: auto;
+    box-sizing: border-box;
+    padding: 18px 18px 14px;
+    border: 1px solid #4d4160;
+    border-radius: 14px;
+    background: #141726;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+    color: #eeeaf7;
+    text-align: center;
+}
+.apm-run-card.is-live { text-align: left; padding-top: 12px; }
+.apm-run-visual { position: relative; width: 128px; height: 128px; margin: 4px auto 12px; }
+.apm-run-visual[hidden] { display: none; }
+.apm-run-ring {
+    position: absolute;
+    inset: 0;
+    border: 2px solid rgba(137, 207, 240, 0.6);
+    border-radius: 50%;
+    animation: apmRunPulse 2.4s ease-out infinite;
+}
+.apm-run-ring:nth-child(2) { animation-delay: 0.8s; }
+.apm-run-ring:nth-child(3) { animation-delay: 1.6s; }
+.apm-run-sweep {
+    position: absolute;
+    inset: 20px;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, rgba(137, 207, 240, 0) 0deg, rgba(137, 207, 240, 0.45) 55deg, rgba(137, 207, 240, 0) 115deg);
+    animation: apmRunSpin 1.8s linear infinite;
+}
+.apm-run-core {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border-radius: 50%;
+    background: #e8c15a;
+    box-shadow: 0 0 16px rgba(232, 193, 90, 0.75);
+    animation: apmRunBreathe 1.8s ease-in-out infinite;
+}
+.apm-run-live { margin: 0 0 10px; }
+.apm-run-live:empty { display: none; }
+.apm-run-title { margin: 0 0 6px; font-size: 15px; font-weight: 600; line-height: 1.35; }
+.apm-run-step { min-height: 32px; font-size: 12px; line-height: 1.45; opacity: 0.85; }
+.apm-run-bar {
+    height: 8px;
+    margin: 12px 0 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.14);
+    overflow: hidden;
+}
+.apm-run-fill {
+    height: 100%;
+    width: 0;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #89cff0, #e8c15a);
+    transition: width 0.3s ease;
+}
+.apm-run-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+.apm-run-pct { opacity: 0.85; }
+.apm-run-cancel { min-height: 44px; min-width: 44px; }
+@keyframes apmRunFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes apmRunPulse { 0% { transform: scale(0.35); opacity: 0.9; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes apmRunSpin { to { transform: rotate(360deg); } }
+@keyframes apmRunBreathe { 0%, 100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.25); opacity: 1; } }
+/* Respect the system setting: the geometry stays, the motion stops. */
+@media (prefers-reduced-motion: reduce) {
+    .apm-run-overlay { animation: none; }
+    .apm-run-ring, .apm-run-sweep, .apm-run-core, .apm-run-fill { animation: none; transition: none; }
+    .apm-run-ring { opacity: 0.5; transform: scale(1); }
+    .apm-run-sweep { background: rgba(137, 207, 240, 0.2); }
+}
+/* The panel's own preview widget gets room to breathe inside the card. */
+.apm-run-live .apm-loading-preview { margin: 0; background: #101322; }

@@ -331,3 +331,38 @@ Each of these is a separate network round trip. Fetching them in sequence added 
 Asset tag `20261102-apm-parallel-fetch` (apm-pipeline.js only), shell cache `detectlab-v388-apm-parallel-fetch`.
 
 **Verification.** `node test-apm-exclusions.js`, `test-apm-train-performance.js`, `test-apm-next.js`, `test-apm-train-network.js`, `test-apm-robust-train.js` and `test-apm-romania-contract.js` pass, including the "both prediction modes use the shared mask before sending data to the worker" contract test. **Not measured:** real-world wall-clock improvement against the production UAT/DEM endpoints (the automated tests use mocked network providers); the saving is proportional to how much the mask/water fetches previously added on top of the DEM fetch, which varies with connection speed and site density.
+
+## Run overlay — animation on screen, loading bar underneath (2026-11-09)
+
+A TRAIN run takes tens of seconds and the panel's progress bar is 6 px tall,
+inside a panel the user has usually scrolled away from. The run now puts the
+animation **on screen**: a full-viewport overlay (`js/apm-next/apm-run-overlay.js`,
+`.apm-run-overlay` in `css/next-gen-apm.css`) with the page blurred behind it
+(`backdrop-filter: blur(7px)`, opaque fallback where unsupported) and the
+loading bar directly under the animation.
+
+Layout inside the card, in DOM order: the animation (the panel's own real-site
+preview canvas when it started, otherwise three pulsing rings plus a rotating
+sweep), the title, the step text, the bar + percentage, and a cancel button when
+the caller supplied one. `prefers-reduced-motion: reduce` stops the motion and
+keeps the geometry.
+
+Who shows it:
+
+* **the panel**, for every TRAIN run (`run()`), including hoard runs — the title
+  says which model is being built;
+* **the archaeological report**, while it asks this engine for its baseline —
+  i.e. when the report window's baseline is *APM Next-Gen custom* or
+  *APM Next-Gen train*. The bar follows the engine's own progress; the title says
+  the report is running the Next-Gen model.
+
+The overlay mirrors state, it never owns it: `update({pct, label})` and `close()`
+are the whole API, there are no timers, no requests and no map access, and only
+one overlay can exist at a time. If the module is absent the panel behaves
+exactly as before (panel bar only), and if the preview widget fails to start the
+rings stay instead of an empty card.
+
+**Verification.** `node test-apm-run-overlay.js` (layout order, bar semantics and
+clamping, single instance, borrowed animation host, cancel contract, CSS blur and
+reduced motion, no I/O) and `test-apm-train-network.js` (a real TRAIN run and a
+real report `report.run({mode:'train'})` both show the overlay and remove it).

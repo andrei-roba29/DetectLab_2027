@@ -1016,7 +1016,7 @@
 //   din vecinii pe care îi acoperă fereastra mutată, iar image-overlay-urile
 //   își mută cele patru colțuri cu aceiași metri. O poziție aliniată o dată
 //   e aceeași în ambele vizualizări. Vezi HISTORICAL_MAP_SHIFT.md §5.
-const CACHE_NAME = 'detectlab-v415-apm-hoard-wording';
+const CACHE_NAME = 'detectlab-v416-apm-run-overlay';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1058,17 +1058,18 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 //   and js/map3d-terrain.js.
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
-  'css/next-gen-apm.css?v=20261109-apm-hoard-wording',
-  'js/apm-next/apm-raster.js?v=20261109-apm-hoard-wording',
-  'js/apm-next/apm-i18n.js?v=20261109-apm-hoard-wording',
-  'js/apm-next/apm-pipeline.js?v=20261109-apm-hoard-wording',
-  'js/apm-next/apm-ui.js?v=20261109-apm-hoard-wording',
-  'js/apm-next/apm-worker.js?v=20261109-apm-hoard-wording',
-  'js/apm-next/apm-loading-preview.js?v=20261109-apm-hoard-wording',
-  'js/apm-next/hoards.config.js?v=20261109-apm-hoard-wording',
-  'js/apm-next/apm-hoards.js?v=20261109-apm-hoard-wording',
-  'js/apm-next/apm-hoard-provider.js?v=20261109-apm-hoard-wording',
-  'js/apm-next/apm-hoard-scale.js?v=20261109-apm-hoard-wording',
+  'css/next-gen-apm.css?v=20261109-apm-run-overlay',
+  'js/apm-next/apm-raster.js?v=20261109-apm-run-overlay',
+  'js/apm-next/apm-i18n.js?v=20261109-apm-run-overlay',
+  'js/apm-next/apm-pipeline.js?v=20261109-apm-run-overlay',
+  'js/apm-next/apm-ui.js?v=20261109-apm-run-overlay',
+  'js/apm-next/apm-worker.js?v=20261109-apm-run-overlay',
+  'js/apm-next/apm-loading-preview.js?v=20261109-apm-run-overlay',
+  'js/apm-next/apm-run-overlay.js?v=20261109-apm-run-overlay',
+  'js/apm-next/hoards.config.js?v=20261109-apm-run-overlay',
+  'js/apm-next/apm-hoards.js?v=20261109-apm-run-overlay',
+  'js/apm-next/apm-hoard-provider.js?v=20261109-apm-run-overlay',
+  'js/apm-next/apm-hoard-scale.js?v=20261109-apm-run-overlay',
 
   // v399: Romanian Heritage sublayers (reader dependencies are local).
   'js/map-app.js?v=20261102-ro-heritage',
@@ -1096,6 +1097,12 @@ const PRECACHE_URLS = [
   // index.html keeps working offline through its own versioned URL.
   'css/window-resize.css?v=20261101-account-social-no-grip',
   'js/window-resize.js?v=20261101-account-social-no-grip',
+  'css/next-gen-apm.css?v=20261109-apm-hoard-wording',
+  'js/apm-next/apm-i18n.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/apm-pipeline.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/apm-ui.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/hoards.config.js?v=20261109-apm-hoard-wording',
+  'js/apm-next/apm-hoards.js?v=20261109-apm-hoard-wording',
   'js/apm-next/hoards.config.js?v=20261105-hoards-gated',
   'js/apm-next/apm-hoards.js?v=20261105-hoards-gated',
   'js/apm-next/apm-hoard-provider.js?v=20261105-hoards-gated',

@@ -344,3 +344,10 @@ The report retains its stricter 500 m UAT clearance for result centres. If
 heritage data is missing or any heritage API layer fails, the report displays
 no results; UAT raster failures are also treated as excluded. The raster is a
 sampled representation and cannot guarantee that every small feature is visible.
+
+**Progress on screen.** When the baseline is *APM Next-Gen custom* or *APM Next-Gen
+train*, the report's wait is shown the same way the APM panel shows its own run:
+a full-screen overlay with the animation in the middle, the page blurred behind
+it and the loading bar under the animation (`js/apm-next/apm-run-overlay.js`). The
+bar follows the Next-Gen engine's progress; the title states that the report is
+running that model. The report's own status line keeps its per-stage text.

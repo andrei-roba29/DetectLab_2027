@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261109-apm-hoard-wording';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261109-apm-run-overlay';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
@@ -65,10 +65,40 @@
     var map = null, layer = null, centreMarker = null, radiusCircle = null, downweightedLayer = null;
     var els = {}, ui = { panel: null, btn: null };
     var loadingPreview = null, previewParams = null;
+    var runOverlay = null;          // full-screen TRAIN overlay (see apm-run-overlay.js)
     function stopLoadingPreview() {
         if (previewParams) previewParams.onPreview = null;
         if (loadingPreview) loadingPreview.stop();
         loadingPreview = null; previewParams = null;
+    }
+
+    /* ── full-screen run overlay ─────────────────────────────────────────────
+     * While TRAIN runs, the animation is on screen with the page blurred behind
+     * it and the loading bar under it, instead of a 6 px bar inside the panel.
+     * The panel keeps its own bar and status for readers who scrolled away; the
+     * overlay is a second, unmissable view of the same run. */
+    function openRunOverlay(opts) {
+        var O = root.DetectLabApmRunOverlay;
+        closeRunOverlay();
+        if (!O || typeof O.create !== 'function') return null;
+        try {
+            runOverlay = O.create({
+                t: T,
+                titleKey: (opts && opts.titleKey) || 'run.overlayTitle',
+                onCancel: opts && opts.onCancel,
+                animationHost: opts && opts.animationHost,
+                onClose: opts && opts.onClose
+            });
+        } catch (ignore) { runOverlay = null; }
+        return runOverlay;
+    }
+
+    function closeRunOverlay() {
+        if (runOverlay) { try { runOverlay.close(); } catch (ignore) {} runOverlay = null; }
+        // The preview widget belongs to the panel; the overlay only borrows it.
+        if (els.previewHost && !els.previewHost.parentNode && ui.panel && els.controls) {
+            ui.panel.insertBefore(els.previewHost, els.controls);
+        }
     }
 
     var i18nBindings = [];          // [{ el, key, attr }] refreshed on language change
@@ -720,19 +750,33 @@
         setBusyUi(true);
         setProgress(T('status.starting'), 2);
         stopLoadingPreview();
-        if (mode === 'train' && !isHoard() && els.previewCb.checked && root.DetectLabApmLoadingPreview) {
+        var wantsPreview = mode === 'train' && !isHoard() && els.previewCb.checked && root.DetectLabApmLoadingPreview;
+        // TRAIN is the long run: put the animation on screen, blur the page and
+        // hang the loading bar underneath it.
+        if (mode === 'train') {
+            if (openRunOverlay({ titleKey: isHoard() ? 'run.overlayHoardTitle' : 'run.overlayTitle',
+                onCancel: cancelRun })) {
+                runOverlay.update({ pct: 2, label: T('status.starting') });
+            }
+        }
+        if (wantsPreview) {
             try {
                 previewParams = params;
+                // The overlay already holds the host; the widget draws inside it.
                 loadingPreview = root.DetectLabApmLoadingPreview.create({ host: els.previewHost, t: T,
                     onCancel: cancelRun, onSkip: stopLoadingPreview, onStop: function () { params.onPreview = null; } });
                 var view = loadingPreview;
+                // Only now is the widget real: hand it to the overlay as the animation.
+                if (runOverlay && runOverlay.setAnimation) runOverlay.setAnimation(els.previewHost);
                 params.onPreview = function (event) { if (state.token === runToken && !runToken.cancelled) view.update(event); };
                 ui.panel.scrollTop = 0;
             } catch (ignore) { stopLoadingPreview(); els.previewHost.replaceChildren(); }
         }
         params.onProgress = function (key, pct, vars) {
             if (state.token === runToken && !runToken.cancelled) {
-                setProgress(T(key, vars), pct);
+                var label = T(key, vars);
+                setProgress(label, pct);
+                if (runOverlay) runOverlay.update({ pct: pct, label: label });
                 if (loadingPreview) loadingPreview.setStage(key, vars);
             }
         };
@@ -751,6 +795,7 @@
         }).then(function () {
             if (state.token !== runToken) return;
             stopLoadingPreview();
+            closeRunOverlay();
             state.token = null;
             state.busy = false;
             setBusyUi(false);
@@ -760,6 +805,7 @@
 
     function cancelRun() {
         stopLoadingPreview();
+        closeRunOverlay();
         if (state.token) state.token.cancelled = true;
         [state.manualSession, state.trainSession].forEach(function (s) {
             if (s.worker) { s.worker.terminate(); s.worker = null; s.analysisKey = null; }
@@ -1493,8 +1539,23 @@
         // Claim the shared worker sessions so the panel cannot start a second
         // analysis on top of the report's run (and vice versa).
         state.reportBusy = true;
-        function release(value) { state.reportBusy = false; return value; }
-        function releaseReject(err) { state.reportBusy = false; throw err; }
+        // The report gets the same on-screen animation and loading bar; the bar
+        // follows this engine's own progress, the stage text says whose run it is.
+        var reportOverlay = openRunOverlay({ titleKey: opts.mode === 'train' ? 'run.overlayReportTrain' : 'run.overlayReportCustom' });
+        var reportLabel = T(opts.mode === 'train' ? 'run.overlayReportTrain' : 'run.overlayReportCustom');
+        if (reportOverlay) reportOverlay.update({ pct: 1, label: reportLabel });
+        function closeReportOverlay() {
+            if (!reportOverlay) return;
+            try { reportOverlay.close(); } catch (ignore) {}
+            if (runOverlay === reportOverlay) runOverlay = null;
+            reportOverlay = null;
+        }
+        function release(value) { state.reportBusy = false; closeReportOverlay(); return value; }
+        function releaseReject(err) { state.reportBusy = false; closeReportOverlay(); throw err; }
+        function reportProgress(key, pct, vars) {
+            if (reportOverlay) reportOverlay.update({ pct: pct, label: T(key, vars) });
+            if (typeof opts.onProgress === 'function') opts.onProgress(key, pct, vars);
+        }
         if (opts.mode === 'train') {
             return loadReportSites(centre, opts.token).then(function (records) {
                 var pool = pipe().sitePool(records, centre);
@@ -1515,7 +1576,7 @@
                     waterClasses: core().WATER_CLASSES.filter(function (c) { return els.water[c].checked; }),
                     workerUrl: WORKER_URL,
                     token: opts.token,
-                    onProgress: opts.onProgress
+                    onProgress: reportProgress
                 };
                 return pipe().runTrain(state.trainSession, params).then(function (res) {
                     res.mode = 'train';
@@ -1526,7 +1587,7 @@
         }
         var params = readManualParams({
             centre: centre, radiusKm: opts.radiusKm,
-            token: opts.token, onProgress: opts.onProgress
+            token: opts.token, onProgress: reportProgress
         });
         return pipe().runManual(state.manualSession, params).then(function (res) {
             res.mode = 'custom';

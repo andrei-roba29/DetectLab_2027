@@ -11,7 +11,7 @@ const read = p=>fs.readFileSync(path.join(__dirname,p),'utf8');
 const fixture = require('./test/fixtures/romania-sites.synthetic.json');
 const scripts=['apm-core','apm-raster','apm-heatmap','apm-sites','apm-providers','romania-periods.config','hoards.config','apm-hoards','apm-hoard-provider','apm-hoard-scale','apm-romania-sites',
     'ariadne/ariadne.config','ariadne/ariadne-tiles','ariadne/ariadne-parse','ariadne/ariadne-query','ariadne/ariadne-upstream','ariadne/ariadne-provider',
-    'apm-site-merge','apm-dare-sites','apm-outside-sites','apm-i18n','apm-train-cache','apm-pipeline','apm-ui'];
+    'apm-site-merge','apm-dare-sites','apm-outside-sites','apm-i18n','apm-train-cache','apm-pipeline','apm-loading-preview','apm-run-overlay','apm-ui'];
 const wcs='<wcs:Capabilities><wcs:ServiceMetadata><wcs:formatSupported>image/tiff</wcs:formatSupported><wcs:Extension><wcs:crsSupported>http://www.opengis.net/def/crs/EPSG/0/4326</wcs:crsSupported></wcs:Extension><wcs:MaxPixels>4000000</wcs:MaxPixels></wcs:ServiceMetadata><wcs:Contents><wcs:CoverageSummary><wcs:CoverageId>DEM_v11</wcs:CoverageId></wcs:CoverageSummary></wcs:Contents></wcs:Capabilities>';
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn,label){for(let i=0;i<1000;i++){if(fn())return;await delay(10);}throw Error('Timeout: '+label);}
@@ -83,6 +83,8 @@ function harness(mode='ok') {
         assert(['apm_sites_within','apm_hoards_within'].includes(name));assert(args.p_radius_km<=(name==='apm_sites_within'?50:150));
         return network('https://project.supabase.example/rest/v1/rpc/'+name);
     },from(){throw Error('Direct table read forbidden');}};
+    // jsdom has no 2D canvas; the preview widget must fail closed on its own.
+    w.HTMLCanvasElement.prototype.getContext=function(){return null;};
     w.GeoTIFF={fromArrayBuffer:async buf=>({getImage:async()=>({getWidth:()=>buf.w,getHeight:()=>buf.h,getGDALNoData:()=>null,
         readRasters:async()=>Float32Array.from({length:buf.w*buf.h},(_,i)=>200+(i%buf.w)*30+15*Math.sin(Math.floor(i/buf.w)/3))})})};
     w.Worker=class {
@@ -190,6 +192,50 @@ function harness(mode='ok') {
         assert(many.requests.slice(beforeRun).every(u=>['image.discomap.eea.europa.eu','overpass-api.de'].includes(new URL(u).host)),'the run itself touches nothing but DEM and hydro');
         console.log('PASS outside Romania TRAIN: the builtin DARE/ARIADNE list trains against terrain backgrounds from the same box, with no Romanian-territory predicate.');
     } finally {many.dom.window.close();}
+    // TRAIN puts the animation on screen: blurred page, loading bar underneath.
+    const screen=harness('ok');
+    try {
+        await screen.pick(46.6,24.8);
+        const before=screen.w.document.querySelector('.apm-status').textContent;
+        screen.w.document.querySelector('.apm-primary').click();
+        const overlay=screen.w.document.querySelector('.apm-run-overlay');
+        assert(overlay,'TRAIN shows a full-screen overlay while it runs');
+        assert.equal(overlay.getAttribute('role'),'dialog');
+        assert.equal(overlay.querySelector('.apm-run-title').textContent,'Building the TRAIN model…');
+        const card=overlay.querySelector('.apm-run-card');
+        const order=[].slice.call(card.children).map(n=>n.className);
+        assert(order.indexOf('apm-run-visual')<order.indexOf('apm-run-bar')&&order.indexOf('apm-run-bar')<order.indexOf('apm-run-meta'),'the loading bar sits under the animation: '+order.join(','));
+        assert.equal(overlay.querySelectorAll('.apm-run-ring').length,3);
+        assert.equal(overlay.querySelector('.apm-run-visual').hidden,false,'a widget that cannot start leaves the rings, not an empty card');
+        assert(!overlay.querySelector('.apm-run-card').classList.contains('is-live'));
+        assert(overlay.querySelector('.apm-run-cancel'),'the run can still be cancelled from the overlay');
+        await until(()=>screen.completed||screen.runError,'overlay TRAIN completion');
+        if(screen.runError)throw screen.runError;
+        assert.equal(screen.w.document.querySelector('.apm-run-overlay'),null,'the overlay is gone when the run ends');
+        assert.equal(screen.w.document.querySelector('.apm-preview-host').parentNode.id,'apmNextPanel','the preview host returns to the panel');
+        assert(!/apm-run-overlay/.test(screen.w.document.body.className),'and it leaves no page-level state behind');
+        console.log('PASS run overlay: TRAIN shows the animation on screen with the loading bar under it, then removes itself; status was '+before.slice(0,20)+'…');
+    } finally {screen.dom.window.close();}
+
+    // The archaeological report asks this engine for its TRAIN baseline: same overlay.
+    const reportRun=harness('ok');
+    try {
+        await reportRun.pick(46.6,24.8);
+        const seen=[];
+        const pending=reportRun.w.DetectLabApmUi.report.run({mode:'train',centre:{lat:46.6,lon:24.8},radiusKm:3,
+            token:{cancelled:false},onProgress:function(key,pct){seen.push(key+':'+pct);}});
+        const rep=reportRun.w.document.querySelector('.apm-run-overlay');
+        assert(rep,'the report run gets the same on-screen animation');
+        assert(/archaeological report is running the APM Next-Gen TRAIN model/.test(rep.querySelector('.apm-run-title').textContent),
+            'and says whose run it is: '+rep.querySelector('.apm-run-title').textContent);
+        const res=await pending;
+        assert.equal(res.mode,'train','the report still receives the TRAIN result');
+        assert.equal(reportRun.w.document.querySelector('.apm-run-overlay'),null,'and the overlay closes with the run');
+        assert(seen.length>0,'the report keeps receiving progress: '+seen.slice(0,3).join(' '));
+        assert.equal(reportRun.w.DetectLabApmRunOverlay.isOpen(),false);
+        console.log('PASS report overlay: the archaeological report shows the same animation and bar while its Next-Gen TRAIN baseline runs.');
+    } finally {reportRun.dom.window.close();}
+
     const hoard=harness();
     try {
         await hoard.pick(46.75,25);
