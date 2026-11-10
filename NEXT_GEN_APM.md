@@ -376,3 +376,74 @@ reduced motion, no I/O) and `test-apm-train-network.js`: a real settlement TRAIN
 shows the widget with real sample values and the bar under it, a hoard TRAIN shows
 the hoard title and the same widget, a run without a 2D canvas keeps the rings, and
 a real `report.run({mode:'train'})` shows and removes the same window.
+
+## Hoards / tezaure: the same result as settlements, and a hoard baseline for the report (2026-11-09)
+
+The TEZAURE category used to produce a different *kind* of answer: a 1–10 km
+prediction disc at its own lattice, its own tile size, its own filters and a
+narrower period choice, so the same engine looked like two products. It no
+longer does.
+
+**What is now shared, not mirrored**
+
+- **Prediction window.** A hoard TRAIN predicts over `TRAIN_AREA_KM` (**50 km**),
+  exactly like a settlement run — `radiusKm` no longer depends on the category.
+  The 150 km is the *training* radius (`hoards.config.js: trainingRadiusKm`), the
+  same way settlements train and predict on 50 km. The dashed circle on the map
+  still shows the radius that was trained.
+- **Exclusions.** The same `computeArcheoExclusionMask` call over the same
+  prediction grid with the same radius: protection radii, UAT mask and heritage
+  layers decide what can be scored, for both categories.
+- **Output.** `apm-worker.js` is shared, so the hoard run returns the same
+  `geojson` (veryhigh outlines), the same continuous heat raster
+  (`MAX_PREDICTION_CELLS`-bounded), the same thresholds, `scoreStats`,
+  `areaKm2`, `provenance` and `diagnostics`; `drawResult` renders both through
+  one code path. `test-apm-train-network.js` compares a hoard run with a
+  settlement run and requires the same threshold keys and the same extent
+  (±5 %).
+- **Filters.** The same `minSites` (10) / `warnSites` (30) rule, the same
+  period list mechanics, the same `TRAIN_ROBUST_CONFIG` folds, the same
+  `minAreaM2` and smoothing. `hoardProvider.filter` only replaces *which
+  records* are the positives; the period selection is applied by the same
+  `params.period`.
+- **The radius control** is MANUAL-only for both categories, and the analysis
+  preview is offered to hoards too.
+
+`apm-pipeline.js` keeps one guard: a hoard prediction radius must be
+`> 0` and `<= 50 km` (`Hoard prediction radius must be between 1 and 50 km`).
+The report passes its own radius (1–10 km), which is why the lower bound exists.
+
+**The archaeological report can now train on hoards**
+
+`Report settings → Baseline → APM Next-Gen — train mode` gained a second field,
+**Training category** (`#archReportTrainCategory`: *Settlements* / *Treasures /
+hoards*, next to *Training period*). Choosing *hoards*:
+
+1. `DetectLabApmUi.report.periods(centre, token, 'hoards')` lists the deposit
+   period groups from `DetectLabHoardProvider.groups()` — the same groups the
+   TEZAURE panel shows, fetched from the same `apm_hoards_within` RPC, cached
+   per centre and category. The settlement repertory is not touched;
+2. the note under the select speaks about deposit periods, and groups with
+   fewer than 10 deposits stay disabled, exactly like the settlement ones;
+3. `report.run({mode:'train', category:'hoards', …})` trains the model on the
+   hoards, over the report's own radius, and the result is used as the APM
+   baseline component in the same way as a settlement model (same class map
+   `veryhigh/high/medium → 5/4.5/4`, same allowed-class filter, same PDF
+   figures);
+4. the model records `meta.baselineCategory` (`'settlements'` or `'hoards'`), so
+   the PDF cover/method lines read *APM Next-Gen — train mode · Tezaure / comori
+   · <period>*. Outside train mode the choice is ignored and reset to
+   settlements, so a later custom run never inherits it.
+
+The hoard release gate still applies: without `trainingAllowed()` the report
+fails closed with the same `hoard.pending` message the panel shows.
+
+**Verification.** `node test-apm-train-network.js` (13 checks: hoard result
+structure/thresholds/extent against a settlement run, the report hoard period
+list from the hoard RPC only, and the report hoard run in the same window),
+`node test-archeo-report.js` (markup, default category, period re-fetch on
+change, `category` handed to the engine, `baselineCategory` in the model),
+`test-apm-hoards.js` and the rest of the APM suite. Shell cache
+`detectlab-v417-apm-train-parity`, asset tag `20261109-apm-train-parity`.
+**Not measured:** wall-clock and network cost of a real hoard run at 150 m
+resolution — the tests use synthetic DEM/hoard fixtures, never live services.

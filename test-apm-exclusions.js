@@ -311,8 +311,8 @@ function assertTextureMasked(heatmap, sourceMask, label) {
     const TAG = '20261102-apm-continuous-heat', BOUNDED = '20261102-apm-train-bounded-grid';
     const PARALLEL = '20261102-apm-parallel-fetch';
     for (const [file, version] of [['apm-heatmap', TAG],
-        ['apm-raster', '20261109-apm-run-overlay'], ['apm-i18n', '20261109-apm-run-overlay'], ['apm-pipeline', '20261109-apm-run-overlay'],
-        ['apm-ui', '20261109-apm-run-overlay']]) {
+        ['apm-raster', '20261109-apm-run-overlay'], ['apm-i18n', '20261109-apm-train-parity'], ['apm-pipeline', '20261109-apm-train-parity'],
+        ['apm-ui', '20261109-apm-train-parity']]) {
         const tag = 'js/apm-next/' + file + '.js?v=' + version;
         assert.ok(html.includes(tag) && sw.includes(tag), file + ' is versioned and precached');
     }

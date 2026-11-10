@@ -110,7 +110,7 @@ function test(label,fn){fn();console.log('PASS '+label);n++;}
   assert.equal(h.trainingAllowed(),false);assert.equal(h.overridden(),false);
   // Switch on: the pending refusal is gone and the next guard is reached instead.
   config.release.operatorOverride=true;
-  await assert.rejects(pipeline.runTrain({}, {category:'hoards'}),/1–10 km/i);
+  await assert.rejects(pipeline.runTrain({}, {category:'hoards'}),/between 1 and 50 km/i);
   assert.equal(h.ready(),false,'the override is not evidence');
   console.log('PASS release gate: refuses with the switch off, gets past it with the switch on, and never claims a review');n++;
   config.release.operatorOverride=false;

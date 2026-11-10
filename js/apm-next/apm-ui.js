@@ -52,7 +52,11 @@
     };
 
     function isHoard() { return state.category === 'hoards'; }
-    function trainingKm() { return isHoard() ? 150 : TRAIN_AREA_KM; }
+    function hoardTrainingKm() {
+        var cfg = root.DetectLabHoardConfig;
+        return cfg && cfg.trainingRadiusKm ? cfg.trainingRadiusKm : 150;
+    }
+    function trainingKm() { return isHoard() ? hoardTrainingKm() : TRAIN_AREA_KM; }
     function hoardRecords() { return root.DetectLabHoardProvider; }
     function changeCategory() {
         if (state.busy) return;
@@ -729,7 +733,9 @@
                     backgroundAllowed: state.siteInput === 'csv' || isHoard() || outsideRegion() ? null
                         : function (lat, lon) { return root.DetectLabRomaniaApmSites.insideRomania(lat, lon); },
                     period: state.period,
-                    radiusKm: isHoard() ? readRadius() : TRAIN_AREA_KM,
+                    // Same prediction window as settlements: the result must cover
+                    // the same area, with the same exclusions and the same render.
+                    radiusKm: TRAIN_AREA_KM,
                     category: isHoard() ? 'hoards' : 'settlements', backgroundType: state.backgroundType,
                     minSlopeDeg: parseFloat(els.minSlope.value),
                     smoothDem: !!els.smooth.checked,
@@ -1054,7 +1060,7 @@
             mode: res.mode || state.mode,
             generated: new Date().toISOString(),
             centre: state.centre,
-            radiusKm: state.mode === 'train' && !isHoard() ? TRAIN_AREA_KM : state.radiusKm,
+            radiusKm: state.mode === 'train' ? TRAIN_AREA_KM : state.radiusKm,
             provenance: res.provenance,
             warnings: res.warnings,
             diagnostics: res.diagnostics || null,
@@ -1137,7 +1143,7 @@
             userAgent: root.navigator ? root.navigator.userAgent : null,
             page: root.location ? root.location.pathname : null,
             point: state.centre,
-            radiusKm: state.mode === 'train' && !isHoard() ? TRAIN_AREA_KM : state.radiusKm,
+            radiusKm: state.mode === 'train' ? TRAIN_AREA_KM : state.radiusKm,
             settings: collectSettings(),
             // A support bundle must never hide an override in force.
             hoards: root.DetectLabApmHoards ? { reviewed: root.DetectLabApmHoards.ready(), trainingAllowed: root.DetectLabApmHoards.trainingAllowed(),
@@ -1407,9 +1413,9 @@
         els.trainOnly.hidden = manual;
         els.curveNote.hidden = manual;
         els.curvesBox.querySelectorAll('textarea').forEach(function (ta) { ta.disabled = !manual; });
-        els.radiusRow.hidden = !manual && !isHoard();
+        els.radiusRow.hidden = !manual;
         if (els.hoardOptions) els.hoardOptions.hidden = !isHoard();
-        if (els.previewOption) els.previewOption.hidden = isHoard();
+        if (els.previewOption) els.previewOption.hidden = false;   // hoards get the same analysis preview
         if (els.settlementSourceNote) els.settlementSourceNote.hidden = isHoard();
         if (els.settlementAreaNote) els.settlementAreaNote.hidden = isHoard();
         els.trainNote.hidden = manual || isHoard();
@@ -1502,7 +1508,7 @@
      * period and cancellation token — everything else is read from this panel,
      * so the two features can never drift apart. */
 
-    var reportSites = { centre: null, records: null };
+    var reportSites = { key: null, records: null };
 
     function reportCentreKey(centre) {
         return Number(centre.lat).toFixed(5) + ',' + Number(centre.lon).toFixed(5);
@@ -1510,7 +1516,8 @@
 
     /** Known-site pool for a report centre (50 km, cached per centre). */
     function loadReportSites(centre, token) {
-        if (reportSites.centre === reportCentreKey(centre) && reportSites.records) {
+        var key = 'settlements:' + reportCentreKey(centre);
+        if (reportSites.key === key && reportSites.records) {
             return Promise.resolve(reportSites.records);
         }
         var provider = root.DetectLabRomaniaApmSites;
@@ -1523,13 +1530,44 @@
             if (records._meta && records._meta.outsideRomania) {
                 throw new Error('The report point is outside the Romanian training dataset.');
             }
-            reportSites = { centre: reportCentreKey(centre), records: records };
+            reportSites = { key: key, records: records };
+            return records;
+        });
+    }
+
+    /** Hoard pool for a report centre — the same provider and 150 km window the
+     * panel's TEZAURE mode uses, so the report never invents its own dataset. */
+    function loadReportHoardSites(centre, token) {
+        var provider = hoardRecords();
+        if (!provider || typeof provider.createProvider !== 'function') {
+            return Promise.reject(new Error('The hoard dataset is unavailable.'));
+        }
+        if (root.DetectLabApmHoards && !root.DetectLabApmHoards.trainingAllowed()) {
+            return Promise.reject(new Error(T('hoard.pending')));
+        }
+        var key = 'hoards:' + reportCentreKey(centre);
+        if (reportSites.key === key && reportSites.records) {
+            return Promise.resolve(reportSites.records);
+        }
+        var t = token || { cancelled: false };
+        return provider.createProvider().getSites(centre, hoardTrainingKm(),
+            { token: t, filters: { include_approximate: !!state.includeApproximate } }).then(function (records) {
+            if (t.cancelled) throw new Error('Cancelled');
+            if (records._meta && records._meta.outsideRomania) {
+                throw new Error('The report point is outside the hoard training dataset.');
+            }
+            reportSites = { key: key, records: records };
             return records;
         });
     }
 
     /** Period groups the report's TRAIN baseline can offer for this centre. */
-    function reportPeriods(centre, token) {
+    function reportPeriods(centre, token, category) {
+        if (category === 'hoards') {
+            return loadReportHoardSites(centre, token).then(function (records) {
+                return hoardRecords().groups(records);
+            });
+        }
         return loadReportSites(centre, token).then(function (records) {
             return pipe().sitePool(records, centre).periods;
         });
@@ -1589,11 +1627,16 @@
             if (typeof opts.onProgress === 'function') opts.onProgress(key, pct, vars);
         }
         if (opts.mode === 'train') {
-            return loadReportSites(centre, opts.token).then(function (records) {
-                var pool = pipe().sitePool(records, centre);
+            // The report's trained baseline can learn from settlements or from
+            // hoards; only the dataset (and its period groups) changes — the
+            // model, the classes and the rendering stay exactly the same.
+            var category = opts.category === 'hoards' ? 'hoards' : 'settlements';
+            var loader = category === 'hoards' ? loadReportHoardSites : loadReportSites;
+            return loader(centre, opts.token).then(function (records) {
+                var groups = category === 'hoards' ? hoardRecords().groups(records) : pipe().sitePool(records, centre).periods;
                 var period = null;
                 if (opts.periodKey && opts.periodKey !== 'all') {
-                    period = pool.periods.filter(function (p) { return p.key === opts.periodKey; })[0] || null;
+                    period = groups.filter(function (p) { return p.key === opts.periodKey; })[0] || null;
                     if (!period) throw new Error('Unknown training period.');
                 }
                 var params = {
@@ -1601,6 +1644,8 @@
                     records: records,
                     period: period,
                     radiusKm: opts.radiusKm,
+                    category: category,
+                    backgroundType: category === 'hoards' ? state.backgroundType : 'random',
                     minSlopeDeg: parseFloat(els.minSlope.value),
                     smoothDem: !!els.smooth.checked,
                     includeDrainage: !!els.drainage.checked,
@@ -1613,6 +1658,7 @@
                 startReportPreview(params);
                 return pipe().runTrain(state.trainSession, params).then(function (res) {
                     res.mode = 'train';
+                    res.category = category;
                     res.period = period;
                     return res;
                 });

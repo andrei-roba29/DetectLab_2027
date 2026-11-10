@@ -633,6 +633,7 @@
     function baselineModeLabel(tr, meta) {
         var b = (meta && meta.baseline) || 'apm20';
         var label = tr(BASELINE_MODE_KEYS[b] || BASELINE_MODE_KEYS.apm20);
+        if (b === 'nextgen_train' && meta.baselineCategory === 'hoards') label += ' · ' + tr('arch_report_category_hoards');
         if (b === 'nextgen_train' && meta.baselinePeriod) label += ' · ' + meta.baselinePeriod;
         return label;
     }

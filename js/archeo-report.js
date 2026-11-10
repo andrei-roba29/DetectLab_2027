@@ -153,6 +153,10 @@
         BASELINE: {
             DEFAULT: 'apm20',
             MODES: ['apm20', 'nextgen_custom', 'nextgen_train'],
+            // The Next-Gen TRAIN baseline can learn from settlements or hoards;
+            // everything downstream (classes, allowed-class filter, PDF) is identical.
+            DEFAULT_CATEGORY: 'settlements',
+            CATEGORIES: ['settlements', 'hoards'],
             // Next-Gen class → the report's APM legend scale (5 / 4.5 / 4), so
             // the allowed-class filter, the focus polygons and the PDF figure
             // behave exactly like the APM 2.0 path.
@@ -1001,6 +1005,7 @@
             centre: { lat: ctx.center.lat, lon: ctx.center.lng },
             radiusKm: ctx.radiusKm,
             periodKey: settings.periodKey,
+            category: settings.category || CONFIG.BASELINE.DEFAULT_CATEGORY,
             token: token,
             onProgress: function () { /* the report keeps its own status line */ }
         }).then(function (res) {
@@ -2190,6 +2195,7 @@
                     bonus: settings.bonuses,
                     baseline: settings.baseline,
                     baselinePeriodKey: settings.periodKey,
+                    baselineCategory: settings.category,
                     radiusM: radiusM,
                     areaKm2: Math.PI * radiusM * radiusM / 1e6,
                     square: analysisArea(center.lat, center.lng, radiusM)
@@ -2337,6 +2343,7 @@
                         ignoreLidar: ctx.ignoreLidar,
                         baseline: ctx.baseline,
                         baselinePeriod: ctx.baseline === 'nextgen_train' ? (ctx.baselinePeriodKey || 'all') : null,
+                        baselineCategory: ctx.baseline === 'nextgen_train' ? (ctx.baselineCategory || 'settlements') : null,
                         bonuses: {
                             roads: !!ctx.bonus.roads,
                             potential: !!ctx.bonus.potential,
@@ -3556,10 +3563,14 @@
         var periodEl = el('archReportPeriod');
         var periodKey = periodEl && periodEl.value && periodEl.value !== 'all'
             ? String(periodEl.value) : null;
-        if (baseline !== 'nextgen_train') periodKey = null;
+        var categoryEl = el('archReportTrainCategory');
+        var category = categoryEl ? String(categoryEl.value || '') : '';
+        if (CONFIG.BASELINE.CATEGORIES.indexOf(category) === -1) category = CONFIG.BASELINE.DEFAULT_CATEGORY;
+        if (baseline !== 'nextgen_train') { periodKey = null; category = CONFIG.BASELINE.DEFAULT_CATEGORY; }
         return {
             baseline: baseline,
             periodKey: periodKey,
+            category: category,
             resultCount: currentResultCount(),
             ignoreLidar: !!(el('archReportIgnoreLidar') && el('archReportIgnoreLidar').checked),
             bonuses: {
@@ -3601,7 +3612,7 @@
         _state.periodToken = token;
         if (note) note.textContent = tr('arch_report_step_sites');
         var centre = { lat: _state.point.lat, lon: _state.point.lng };
-        api.periods(centre, token).then(function (groups) {
+        api.periods(centre, token, settings.category).then(function (groups) {
             if (token.cancelled) return;
             var live = el('archReportPeriod');
             if (live !== sel) return;
@@ -3620,7 +3631,7 @@
             });
             var keep = current === 'all' || (groups || []).some(function (g) { return g.key === current; });
             sel.value = keep && current ? current : 'all';
-            if (note) note.textContent = tr('arch_report_period_hint');
+            if (note) note.textContent = tr(settings.category === 'hoards' ? 'arch_report_period_hint_hoard' : 'arch_report_period_hint');
         }).catch(function (err) {
             if (token.cancelled) return;
             console.warn('[ArcheoReport] training periods unavailable:', err);
@@ -3641,6 +3652,8 @@
         });
         var row = el('archReportPeriodRow');
         if (row) row.hidden = value !== 'nextgen_train';
+        var catRow = el('archReportTrainCategoryRow');
+        if (catRow) catRow.hidden = value !== 'nextgen_train';
         if (value === 'nextgen_train') refreshPeriodOptions();
         settingsChanged();
     }
@@ -3682,6 +3695,14 @@
                 btn.addEventListener('click', function () { setBaseline(tab[1]); });
             }
         });
+        var category = el('archReportTrainCategory');
+        if (category && !category.dataset.archReportWired) {
+            category.dataset.archReportWired = '1';
+            category.addEventListener('change', function () {
+                refreshPeriodOptions();
+                settingsChanged();
+            });
+        }
         var period = el('archReportPeriod');
         if (period && !period.dataset.archReportWired) {
             period.dataset.archReportWired = '1';

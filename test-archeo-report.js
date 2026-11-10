@@ -761,6 +761,9 @@ section('Report window: baseline, period, bonuses');
     ['archReportBaselineApm20', 'archReportBaselineCustom', 'archReportBaselineTrain']
         .forEach(id => check('baseline option #' + id + ' is offered', html.indexOf('id="' + id + '"') !== -1));
     check('train mode asks for the period of time', html.indexOf('id="archReportPeriod"') !== -1);
+    check('train mode also asks which data it learns from (settlements or hoards)',
+        html.indexOf('id="archReportTrainCategory"') !== -1 && /id="archReportTrainCategoryRow" hidden/.test(html) &&
+        /<option value="settlements" selected/.test(html) && /<option value="hoards"/.test(html));
     ['archReportBonusRoads', 'archReportBonusPotential', 'archReportBonusLidar']
         .forEach(id => check('bonus tick #' + id + ' is on by default',
             new RegExp('id="' + id + '" checked').test(html)));
@@ -773,6 +776,8 @@ section('Report window: baseline, period, bonuses');
         s0.baseline === 'apm20' && s0.bonuses.roads === true && s0.bonuses.potential === true &&
         s0.bonuses.lidar === true && s0.ignoreLidar === false && s0.periodKey === null,
         JSON.stringify(s0));
+    check('the trained baseline defaults to settlements, like the panel',
+        s0.category === 'settlements', s0.category);
     check('the default number of results is 3', s0.resultCount === 3, s0.resultCount);
     check('index.html offers every count from 1 to 10',
         [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].every(n => html.indexOf('<option value="' + n + '"') !== -1) &&
@@ -1527,10 +1532,14 @@ section('End-to-end analysis (runReport)');
         sandbox.translations = {
             en: { arch_report_title: 'Archaeological Report', arch_report_result: 'Result',
                   arch_report_class_high: 'High', arch_report_pdf_lang: 'PDF language:',
-                  arch_report_fig_apm_title: 'APM areas' },
+                  arch_report_fig_apm_title: 'APM areas',
+                  arch_report_period_hint: 'Period used to train the Next-Gen model around this point.',
+                  arch_report_period_hint_hoard: 'Deposit period used to train the Next-Gen hoard model around this point.' },
             ro: { arch_report_title: 'Raport arheologic', arch_report_result: 'Rezultat',
                   arch_report_class_high: 'Ridicat', arch_report_pdf_lang: 'Limba PDF-ului:',
-                  arch_report_fig_apm_title: 'Zonele APM' }
+                  arch_report_fig_apm_title: 'Zonele APM',
+                  arch_report_period_hint: 'Perioada folosită pentru antrenarea modelului Next-Gen în jurul acestui punct.',
+                  arch_report_period_hint_hoard: 'Perioada de depunere folosită pentru antrenarea modelului Next-Gen pe tezaure în jurul acestui punct.' }
         };
         check('makeTr binds a language', R.makeTr('ro')('arch_report_title') === 'Raport arheologic',
             R.makeTr('ro')('arch_report_title'));
@@ -1636,8 +1645,12 @@ section('End-to-end analysis (runReport)');
         sandbox.DetectLabApmUi = {
             report: {
                 run(opts) { seenRuns.push(opts); return Promise.resolve({ geojson: nextgenFC }); },
-                periods(centre) {
-                    seenPeriods.push(centre);
+                periods(centre, token, category) {
+                    seenPeriods.push(Object.assign({ category }, centre));
+                    if (category === 'hoards') return Promise.resolve([
+                        { key: 'bronze', label: 'Bronze', count: 120, selectable: true },
+                        { key: 'iron', label: 'Iron', count: 6, selectable: false }
+                    ]);
                     // sitePool().periods has no "all" entry — that option is
                     // added by the report window itself.
                     return Promise.resolve([
@@ -1686,7 +1699,8 @@ section('End-to-end analysis (runReport)');
         await new Promise(r => setTimeout(r, 20));
         sandbox.document.createElement = realCreateElement;
         check('the period list is fetched for the report point',
-            seenPeriods.length === 1 && Math.abs(seenPeriods[0].lat - C.lat) < 1e-9,
+            seenPeriods.length === 1 && Math.abs(seenPeriods[0].lat - C.lat) < 1e-9 &&
+            seenPeriods[0].category === 'settlements',
             JSON.stringify(seenPeriods));
         check('periods fill the select: All + Roman, Neolithic blocked (<10 sites)',
             options.length === 3 && options[0].value === 'all' && options[1].value === 'roman' &&
@@ -1701,6 +1715,56 @@ section('End-to-end analysis (runReport)');
         check('the model records the training period',
             !!train && train.meta.baseline === 'nextgen_train' && train.meta.baselinePeriod === 'roman',
             train && train.meta.baselinePeriod);
+
+        // The trained baseline can also learn from hoards: the same window asks
+        // which data to use, the period list follows that choice, and the engine
+        // is told. Nothing else in the report changes.
+        const catSel = fakeEl('archReportTrainCategory');
+        const catRow = fakeEl('archReportTrainCategoryRow');
+        R.setBaseline('nextgen_train', false);
+        check('the category row appears next to the period for the trained baseline',
+            catRow.hidden === false && fakeEl('archReportPeriodRow').hidden === false);
+        check('settlements stays the default until the user says otherwise',
+            catSel.value !== 'hoards' && R.readSettings().category === 'settlements');
+        seenPeriods = [];
+        options.length = 0;
+        sandbox.document.createElement = function (tag) {
+            return tag === 'option' ? { value: '', textContent: '', disabled: false }
+                                    : realCreateElement.call(sandbox.document, tag);
+        };
+        const prevTranslations = sandbox.translations;
+        sandbox.translations = { en: { arch_report_period_hint: 'Period used to train the Next-Gen model around this point.',
+            arch_report_period_hint_hoard: 'Deposit period used to train the Next-Gen hoard model around this point.' } };
+        catSel.value = 'hoards';
+        catSel.fire('change');
+        await new Promise(r => setTimeout(r, 20));
+        sandbox.document.createElement = realCreateElement;
+        check('choosing hoards re-asks the engine for hoard periods',
+            seenPeriods.length === 1 && seenPeriods[0].category === 'hoards',
+            JSON.stringify(seenPeriods));
+        check('the hoard periods fill the select, with the thin one blocked',
+            options.length === 3 && options[1].value === 'bronze' && options[1].disabled === false &&
+            options[2].value === 'iron' && options[2].disabled === true && periodSel.value === 'all',
+            JSON.stringify(options.map(o => [o.value, o.disabled])));
+        check('the note under it speaks about deposit periods, not settlements',
+            /hoard model/i.test(String(domNodes['archReportPeriodNote'].textContent)),
+            domNodes['archReportPeriodNote'].textContent);
+        sandbox.translations = prevTranslations;
+        check('changing the category starts nothing on its own (no run yet)',
+            seenRuns.length === 2, seenRuns.length);
+        periodSel.value = 'bronze';
+        const hoardRun = await sandbox.runArcheoReport();
+        check('the report hands the hoard category to the engine',
+            seenRuns.length === 3 && seenRuns[2].mode === 'train' && seenRuns[2].category === 'hoards' &&
+            seenRuns[2].periodKey === 'bronze', JSON.stringify(seenRuns[2]));
+        check('and records it for the PDF, next to the period',
+            !!hoardRun && hoardRun.meta.baseline === 'nextgen_train' &&
+            hoardRun.meta.baselineCategory === 'hoards' && hoardRun.meta.baselinePeriod === 'bronze',
+            hoardRun && JSON.stringify([hoardRun.meta.baselineCategory, hoardRun.meta.baselinePeriod]));
+        // Leaving train mode drops the category back to the settlement default so
+        // a later custom run never inherits a hoard choice.
+        catSel.value = 'settlements';
+        fakeEl('archReportPeriod').value = '';
 
         // a broken engine fails closed with a keyed status
         sandbox.DetectLabApmUi = { report: { run() { return Promise.reject(new Error('worker crashed')); } } };

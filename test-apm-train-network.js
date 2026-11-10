@@ -199,6 +199,7 @@ function harness(mode='ok', opts={}) {
         assert(many.requests.slice(beforeRun).every(u=>['image.discomap.eea.europa.eu','overpass-api.de'].includes(new URL(u).host)),'the run itself touches nothing but DEM and hydro');
         console.log('PASS outside Romania TRAIN: the builtin DARE/ARIADNE list trains against terrain backgrounds from the same box, with no Romanian-territory predicate.');
     } finally {many.dom.window.close();}
+    let settlementResult=null, settlementExtent=null;
     // TRAIN puts the window on screen: blurred page, variable analysis, bar underneath.
     const screen=harness('ok',{canvas:true});
     try {
@@ -228,8 +229,13 @@ function harness(mode='ok', opts={}) {
         assert(Number(overlay.querySelector('.apm-run-bar').getAttribute('aria-valuenow'))>0,'the bar is moving under it');
         await until(()=>screen.completed||screen.runError,'overlay TRAIN completion');
         if(screen.runError)throw screen.runError;
+        // Remember what a settlement result covers and contains: the hoard run
+        // must produce the same thing, not a smaller disc.
+        settlementResult=screen.completed;
         assert.equal(screen.w.document.querySelector('.apm-run-overlay'),null,'the window is gone when the run ends');
         assert.equal(screen.w.document.querySelector('.apm-preview-host').parentNode.id,'apmNextPanel','the preview host returns to the panel');
+        settlementExtent={lon:settlementResult.heatmap.dLon*settlementResult.heatmap.w,lat:settlementResult.heatmap.dLat*settlementResult.heatmap.h,
+            cells:settlementResult.heatmap.sourceWidth*settlementResult.heatmap.sourceHeight};
         console.log('PASS run window: TRAIN shows the variable analysis for real sites in a window with the loading bar under it ('+site+' → '+values.slice(0,34)+'…)');
     } finally {screen.dom.window.close();}
 
@@ -266,6 +272,33 @@ function harness(mode='ok', opts={}) {
         assert.equal(reportRun.w.DetectLabApmRunOverlay.isOpen(),false);
         console.log('PASS report overlay: the archaeological report shows the same animation and bar while its Next-Gen TRAIN baseline runs.');
     } finally {reportRun.dom.window.close();}
+
+    // The report's Next-Gen TRAIN baseline can also learn from hoards: the same
+    // engine, the same window, only the dataset and its period list change.
+    const reportHoards=harness('hoardsMany',{canvas:true});
+    try {
+        reportHoards.w.DetectLabHoardConfig.resolutionM=1000;reportHoards.w.DetectLabHoardConfig.trainingRadiusKm=20;
+        await reportHoards.pick(46.75,25);
+        const ui=reportHoards.w.DetectLabApmUi.report;
+        const before=reportHoards.requests.length;
+        const groups=await ui.periods({lat:46.75,lon:25},{cancelled:false},'hoards');
+        assert(Array.isArray(groups),'the report can list hoard periods: '+JSON.stringify(groups));
+        const asked=reportHoards.requests.slice(before);
+        assert(asked.some(u=>u.includes('apm_hoards_within')),'from the hoard RPC only: '+asked.join(' '));
+        assert(!asked.some(u=>u.includes('apm_sites_within')),'the settlement repertory is not touched');
+        const pending=ui.run({mode:'train',category:'hoards',centre:{lat:46.75,lon:25},radiusKm:3,periodKey:'all',token:{cancelled:false}});
+        const hoardOverlay=reportHoards.w.document.querySelector('.apm-run-overlay');
+        assert(hoardOverlay,'the hoard baseline gets the run window too');
+        await until(()=>hoardOverlay.querySelector('.apm-run-live .apm-loading-preview')||reportHoards.params,'hoard report preview');
+        assert(hoardOverlay.querySelector('.apm-run-live .apm-loading-preview'),'and the variable analysis');
+        const res=await pending;
+        assert.equal(reportHoards.params.category,'hoards','the engine is told which category to train');
+        assert.equal(res.mode,'train');
+        assert.equal(res.category,'hoards','and the report gets the category back');
+        assert(res.geojson&&res.thresholds,'with a usable baseline model behind it');
+        assert.equal(reportHoards.w.document.querySelector('.apm-run-overlay'),null,'the window closes');
+        console.log('PASS report hoards: the report\'s Next-Gen TRAIN baseline can be trained on hoards, from the hoard RPC, in the same window.');
+    } finally {reportHoards.dom.window.close();}
 
     const hoard=harness();
     try {
@@ -335,6 +368,19 @@ function harness(mode='ok', opts={}) {
         await until(()=>ovr.completed||ovr.runError,'override hoard run: status='+ovr.w.document.querySelector('.apm-status').textContent);
         assert(!ovr.runError,'operator override trains hoards: '+(ovr.runError&&ovr.runError.message));
         assert.equal(ovr.params.category,'hoards');
+        // Parity with settlements: same prediction window, same result structure.
+        assert.equal(ovr.params.radiusKm,50,'the hoard run predicts over the same 50 km window as settlements');
+        const hr=ovr.completed;
+        for(const key of ['geojson','heatmap','thresholds','scoreStats','areaKm2','provenance','diagnostics']) assert(key in hr,'hoard result carries '+key+' like a settlement result');
+        assert(hr.geojson.type==='FeatureCollection','the hoard output is a polygonised FeatureCollection too');
+        assert(hr.heatmap.sourceWidth>10&&hr.heatmap.sourceHeight>10,'with a real heat raster: '+hr.heatmap.sourceWidth+'×'+hr.heatmap.sourceHeight);
+        assert(hr.scoreStats.cells>0,'and scored cells: '+hr.scoreStats.cells);
+        assert.deepEqual(Object.keys(hr.thresholds).sort(),Object.keys(settlementResult.thresholds).sort(),'same class thresholds');
+        const hoardExtent={lon:hr.heatmap.dLon*hr.heatmap.w,lat:hr.heatmap.dLat*hr.heatmap.h};
+        assert(Math.abs(hoardExtent.lon-settlementExtent.lon)/settlementExtent.lon<0.05&&Math.abs(hoardExtent.lat-settlementExtent.lat)/settlementExtent.lat<0.05,
+            'the hoard result covers the same area as the settlement one ('+hoardExtent.lon.toFixed(3)+'° vs '+settlementExtent.lon.toFixed(3)+'°)');
+        assert.equal(hr.diagnostics.category,'hoards');
+        assert.equal(ovr.w.document.querySelector('.apm-note.apm-period-hint')!==null,true);
         const warns=(ovr.completed.warnings||[]).map(x=>x&&x.key);
         assert(warns.includes('warn.hoardOverride'),'the override travels with the result: '+warns.join(','));
         assert(/Operator override/.test(ovr.w.document.querySelector('.apm-warnings').textContent),'and it is listed in the result panel');
