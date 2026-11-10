@@ -15,7 +15,14 @@ const scripts=['apm-core','apm-raster','apm-heatmap','apm-sites','apm-providers'
 const wcs='<wcs:Capabilities><wcs:ServiceMetadata><wcs:formatSupported>image/tiff</wcs:formatSupported><wcs:Extension><wcs:crsSupported>http://www.opengis.net/def/crs/EPSG/0/4326</wcs:crsSupported></wcs:Extension><wcs:MaxPixels>4000000</wcs:MaxPixels></wcs:ServiceMetadata><wcs:Contents><wcs:CoverageSummary><wcs:CoverageId>DEM_v11</wcs:CoverageId></wcs:CoverageSummary></wcs:Contents></wcs:Capabilities>';
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn,label){for(let i=0;i<1000;i++){if(fn())return;await delay(10);}throw Error('Timeout: '+label);}
-function harness(mode='ok') {
+// Minimal 2D context so the preview widget can draw; jsdom ships none.
+function canvas2d(){
+    const noop=()=>{};
+    return {clearRect:noop,fillRect:noop,strokeRect:noop,beginPath:noop,closePath:noop,moveTo:noop,lineTo:noop,arc:noop,
+        fill:noop,stroke:noop,save:noop,restore:noop,rect:noop,clip:noop,setLineDash:noop,setTransform:noop,fillText:noop,
+        measureText:()=>({width:40}),canvas:{width:320,height:132},fillStyle:'',strokeStyle:'',lineWidth:1,font:'10px sans-serif',textAlign:'left'};
+}
+function harness(mode='ok', opts={}) {
     const dom=new JSDOM('<body><div class="map-frame"></div></body>',{url:'https://detectlab.example',runScripts:'outside-only'});
     const w=dom.window,requests=[],events={},ops=[],panes={};let completed,runError,params;
     w.localStorage.setItem('detectlab_lang','en');w._dlIsPremium=()=>true;
@@ -83,8 +90,8 @@ function harness(mode='ok') {
         assert(['apm_sites_within','apm_hoards_within'].includes(name));assert(args.p_radius_km<=(name==='apm_sites_within'?50:150));
         return network('https://project.supabase.example/rest/v1/rpc/'+name);
     },from(){throw Error('Direct table read forbidden');}};
-    // jsdom has no 2D canvas; the preview widget must fail closed on its own.
-    w.HTMLCanvasElement.prototype.getContext=function(){return null;};
+    // jsdom has no 2D canvas: opt in when the widget itself is under test.
+    w.HTMLCanvasElement.prototype.getContext=opts.canvas?function(){return canvas2d();}:function(){return null;};
     w.GeoTIFF={fromArrayBuffer:async buf=>({getImage:async()=>({getWidth:()=>buf.w,getHeight:()=>buf.h,getGDALNoData:()=>null,
         readRasters:async()=>Float32Array.from({length:buf.w*buf.h},(_,i)=>200+(i%buf.w)*30+15*Math.sin(Math.floor(i/buf.w)/3))})})};
     w.Worker=class {
@@ -192,30 +199,54 @@ function harness(mode='ok') {
         assert(many.requests.slice(beforeRun).every(u=>['image.discomap.eea.europa.eu','overpass-api.de'].includes(new URL(u).host)),'the run itself touches nothing but DEM and hydro');
         console.log('PASS outside Romania TRAIN: the builtin DARE/ARIADNE list trains against terrain backgrounds from the same box, with no Romanian-territory predicate.');
     } finally {many.dom.window.close();}
-    // TRAIN puts the animation on screen: blurred page, loading bar underneath.
-    const screen=harness('ok');
+    // TRAIN puts the window on screen: blurred page, variable analysis, bar underneath.
+    const screen=harness('ok',{canvas:true});
     try {
         await screen.pick(46.6,24.8);
-        const before=screen.w.document.querySelector('.apm-status').textContent;
         screen.w.document.querySelector('.apm-primary').click();
         const overlay=screen.w.document.querySelector('.apm-run-overlay');
-        assert(overlay,'TRAIN shows a full-screen overlay while it runs');
+        assert(overlay,'TRAIN shows a full-screen window while it runs');
         assert.equal(overlay.getAttribute('role'),'dialog');
         assert.equal(overlay.querySelector('.apm-run-title').textContent,'Building the TRAIN model…');
         const card=overlay.querySelector('.apm-run-card');
         const order=[].slice.call(card.children).map(n=>n.className);
         assert(order.indexOf('apm-run-visual')<order.indexOf('apm-run-bar')&&order.indexOf('apm-run-bar')<order.indexOf('apm-run-meta'),'the loading bar sits under the animation: '+order.join(','));
-        assert.equal(overlay.querySelectorAll('.apm-run-ring').length,3);
-        assert.equal(overlay.querySelector('.apm-run-visual').hidden,false,'a widget that cannot start leaves the rings, not an empty card');
-        assert(!overlay.querySelector('.apm-run-card').classList.contains('is-live'));
-        assert(overlay.querySelector('.apm-run-cancel'),'the run can still be cancelled from the overlay');
+        assert.equal(overlay.querySelectorAll('.apm-run-ring').length,3,'the fallback animation is there');
+        const widget=overlay.querySelector('.apm-run-live .apm-loading-preview');
+        assert(widget,'the variable analysis is the animation, as before');
+        assert.equal(overlay.querySelector('.apm-run-visual').hidden,true,'and the rings step aside for it');
+        assert.equal(overlay.querySelector('.apm-run-card').classList.contains('is-live'),true);
+        assert(widget.querySelector('.apm-preview-canvas'),'with the real canvas');
+        assert(widget.querySelectorAll('.apm-preview-tabs button').length===3,'and the water / relief / soil tabs');
+        assert.equal(widget.querySelector('.apm-preview-head strong').textContent,'How the environment is sampled');
+        assert(overlay.querySelector('.apm-run-cancel'),'the run can still be cancelled from the window');
+        await until(()=>/Altitude .* m . slope/.test((overlay.querySelector('.apm-preview-values')||{}).textContent||''),'sample values in the window');
+        const values=overlay.querySelector('.apm-preview-values').textContent;
+        const site=overlay.querySelector('.apm-preview-site').textContent;
+        assert(/\(.*\)/.test(values)||/water/.test(values),'the water distance names its class: '+values);
+        assert(/·/.test(site),'and the site is named with its coordinates: '+site);
+        assert(Number(overlay.querySelector('.apm-run-bar').getAttribute('aria-valuenow'))>0,'the bar is moving under it');
         await until(()=>screen.completed||screen.runError,'overlay TRAIN completion');
         if(screen.runError)throw screen.runError;
-        assert.equal(screen.w.document.querySelector('.apm-run-overlay'),null,'the overlay is gone when the run ends');
+        assert.equal(screen.w.document.querySelector('.apm-run-overlay'),null,'the window is gone when the run ends');
         assert.equal(screen.w.document.querySelector('.apm-preview-host').parentNode.id,'apmNextPanel','the preview host returns to the panel');
-        assert(!/apm-run-overlay/.test(screen.w.document.body.className),'and it leaves no page-level state behind');
-        console.log('PASS run overlay: TRAIN shows the animation on screen with the loading bar under it, then removes itself; status was '+before.slice(0,20)+'…');
+        console.log('PASS run window: TRAIN shows the variable analysis for real sites in a window with the loading bar under it ('+site+' → '+values.slice(0,34)+'…)');
     } finally {screen.dom.window.close();}
+
+    // No 2D canvas at all: the window must still work, with the rings.
+    const noCanvas=harness('ok');
+    try {
+        await noCanvas.pick(46.6,24.8);
+        noCanvas.w.document.querySelector('.apm-primary').click();
+        const overlay=noCanvas.w.document.querySelector('.apm-run-overlay');
+        assert(overlay,'the window still appears');
+        assert.equal(overlay.querySelector('.apm-run-visual').hidden,false,'a widget that cannot start leaves the rings, not an empty card');
+        assert(!overlay.querySelector('.apm-run-card').classList.contains('is-live'));
+        await until(()=>noCanvas.completed||noCanvas.runError,'no-canvas TRAIN completion');
+        if(noCanvas.runError)throw noCanvas.runError;
+        assert.equal(noCanvas.w.document.querySelector('.apm-run-overlay'),null);
+        console.log('PASS run window fallback: without a 2D canvas the rings stay and the run completes.');
+    } finally {noCanvas.dom.window.close();}
 
     // The archaeological report asks this engine for its TRAIN baseline: same overlay.
     const reportRun=harness('ok');
@@ -282,7 +313,7 @@ function harness(mode='ok') {
     } finally {hoardGate.dom.window.close();}
     // Operator override: the switch is the operator's, not evidence. It must let
     // TRAIN run, name itself in the panel, and travel with the result.
-    const ovr=harness('hoardsMany');
+    const ovr=harness('hoardsMany',{canvas:true});
     try {
         assert.equal(ovr.w.DetectLabHoardConfig.release.operatorOverride,true,'the operator switch ships ON at the operator request');
         ovr.w.DetectLabHoardConfig.resolutionM=1000;ovr.w.DetectLabHoardConfig.trainingRadiusKm=20; // synthetic window, same code path
@@ -297,6 +328,10 @@ function harness(mode='ok') {
         assert(pending && !pending.hidden,'the panel states the override while it is in force');
         assert(ovr.w.document.querySelector('.apm-train .apm-note')&&[...ovr.w.document.querySelectorAll('.apm-train .apm-note')].filter(n=>/not activated/.test(n.textContent)).every(n=>n.hidden),'the closed-gate note is gone');
         run.click();
+        const hOverlay=ovr.w.document.querySelector('.apm-run-overlay');
+        assert(hOverlay,'a hoard run gets the same window');
+        assert.equal(hOverlay.querySelector('.apm-run-title').textContent,'Building the hoard model…');
+        assert(hOverlay.querySelector('.apm-run-live .apm-loading-preview'),'hoards get the variable analysis too: the sampling work is the same');
         await until(()=>ovr.completed||ovr.runError,'override hoard run: status='+ovr.w.document.querySelector('.apm-status').textContent);
         assert(!ovr.runError,'operator override trains hoards: '+(ovr.runError&&ovr.runError.message));
         assert.equal(ovr.params.category,'hoards');

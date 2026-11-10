@@ -622,7 +622,9 @@
         }).concat(bg.map(function (b) { return { lat: b.lat, lon: b.lon, x: b.x, y: b.y, isSite: false }; }));
 
         // Optional read-only, bounded loading preview. Observer errors never fail TRAIN.
-        var previewCount = !isHoard && typeof params.onPreview === 'function' ? Math.min(4, nSites) : 0;
+        // The preview shows the real training samples being measured, hoards
+        // included: it is the same sampleTile call either way.
+        var previewCount = typeof params.onPreview === 'function' ? Math.min(4, nSites) : 0;
         function preview(event) {
             if (!previewCount || typeof params.onPreview !== 'function') return;
             try { params.onPreview(event); } catch (ignore) { params.onPreview = null; }

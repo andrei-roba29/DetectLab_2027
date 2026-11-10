@@ -60,6 +60,22 @@
         var card = el(doc, 'section', 'apm-run-card');
         box.appendChild(card);
 
+        // Window title bar: what is running, and the way out.
+        var head = el(doc, 'div', 'apm-run-head');
+        var title = el(doc, 'h3', 'apm-run-title');
+        title.textContent = T(titleKey);
+        title.dataset.runKey = titleKey;
+        head.appendChild(title);
+        if (typeof opts.onCancel === 'function') {
+            var cancel = el(doc, 'button', 'apm-btn apm-run-cancel');
+            cancel.type = 'button';
+            cancel.textContent = T('run.cancel');
+            cancel.dataset.runKey = 'run.cancel';
+            cancel.addEventListener('click', function () { opts.onCancel(); });
+            head.appendChild(cancel);
+        }
+        card.appendChild(head);
+
         // 1. the animation
         var visual = el(doc, 'div', 'apm-run-visual');
         visual.setAttribute('aria-hidden', 'true');
@@ -93,11 +109,6 @@
         }
         if (opts.animationHost) setAnimation(opts.animationHost);
 
-        var title = el(doc, 'h3', 'apm-run-title');
-        title.textContent = T(titleKey);
-        title.dataset.runKey = titleKey;
-        card.appendChild(title);
-
         var step = el(doc, 'div', 'apm-run-step');
         step.setAttribute('role', 'status');
         step.setAttribute('aria-live', 'polite');
@@ -117,14 +128,6 @@
         var pct = el(doc, 'span', 'apm-run-pct');
         pct.textContent = '0%';
         meta.appendChild(pct);
-        if (typeof opts.onCancel === 'function') {
-            var cancel = el(doc, 'button', 'apm-btn apm-run-cancel');
-            cancel.type = 'button';
-            cancel.textContent = T('run.cancel');
-            cancel.dataset.runKey = 'run.cancel';
-            cancel.addEventListener('click', function () { opts.onCancel(); });
-            meta.appendChild(cancel);
-        }
         card.appendChild(meta);
 
         doc.body.appendChild(box);

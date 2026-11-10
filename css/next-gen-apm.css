@@ -326,28 +326,46 @@ body.apm-picking .leaflet-apmHotspots-pane * { pointer-events: none !important; 
     align-items: center;
     justify-content: center;
     padding: 16px;
-    background: rgba(8, 10, 18, 0.55);
-    -webkit-backdrop-filter: blur(7px) saturate(0.85);
-    backdrop-filter: blur(7px) saturate(0.85);
+    /* Transparent, not tinted: the blur is what separates the run from the map. */
+    background: rgba(6, 8, 14, 0.16);
+    -webkit-backdrop-filter: blur(10px) saturate(0.9);
+    backdrop-filter: blur(10px) saturate(0.9);
     animation: apmRunFade 0.18s ease-out;
 }
 @supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
-    .apm-run-overlay { background: rgba(8, 10, 18, 0.88); }
+    /* Without blur a transparent scrim would be unreadable, so it goes opaque. */
+    .apm-run-overlay { background: rgba(6, 8, 14, 0.82); }
 }
+/* The window itself is glass: translucent, blurred, with a light rim. */
 .apm-run-card {
-    width: min(520px, 100%);
+    width: min(560px, 100%);
     max-height: calc(100vh - 32px);
     overflow: auto;
     box-sizing: border-box;
-    padding: 18px 18px 14px;
-    border: 1px solid #4d4160;
-    border-radius: 14px;
-    background: #141726;
-    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+    padding: 14px 16px 12px;
+    border: 1px solid rgba(181, 162, 213, 0.35);
+    border-radius: 16px;
+    background: rgba(18, 21, 34, 0.72);
+    -webkit-backdrop-filter: blur(18px) saturate(1.05);
+    backdrop-filter: blur(18px) saturate(1.05);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
     color: #eeeaf7;
     text-align: center;
 }
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+    .apm-run-card { background: rgba(20, 23, 38, 0.95); }
+}
 .apm-run-card.is-live { text-align: left; padding-top: 12px; }
+/* Window title bar: the title on the left, the way out on the right. */
+.apm-run-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(181, 162, 213, 0.22);
+    text-align: left;
+}
 .apm-run-visual { position: relative; width: 128px; height: 128px; margin: 4px auto 12px; }
 .apm-run-visual[hidden] { display: none; }
 .apm-run-ring {
@@ -380,7 +398,7 @@ body.apm-picking .leaflet-apmHotspots-pane * { pointer-events: none !important; 
 }
 .apm-run-live { margin: 0 0 10px; }
 .apm-run-live:empty { display: none; }
-.apm-run-title { margin: 0 0 6px; font-size: 15px; font-weight: 600; line-height: 1.35; }
+.apm-run-title { flex: 1 1 auto; margin: 0; font-size: 14px; font-weight: 600; line-height: 1.35; }
 .apm-run-step { min-height: 32px; font-size: 12px; line-height: 1.45; opacity: 0.85; }
 .apm-run-bar {
     height: 8px;
@@ -405,7 +423,7 @@ body.apm-picking .leaflet-apmHotspots-pane * { pointer-events: none !important; 
     font-variant-numeric: tabular-nums;
 }
 .apm-run-pct { opacity: 0.85; }
-.apm-run-cancel { min-height: 44px; min-width: 44px; }
+.apm-run-cancel { min-height: 40px; min-width: 44px; flex: 0 0 auto; }
 @keyframes apmRunFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes apmRunPulse { 0% { transform: scale(0.35); opacity: 0.9; } 100% { transform: scale(1); opacity: 0; } }
 @keyframes apmRunSpin { to { transform: rotate(360deg); } }
@@ -417,5 +435,16 @@ body.apm-picking .leaflet-apmHotspots-pane * { pointer-events: none !important; 
     .apm-run-ring { opacity: 0.5; transform: scale(1); }
     .apm-run-sweep { background: rgba(137, 207, 240, 0.2); }
 }
-/* The panel's own preview widget gets room to breathe inside the card. */
-.apm-run-live .apm-loading-preview { margin: 0; background: #101322; }
+/* The panel's own preview widget — the variable analysis — is the animation and
+ * keeps its familiar look inside the window. The window already says what is
+ * running and offers Cancel, so the widget's own title and Cancel step aside. */
+.apm-run-live .apm-loading-preview {
+    margin: 0;
+    background: rgba(9, 11, 20, 0.6);
+    border-color: rgba(181, 162, 213, 0.28);
+}
+.apm-run-live .apm-preview-head { background: transparent; }
+.apm-run-live .apm-preview-head strong,
+.apm-run-live .apm-preview-head .apm-preview-button[data-preview-key="run.cancel"] { display: none; }
+.apm-run-live .apm-preview-site { font-size: 12px; }
+.apm-run-live .apm-preview-values { font-size: 12.5px; }
