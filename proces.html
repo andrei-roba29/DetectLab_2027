@@ -39,7 +39,7 @@
     <div class="doc-hero-meta">
       <span class="doc-chip">9 pași</span>
       <span class="doc-chip">5 km² per raport</span>
-      <span class="doc-chip">3 locații clasate</span>
+      <span class="doc-chip">până la 10 locații clasate</span>
       <span class="doc-chip">786 obiective LiDAR</span>
       <span class="doc-chip">PDF RO / EN</span>
     </div>
@@ -183,7 +183,7 @@
 
       <section class="doc-section" id="step8">
         <h2>08. Raportul arheologic: fuziunea factorilor și epoca locațiilor</h2>
-        <p>Ultimul pas leagă totul: în <strong>5 km²</strong> în jurul punctului ales, raportul combină factorii precedenți într-un singur scor și returnează <strong>3 locații clasate</strong>.</p>
+        <p>Ultimul pas leagă totul: în <strong>5 km²</strong> în jurul punctului ales, raportul combină factorii precedenți într-un singur scor și returnează <strong>până la 10 locații clasate</strong> — câte anume alegi tu în fereastră, implicit 3.</p>
         <div class="doc-table-wrap">
           <table class="doc-table">
             <caption>Fuziunea factorilor</caption>
@@ -199,7 +199,7 @@
         </div>
         <p>Selecția nu este „cel mai mare scor, atât”: fiecare punct trebuie să treacă de filtrele obligatorii — teren liber conform UAT și la minimum 500 m de zonele construite, minimum 700 m față de orice sit cunoscut (perimetrele poligonale sunt eșantionate, nu măsurate doar din centru), clasă APM peste medie. Excepția este punctul adnotat LiDAR, care este returnat automat, cu componenta APM marcată ca necunoscută. Rezultatele trebuie să fie la minimum 350 m unul de altul, ca să nu primești trei variante ale aceluiași loc. Clasificarea finală a unui rezultat: <strong>ridicat ≥ 0,75</strong>, <strong>mediu ≥ 0,50</strong>, altfel scăzut.</p>
         <h3>Încadrarea în epocă</h3>
-        <p>Pentru fiecare dintre cele 3 locații, raportul estimează epoca printr-un <strong>vot invers proporțional cu distanța</strong> asupra celor mai apropiate 3 situri cunoscute. Estimarea este afișată împreună cu <strong>textul original de datare</strong> („sec. II-III p.Chr.”, „așezare hallstattiană”, „castru militar auxiliar”), cu cele mai apropiate 5 situri și distanțele lor, cu link la fișa RAN/CIMEC și cu marcajul <strong>†</strong> atunci când datarea vine din numele sitului, nu dintr-un câmp de datare. Notația pe secole și milenii este interpretată automat și mapată pe scara de epoci folosită de toate modulele (Paleolitic → Modern).</p>
+        <p>Pentru fiecare dintre locațiile returnate, raportul estimează epoca printr-un <strong>vot invers proporțional cu distanța</strong> asupra celor mai apropiate 3 situri cunoscute. Estimarea este afișată împreună cu <strong>textul original de datare</strong> („sec. II-III p.Chr.”, „așezare hallstattiană”, „castru militar auxiliar”), cu cele mai apropiate 5 situri și distanțele lor, cu link la fișa RAN/CIMEC și cu marcajul <strong>†</strong> atunci când datarea vine din numele sitului, nu dintr-un câmp de datare. Notația pe secole și milenii este interpretată automat și mapată pe scara de epoci folosită de toate modulele (Paleolitic → Modern).</p>
         <h3>Livrabilul</h3>
         <p>Rezultatul se vede pe hartă ca poligoane portocalii cu etichete de tip <em>Rezultat n/3 · %</em> (clic pe poligon → pop-up cu scorul) și se descarcă sub forma unui <strong>PDF</strong> în română sau engleză: copertă, metodă, câte o pagină de scor pentru fiecare locație, pagina cu siturile și epocile apropiate, figurile analizei (poligoanele APM sunt desenate din grila clasificată a analizei, deci nu pot contrazice scorul) și lista surselor. Limba documentului se alege separat de limba interfeței.</p>
         <p class="doc-note doc-warn">Dacă sursa APM nu poate fi citită, raportul returnează 0 rezultate și ascunde butonul de descărcare, explicând motivul. Un raport pe date incomplete ar fi mai rău decât niciun raport.</p>
@@ -227,7 +227,7 @@
               <tr><td>O localitate sau un sit</td><td>Corpus documentar pe 8 surse, cu proveniență, <strong>profilul epocilor cu procente</strong> în antet, export JSON/CSV</td></tr>
               <tr><td>Un punct și o rază (1–10 km)</td><td>Bule / hartă de căldură cu scor în procente, rating cu 5 stele și distanța până la cel mai apropiat sit cunoscut</td></tr>
               <tr><td>Un punct și o rază (10–50 km)</td><td>Obiective LiDAR validate din bază, cu categorie și coordonate exacte</td></tr>
-              <tr><td>Un punct și o rază (1–10 km)</td><td><strong>3 locații clasate</strong>, încadrate în epocă, cu dovezi și surse, plus PDF în română sau engleză</td></tr>
+              <tr><td>Un punct și o rază (1–10 km)</td><td><strong>până la 10 locații clasate</strong> (implicit 3), încadrate în epocă, cu dovezi și surse, plus PDF în română sau engleză</td></tr>
             </tbody>
           </table>
         </div>

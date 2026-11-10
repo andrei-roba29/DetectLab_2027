@@ -4362,8 +4362,8 @@
                          Analizează o rază de 1–10 km în jurul unui punct ales de utilizator,
                          cu un baseline APM ales de utilizator (APM 2.0 sau APM Next-Gen
                          custom/train), bonusuri opționale (drumuri romane, potențial,
-                         LiDAR) și întoarce până la 3 rezultate (inele albastre) plus un
-                         raport PDF. Toate controalele trăiesc în fereastra de mai jos
+                         LiDAR) și întoarce până la 10 rezultate (inele albastre, număr
+                         ales de utilizator în fereastră, implicit 3) plus un raport PDF. Toate controalele trăiesc în fereastra de mai jos
                          (#archReportPanel) — același shell ca APM Next-Gen. -->
                     <div class="transp-layer-row arch-report-row" data-category="premium" id="archReportRow">
                         <div class="transp-layer-label" style="margin-bottom:6px">
@@ -4441,6 +4441,22 @@
                     <div class="apm-group">
                         <div class="arch-report-control"><span>Search radius / Rază</span><strong id="archReportDistanceValue">3 km</strong></div>
                         <input type="range" class="transp-slider" id="archReportDistance" min="1" max="10" value="3" step="1" aria-label="Search radius from 1 to 10 kilometres">
+                        <label class="apm-field" for="archReportResultCount">
+                            <span class="t" data-key="arch_report_opt_results">Number of results</span>
+                            <select id="archReportResultCount" class="apm-select" aria-label="Number of results, 1 to 10">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3" selected>3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                                <option value="9">9</option>
+                                <option value="10">10</option>
+                            </select>
+                        </label>
+                        <div class="apm-note t" data-key="arch_report_opt_results_hint">Up to this many places, at least 350 m apart. The report lists fewer when the filters leave fewer candidates.</div>
                         <label class="arch-report-show" id="archReportResultsToggleWrap" style="display:none">
                             <input type="checkbox" id="archReportResultsToggle" checked>
                             <span class="t" data-key="arch_report_show_results">Show results on the map</span>
@@ -5343,7 +5359,7 @@
     </footer>
 
     <script src="js/ios-input-focus.js?v=20261102-ios-viewport-settle"></script>
-    <script src="js/translations.js?v=20261106-hoards"></script>
+    <script src="js/translations.js?v=20261109-arch-report-results"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
     <script src="js/leaflet.js"></script>
@@ -5585,9 +5601,9 @@
     <!-- Premium "Archeological Report" / "Raport arheologic": PDF writer →
          PDF layout → the analysis layer itself (this order matters). -->
     <script src="js/pdf-writer.js?v=20260827-arch-report"></script>
-    <script src="js/archeo-report-pdf.js?v=20261102-arch-report-focus"></script>
-    <script src="js/archeo-report.js?v=20261102-arch-report-focus"></script>
-    <script src="js/tutorial.js?v=20261102-video-speed"></script>
+    <script src="js/archeo-report-pdf.js?v=20261109-arch-report-results"></script>
+    <script src="js/archeo-report.js?v=20261109-arch-report-results"></script>
+    <script src="js/tutorial.js?v=20261109-arch-report-results"></script>
 
     <!-- AUTH MODAL -->
     <style>

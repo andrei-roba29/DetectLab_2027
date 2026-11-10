@@ -464,6 +464,13 @@
         pt.y += 12;
 
         pt.h2(tr('arch_report_results_found', { n: model.results.length }));
+        // Say what was asked for when fewer places survived the filters — a
+        // short list is a filter outcome, not a broken run.
+        if (meta.requestedResults && model.results.length < meta.requestedResults) {
+            pt.para(tr('arch_report_results_requested', {
+                requested: meta.requestedResults, found: model.results.length
+            }), { size: 9, color: C.muted, spaceAfter: 6 });
+        }
         if (!model.results.length) {
             pt.para(tr('arch_report_no_results'), { color: C.muted });
         } else {
