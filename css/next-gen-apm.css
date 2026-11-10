@@ -321,7 +321,7 @@ body.apm-picking .leaflet-apmHotspots-pane * { pointer-events: none !important; 
 .apm-run-overlay {
     position: fixed;
     inset: 0;
-    z-index: 100000;
+    z-index: 100100;   /* above panels and windows (100000), below the critical banner */
     display: flex;
     align-items: center;
     justify-content: center;

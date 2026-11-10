@@ -112,6 +112,21 @@ check('the panel preview is mounted inside the overlay, and the rings step aside
     dom.window.close();
 });
 
+check('a widget that stops on its own gives the animation back', () => {
+    const {dom, w, O} = boot();
+    const host = w.document.createElement('div');
+    host.className = 'apm-preview-host';
+    const view = O.create({t});
+    view.setAnimation(host);
+    assert.equal(w.document.querySelector('.apm-run-visual').hidden, true);
+    view.clearAnimation();
+    assert.equal(host.parentNode, null, 'the dead widget is detached');
+    assert.equal(w.document.querySelector('.apm-run-visual').hidden, false, 'the rings return');
+    assert(!w.document.querySelector('.apm-run-card').classList.contains('is-live'));
+    view.close();
+    dom.window.close();
+});
+
 check('cancel is offered only when the caller can cancel, and it reports back', () => {
     const {dom, w, O} = boot();
     O.create({t});

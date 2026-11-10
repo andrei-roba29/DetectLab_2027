@@ -72,13 +72,24 @@
         // the rings rather than sitting next to them.
         var live = el(doc, 'div', 'apm-run-live');
         card.appendChild(live);
+        function mine() { return current && current.el === box ? current : null; }
         function setAnimation(node) {
             if (!node) return false;
             live.appendChild(node);
             visual.hidden = true;
             card.classList.add('is-live');
-            if (current) current.animationHost = node;
+            var c = mine();
+            if (c) c.animationHost = node;
             return true;
+        }
+        // The widget can stop on its own (skip, cancelled run, a browser without
+        // 2D canvas). The rings come back rather than leaving a blank card.
+        function clearAnimation() {
+            var c = mine();
+            if (c && c.animationHost && c.animationHost.parentNode) c.animationHost.parentNode.removeChild(c.animationHost);
+            if (c) c.animationHost = null;
+            visual.hidden = false;
+            card.classList.remove('is-live');
         }
         if (opts.animationHost) setAnimation(opts.animationHost);
 
@@ -125,6 +136,7 @@
             // the caller knows it really started: a failed widget leaves the
             // rings in place instead of an empty card.
             setAnimation: setAnimation,
+            clearAnimation: clearAnimation,
             update: function (state) {
                 state = state || {};
                 var v = number(state.pct);

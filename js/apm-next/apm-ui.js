@@ -70,6 +70,9 @@
         if (previewParams) previewParams.onPreview = null;
         if (loadingPreview) loadingPreview.stop();
         loadingPreview = null; previewParams = null;
+        // The overlay borrowed the widget as its animation; without it the rings
+        // come back instead of an empty card.
+        if (runOverlay && runOverlay.clearAnimation) runOverlay.clearAnimation();
     }
 
     /* ── full-screen run overlay ─────────────────────────────────────────────
