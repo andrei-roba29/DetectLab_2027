@@ -267,10 +267,10 @@
         els.run.disabled = !canRunNow || !state.centre || trainBlocked;
         var hoardModules = root.DetectLabApmHoards;
         var hoardClosed = state.mode === 'train' && isHoard() && !(hoardModules && hoardModules.trainingAllowed());
-        els.run.title = hoardClosed ? T('hoard.pending') : (state.mode === 'train' && isHoard() && hoardModules.overridden() ? T('hoard.override') : '');
-        // The override is stated in the panel for as long as it is in force.
+        // Only the closed gate explains itself here; the override is stated on
+        // the result (warn.hoardOverride), not as a paragraph in the panel.
+        els.run.title = hoardClosed ? T('hoard.pending') : '';
         if (els.hoardPending) els.hoardPending.hidden = !isHoard() || !hoardClosed;
-        if (els.hoardOverride) els.hoardOverride.hidden = !isHoard() || !(hoardModules && hoardModules.overridden());
         els.run.textContent = state.mode === 'train' ? T('run.train') : T('run.manual');
         els.pickBtn.disabled = !premium || !on || state.busy;
         els.loadSites.disabled = !premium || !on || !state.centre || state.busy || state.sitesLoading;
@@ -1284,8 +1284,10 @@
         els.approximateRow = h('label',{class:'apm-field'},[els.approximate,h('span',{key:'hoard.approximate'})]);
         els.background = h('select',{class:'apm-select',onchange:function(){state.backgroundType=els.background.value;}},[h('option',{value:'random',key:'hoard.random'}),h('option',{value:'known-sites',key:'hoard.known'})]);
         els.hoardPending = h('div',{class:'apm-note',key:'hoard.pending'});
-        els.hoardOverride = h('div',{class:'apm-note apm-hoard-override',role:'status',key:'hoard.override',hidden:true});
-        els.hoardOptions = h('div',{},[els.approximateRow,h('label',{class:'apm-field'},[h('span',{key:'hoard.background'}),els.background]),h('div',{class:'apm-note',key:'hoard.area'}),h('div',{class:'apm-note',key:'hoard.notice'}),h('div',{class:'apm-note',key:'hoard.attribution'}),h('div',{class:'apm-note',key:'hoard.objectDates'}),els.hoardPending,els.hoardOverride]);
+        // Hoard options are controls only: no radius/licence/chronology essays
+        // and no override paragraph in the panel. The override still travels
+        // with the result it belongs to (warn.hoardOverride).
+        els.hoardOptions = h('div',{class:'apm-hoard-options'},[els.approximateRow,h('label',{class:'apm-field'},[h('span',{key:'hoard.background'}),els.background]),els.hoardPending]);
         els.loadSites = bind(h('button', { type: 'button', class: 'apm-btn apm-small', onclick: loadBuiltinSites }), 'train.reload');
         els.sitesCount = h('span', { class: 'apm-note' });
         els.csvInput = h('input', { type: 'file', accept: '.csv,text/csv', onchange: onCsvUpload });

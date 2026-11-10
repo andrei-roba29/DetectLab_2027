@@ -167,9 +167,9 @@ test('interior hit targets and lazy popup bindings retain outlines/holes; PWA wi
     assert(ui.includes("fill: true, fillColor: '#d9f5ff', fillOpacity: 0.001, fillRule: 'evenodd'"));
     assert(ui.includes('l.bindPopup(function(){return hotspotPopup(f,res);},'));
     assert(ui.includes('minWidth:200,maxWidth:320,maxHeight:320'));
-    for(const asset of ['js/apm-next/apm-ui.js','js/apm-next/apm-i18n.js'])assert(html.includes(asset+'?v=20261109-apm-train-parity'));
+    for(const asset of ['js/apm-next/apm-ui.js','js/apm-next/apm-i18n.js'])assert(html.includes(asset+'?v=20261109-apm-clean-panel'));
     assert(html.includes('css/next-gen-apm.css?v=20261109-apm-run-overlay'));
-    for(const asset of ['apm-ui','apm-i18n'])assert(sw.includes('js/apm-next/'+asset+'.js?v=20261109-apm-train-parity'));
+    for(const asset of ['apm-ui','apm-i18n'])assert(sw.includes('js/apm-next/'+asset+'.js?v=20261109-apm-clean-panel'));
     for(const asset of ['apm-worker','apm-loading-preview'])assert(sw.includes('js/apm-next/'+asset+'.js?v=20261109-apm-run-overlay'));
     assert(sw.includes('js/apm-next/apm-explain.js?v=20261105-apm-hotspot-explain'));
     assert(/const CACHE_NAME = 'detectlab-v\d+-[a-z0-9-]+';/.test(sw));

@@ -192,7 +192,7 @@ Added tests cover classifier traps/order/multiple periods, date conversion and f
 4. Validate affordable complete request planning, cold/warm full-runtime measurements, cancellation, and both background modes on a real test area. All four release flags remain false until then; since 2026-11-09 the operator switch (see below) lets training run anyway, always labelled provisional.
 5. Verify the hosted frontend and signed-token browser entitlement flows. The completed backend migration and role/claim smoke checks do not substitute for those checks.
 
-The work deploys a safe backend foundation and, since 2026-11-09, a hoard mode that trains **under an explicit operator override** — every panel and every result says the reviews are open. It does **not** claim the original full feature, ingestion, live validation or performance acceptance is complete.
+The work deploys a safe backend foundation and, since 2026-11-09, a hoard mode that trains **under an explicit operator override** — the panel no longer repeats it, but every result says the reviews are open. It does **not** claim the original full feature, ingestion, live validation or performance acceptance is complete.
 
 ## Operator override (added 2026-11-09, at the operator's request)
 
@@ -223,10 +223,12 @@ What changed:
    * `ready()` keeps its meaning — it reads the four reviews only, so
      `tools/sync-hoards.mjs` still refuses data writes, and `openReviews()`
      still lists exactly what is missing;
-   * the APM panel shows a permanent amber note (`hoard.override`) for as long
-     as the switch is on, and the run button carries the same text;
-   * every result carries `warn.hoardOverride` with the number of open reviews,
-     so an export can never be mistaken for a reviewed model.
+   * the panel no longer prints a paragraph about it (removed on the operator's
+     request, 2026-11-09, together with the radius/licence/chronology notes;
+     `hoard.override` is gone from `apm-i18n.js`);
+   * every result still carries `warn.hoardOverride` with the number of open
+     reviews, listed in the result panel, so an export can never be mistaken for
+     a reviewed model.
 
 To turn it off again, flip that one field — nothing else changes:
 

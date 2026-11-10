@@ -356,9 +356,13 @@ function harness(mode='ok', opts={}) {
         await until(()=>/hoards with the selected deposit period/.test(ovr.w.document.querySelector('.apm-status').textContent),'override hoard load');
         const run=ovr.w.document.querySelector('.apm-primary');
         assert(!run.disabled,'operator override makes the button runnable');
-        assert(/Operator override is ON/.test(run.title),'the button says why it is runnable: '+run.title);
-        const pending=ovr.w.document.querySelector('.apm-note[role=status].apm-hoard-override');
-        assert(pending && !pending.hidden,'the panel states the override while it is in force');
+        // The panel itself carries no override/licence/chronology essays any more;
+        // the override is stated on the result the run produces.
+        assert.equal(run.title,'','no override paragraph on the button: '+run.title);
+        assert.equal(ovr.w.document.querySelector('.apm-hoard-override'),null,'no override note in the panel');
+        const hoardText=ovr.w.document.querySelector('.apm-hoard-options').textContent;
+        for(const essay of ['Training radius: 150 km','Hoard locations reflect','Sources: DARMC','Romanian periods inferred'])
+            assert.equal(hoardText.includes(essay),false,'the panel no longer explains: '+essay);
         assert(ovr.w.document.querySelector('.apm-train .apm-note')&&[...ovr.w.document.querySelectorAll('.apm-train .apm-note')].filter(n=>/not activated/.test(n.textContent)).every(n=>n.hidden),'the closed-gate note is gone');
         run.click();
         const hOverlay=ovr.w.document.querySelector('.apm-run-overlay');
@@ -384,7 +388,7 @@ function harness(mode='ok', opts={}) {
         const warns=(ovr.completed.warnings||[]).map(x=>x&&x.key);
         assert(warns.includes('warn.hoardOverride'),'the override travels with the result: '+warns.join(','));
         assert(/Operator override/.test(ovr.w.document.querySelector('.apm-warnings').textContent),'and it is listed in the result panel');
-        console.log('PASS operator override: hoard TRAIN runs with the switch on, the panel and the result both say so.');
+        console.log('PASS operator override: hoard TRAIN runs with the switch on; the panel stays clean and the override travels with the result.');
     } finally {ovr.dom.window.close();}
     const approx=harness('approximate');
     try {

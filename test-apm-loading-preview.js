@@ -163,8 +163,9 @@ function domHarness(reduced = false) {
         assert(html.indexOf('<script src="js/apm-next/apm-loading-preview.js') < html.indexOf('<script src="js/apm-next/apm-ui.js'));
         for (const f of ['apm-raster', 'apm-worker', 'apm-loading-preview'])
             assert(sw.includes('js/apm-next/' + f + '.js?v=20261109-apm-run-overlay'));
-        for (const f of ['apm-ui', 'apm-i18n', 'apm-pipeline'])
-            assert(sw.includes('js/apm-next/' + f + '.js?v=20261109-apm-train-parity'));
+        for (const f of ['apm-ui', 'apm-i18n'])
+            assert(sw.includes('js/apm-next/' + f + '.js?v=20261109-apm-clean-panel'));
+        assert(sw.includes('js/apm-next/apm-pipeline.js?v=20261109-apm-train-parity'));
         for (const k of ['preview.title', 'preview.method.water', 'preview.method.relief', 'preview.method.soil'])
             for (const lang of ['en', 'ro']) assert.notEqual(i18n.t(k, lang), k);
     });

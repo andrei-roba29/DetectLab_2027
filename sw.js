@@ -1016,7 +1016,7 @@
 //   din vecinii pe care îi acoperă fereastra mutată, iar image-overlay-urile
 //   își mută cele patru colțuri cu aceiași metri. O poziție aliniată o dată
 //   e aceeași în ambele vizualizări. Vezi HISTORICAL_MAP_SHIFT.md §5.
-const CACHE_NAME = 'detectlab-v417-apm-train-parity';
+const CACHE_NAME = 'detectlab-v418-apm-clean-panel';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1056,6 +1056,10 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 //   scale bar (measured as --m3d-basemap-lift) — instead of disappearing with
 //   the rest of the Leaflet control container. Re-tags css/map3d-terrain.css
 //   and js/map3d-terrain.js.
+// v418: the TEZAURE TRAIN panel carries controls only — the radius/resolution,
+//   discovery-bias, sources/licence, name-keyword-period and operator-override
+//   paragraphs are gone (the override still travels with every result).
+//   Re-tags apm-ui.js and apm-i18n.js.
 // v417: hoard TRAIN now produces the settlement result — the same 50 km window,
 //   the same exclusions, heatmap, thresholds and export — and the archaeological
 //   report's Next-Gen TRAIN baseline can learn from hoards/tezaure as well as
@@ -1065,9 +1069,9 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 const PRECACHE_URLS = [
   'css/next-gen-apm.css?v=20261109-apm-run-overlay',
   'js/apm-next/apm-raster.js?v=20261109-apm-run-overlay',
-  'js/apm-next/apm-i18n.js?v=20261109-apm-train-parity',
+  'js/apm-next/apm-i18n.js?v=20261109-apm-clean-panel',
   'js/apm-next/apm-pipeline.js?v=20261109-apm-train-parity',
-  'js/apm-next/apm-ui.js?v=20261109-apm-train-parity',
+  'js/apm-next/apm-ui.js?v=20261109-apm-clean-panel',
   'js/apm-next/apm-worker.js?v=20261109-apm-run-overlay',
   'js/apm-next/apm-loading-preview.js?v=20261109-apm-run-overlay',
   'js/apm-next/apm-run-overlay.js?v=20261109-apm-run-overlay',
