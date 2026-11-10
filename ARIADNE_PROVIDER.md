@@ -41,8 +41,11 @@ grid-parity test fails if the two copies ever differ.
 
 **Small box (hits).** One GET, one page. A record needs a `geopoint`; a record
 with only a `boundingbox` is rejected (`collection-boundingbox-only`) and no
-coordinate is derived from the box or its centroid. In the settlement role only
-`ariadneSubject[].prefLabel === 'Site/monument'` survives.
+coordinate is derived from the box or its centroid. In the settlement role only a
+published subject that says **site** or **monument** survives (`Site/monument`,
+`Archaeological site`, `Monument`… matched on words, not on one exact string; the
+hit's `resourceType` counts as a subject when no subject list is present). Coins
+and inscriptions still never match.
 
 **Large box (grid).** `hits` is empty, so the cells are the data. A request whose
 answer contains 5000 buckets is incomplete: the box is split into four quadrants

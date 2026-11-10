@@ -28,6 +28,7 @@ const SANCTIONED = [
     path.join('js', 'apm-next', 'apm-dare-sites.js'),
     path.join('js', 'apm-next', 'apm-site-merge.js'),
     'index.html',                       // loads the modules above
+    'sw.js',                            // pre-caches those module URLs
     'test-apm-outside-sites.js',
     'test-apm-train-network.js',
     path.join('supabase', 'functions', 'ariadne'),

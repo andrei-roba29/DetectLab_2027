@@ -109,27 +109,48 @@ function mockAriadne(records, options = {}) {
     const ariadneRecords = [
         { id: 'ariadne:a', ariadneId: 'a', name: 'Vindobona', lat: 48.2085, lon: 16.374, positionKind: 'geopoint', type: 'Site/monument' },
         { id: 'ariadne:b', ariadneId: 'b', name: 'Celamantia', lat: 47.8, lon: 18.3, positionKind: 'geopoint', type: 'Site/monument' },
-        { id: 'ariadne:c', ariadneId: 'c', name: 'Vindobona', lat: 48.2086, lon: 16.3741, positionKind: 'cell', type: 'Site/monument' }
+        { id: 'ariadne:c', ariadneId: 'c', name: 'Vindobona', lat: 48.2086, lon: 16.3741, positionKind: 'cell', type: 'Site/monument', cellKey: 'u2edh9p', cellCount: 4 },
+        { id: 'ariadne:cell:u2edhzz', ariadneId: 'ariadne:cell:u2edhzz', lat: 48.15, lon: 16.3, positionKind: 'cell', cellKey: 'u2edhzz', cellCount: 3 }
     ];
 
     const periodMeta = [{ label: 'roman', count: 2 }, { label: 'medieval', count: 1 }];
     const provider = outside.createProvider({ dare: mockDare(dareRecords), ariadne: mockAriadne(ariadneRecords, { periods: periodMeta }) });
     const merged = await provider.getSites(VIENNA, 50);
 
-    ok('a place in both catalogues is returned once', merged.length === 4, `${merged.length} records`);
+    ok('a place in both catalogues is returned once', merged.length === 5, `${merged.length} records`);
     ok('the merged record names both sources', merged.find(r => r.name === 'Vindobona').sources.join(',') === 'dare,ariadne');
     ok('the ARIADNE-only site is present', merged.some(r => r.name === 'Celamantia'));
-    ok('density cells are never turned into sites', !merged.some(r => r.id === 'ariadne:c'));
+    ok('a grid cell that contains a DARE point adds nothing: the cell is dropped, DARE is kept',
+        !merged.some(r => r.id === 'ariadne:c') && merged._meta.sources.ariadne.droppedNearDare === 1);
+    // The portal publishes small boxes as a 152 m density grid too. One bucket is NOT a
+    // site, so it becomes one point at the cell centre, named as a cell, at half a cell
+    // diagonal (110 m) — the position quality says how approximate it is.
+    const cellPoint = merged.find(r => r.positionKind === 'cell');
+    ok('a grid cell away from DARE is one labelled point, not a hidden zero',
+        !!cellPoint && /^ARIADNE grid cell /.test(cellPoint.name) && cellPoint.positionAccuracy === 110,
+        JSON.stringify(cellPoint && { name: cellPoint.name, acc: cellPoint.positionAccuracy }));
+    ok('the cell keeps the record count it stands for', cellPoint.cellCount === 3 && cellPoint.cellKey === 'u2edhzz');
+    ok('the meta counts points and cells apart',
+        merged._meta.sources.ariadne.cellPoints === 1 && merged._meta.sources.ariadne.points === 2,
+        JSON.stringify({ cells: merged._meta.sources.ariadne.cellPoints, points: merged._meta.sources.ariadne.points }));
+    ok('and reports what the portal actually answered',
+        merged._meta.sources.ariadne.sawHits >= 2 && merged._meta.sources.ariadne.sawCells >= 2,
+        JSON.stringify({ hits: merged._meta.sources.ariadne.sawHits, cells: merged._meta.sources.ariadne.sawCells }));
     ok('the meta says one place was merged', merged._meta.merged === 1);
-    ok('the meta reports each source separately', merged._meta.sources.dare.records === 3 && merged._meta.sources.ariadne.records === 2);
+    ok('the meta reports each source separately', merged._meta.sources.dare.records === 3 && merged._meta.sources.ariadne.records === 3,
+        JSON.stringify(merged._meta.sources.ariadne.records));
     ok('and marks the answer complete', merged._meta.incomplete === false);
     ok('the portal\'s own period vocabulary travels with the answer, largest first',
         Array.isArray(merged._meta.sources.ariadne.periods) && merged._meta.sources.ariadne.periods[0].label === 'roman',
         JSON.stringify(merged._meta.sources.ariadne.periods));
-    const filtered = sites.filterSites(merged, { center: VIENNA, radiusKm: 50, period: null, dedupeM: -1 });
-    ok('the TRAIN filter keeps the sites inside the radius', filtered.sites.length === 2, `${filtered.sites.length} kept`);
+    const filtered = sites.filterSites(merged, { center: VIENNA, radiusKm: 50, period: null, dedupeM: -1,
+        maxAccuracyM: outside.CONFIG.acceptAccuracyM });
+    ok('the TRAIN filter keeps the sites inside the radius', filtered.sites.length === 3, `${filtered.sites.length} kept`);
     ok('and drops nothing for type or position quality', filtered.dropped.type === 0 && filtered.dropped.accuracy === 0, JSON.stringify(filtered.dropped));
     ok('the two far sites are dropped only for distance', filtered.dropped.outside === 2);
+    ok('with the shared 100 m ceiling the cell point would vanish silently',
+        sites.filterSites(merged, { center: VIENNA, radiusKm: 50, period: null, dedupeM: -1 }).dropped.accuracy === 1);
+    ok('the ceiling the outside provider publishes covers its own cells', outside.CONFIG.acceptAccuracyM >= outside.CONFIG.cellAccuracyM);
 
     const dareOnly = await outside.createProvider({ dare: mockDare(dareRecords), ariadne: mockAriadne([], { throw: true }) }).getSites(VIENNA, 50);
     ok('a dead ARIADNE leaves the DARE sites in place', dareOnly.length === 3);
@@ -171,5 +192,5 @@ function mockAriadne(records, options = {}) {
     ok('and is labelled as subject-only', subjectProvider.roleFor('settlement', VIENNA).subjectOnly === true);
     ok('Romania stays excluded even with the opt-in', subjectProvider.roleFor('settlement', { lat: 46.77, lon: 23.59 }).reason === 'romania-excluded');
 
-    console.log(`PASS outside-Romania sources (${checks} checks): DARE bbox/zoom/URL from the contract the map already uses; settlement categories only; no invented dates; ARIADNE in subject-only mode and never inside Romania; the training disc cut so the portal answers with hits, not a density grid; and the two catalogues merged so a place attested by both is shown once, with every source, overlap and failure reported. Live hosts and CORS: NOT VERIFIED.`);
+    console.log(`PASS outside-Romania sources (${checks} checks): DARE bbox/zoom/URL from the contract the map already uses; settlement categories only; no invented dates; ARIADNE in subject-only mode and never inside Romania; the training disc cut into tiles; hits used as points and the portal's density grid used as one labelled 110 m point per cell (dropped where DARE already places the place); and the two catalogues merged so a place attested by both is shown once, with every source, overlap and failure reported. Live hosts and CORS: NOT VERIFIED.`);
 })().catch(error => { console.error(error); process.exitCode = 1; });

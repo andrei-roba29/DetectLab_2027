@@ -581,7 +581,11 @@
         if (siteMeta && siteMeta.includeEmptyCoord) warnings.push(M('train.emptyIncluded', {}, 'Unknown-position records are opted in.'));
         var radiusM = params.radiusKm * 1000;
         var areaM = (isHoard ? hoardConfig.trainingRadiusKm : TRAIN_AREA_KM) * 1000;
-        var sel = isHoard ? hoardProvider.filter(params.records, centre, params.period) : sites.filterSites(params.records, { center: centre, radiusKm: TRAIN_AREA_KM, period: params.period, dedupeM: -1 });
+        // Outside Romania the merged catalogues publish grid-cell points with a
+        // 110 m positional error: filter them with the ceiling they were published for.
+        var outsideRecords = !!(siteMeta && siteMeta.region === 'outside-romania');
+        var sel = isHoard ? hoardProvider.filter(params.records, centre, params.period) : sites.filterSites(params.records, { center: centre, radiusKm: TRAIN_AREA_KM, period: params.period, dedupeM: -1,
+            maxAccuracyM: outsideRecords ? 150 : undefined });
         var nSites = sel.sites.length;
         var minSites = params.minSites || 10, warnSites = params.warnSites || 30;
         if (trainSiteStatus(nSites, minSites, warnSites).status === 'block') {

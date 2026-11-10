@@ -27,6 +27,17 @@
         ariadneMaxTiles: 9,
         ariadneRadiusPad: 1.06,     // tiles overlap slightly so nothing falls between them
         positionAccuracyM: 50,
+        // The portal publishes a small box two ways: hits (real points) and, when it
+        // answers with its density grid, one geohash-7 cell per bucket (~152 m). A
+        // cell centre is a real location to within half the cell diagonally, so it is
+        // accepted as ONE point per cell, at that accuracy, and named as a cell.
+        cellAccuracyM: 110,
+        // The position-accuracy ceiling the TRAIN filters must use for these records.
+        // Inside Romania it stays the shared 100 m; a 110 m cell would be dropped otherwise.
+        acceptAccuracyM: 150,
+        // Hard budget: the merged list is deduplicated in O(n²), so the cell path is
+        // capped and the status line says how many cells were left out.
+        maxAriadnePoints: 1500,
         minZoomDare: 7
     };
 
@@ -50,10 +61,40 @@
         return list.slice(0, config.ariadneMaxTiles);
     }
 
-    /** ARIADNE hit → TRAIN record. Cells are density, not sites, and are refused. */
+    /**
+     * ARIADNE answer → TRAIN record.
+     *
+     * A hit is a published point. A bucket from the portal's own grid is not a site:
+     * it is one cell with a record count, so it becomes ONE point at the cell centre,
+     * named as a cell, carrying the cell's own positional error (half its diagonal)
+     * and the count it stands for. Never one point per underlying record.
+     */
     function ariadneRecord(record) {
-        if (!record || record.positionKind === 'cell') return null;
-        if (!Number.isFinite(record.lat) || !Number.isFinite(record.lon)) return null;
+        if (!record || !Number.isFinite(record.lat) || !Number.isFinite(record.lon)) return null;
+        if (record.positionKind === 'cell') {
+            var key = record.cellKey || String(record.id || '').replace(/^ariadne:cell:/, '');
+            return {
+                id: record.id || ('ariadne:cell:' + key),
+                name: 'ARIADNE grid cell ' + key,
+                ancientName: null,
+                lat: record.lat, lon: record.lon,
+                type: 'settlement',
+                positionAccuracy: CONFIG.cellAccuracyM,
+                approximatePosition: false,      // the accuracy says how approximate it is
+                positionAccepted: true,
+                positionKind: 'cell',
+                cellKey: key,
+                cellCount: typeof record.cellCount === 'number' ? record.cellCount : null,
+                source: 'ariadne',
+                sourceIds: { ariadne: record.id || ('ariadne:cell:' + key) },
+                pleiadesId: null,
+                ariadneType: null,
+                subjects: [],
+                publisher: null,
+                periods: [],
+                periodSource: 'unknown'
+            };
+        }
         return {
             id: record.id,
             name: record.name || ('ARIADNE ' + record.ariadneId),
@@ -87,6 +128,12 @@
         });
     }
 
+    function mergeCounts(into, more) {
+        var out = Object.assign({}, into || {});
+        Object.keys(more || {}).forEach(function (k) { out[k] = (out[k] || 0) + more[k]; });
+        return out;
+    }
+
     function createProvider(options) {
         options = options || {};
         var config = Object.assign({}, CONFIG, options.config || {});
@@ -105,7 +152,12 @@
                     none._meta = { outsideRomania: false, region: 'romania', message: 'Romania uses the national repertory, not these catalogues.' };
                     return none;
                 }
-                var stats = { dare: { ok: false, records: 0, error: null }, ariadne: { ok: false, records: 0, requests: 0, error: null, mode: null } };
+                var stats = {
+                    dare: { ok: false, records: 0, error: null },
+                    ariadne: { ok: false, records: 0, requests: 0, error: null, mode: null,
+                        hits: 0, cells: 0, cellsCapped: 0, rejected: {}, points: 0, cellPoints: 0,
+                        sawHits: 0, sawCells: 0, droppedOverBudget: 0, droppedNearDare: 0 }
+                };
                 var groups = [];
 
                 if (dare) {
@@ -127,6 +179,7 @@
                 if (ariadne) {
                     var collected = [];
                     var tileErrors = [];
+                    var hitsSeen = 0, cellsSeen = 0, droppedOverBudget = 0;
                     var tileList = tilesFor(centre, radiusKm, config);
                     for (var i = 0; i < tileList.length; i++) {
                         if (opts.signal && opts.signal.aborted) break;
@@ -138,7 +191,12 @@
                             ((hits._meta && hits._meta.periods) || []).forEach(function (p) {
                                 periodsSeen[p.label] = (periodsSeen[p.label] || 0) + p.count;
                             });
+                            stats.ariadne.hits += ((hits._meta && hits._meta.hits) || 0);
+                            stats.ariadne.cells += ((hits._meta && hits._meta.cells) || 0);
+                            stats.ariadne.cellsCapped = (stats.ariadne.cellsCapped || 0) + ((hits._meta && hits._meta.cellsCapped) || 0);
+                            if (hits._meta && hits._meta.rejected) stats.ariadne.rejected = mergeCounts(stats.ariadne.rejected, hits._meta.rejected);
                             (hits || []).forEach(function (record) {
+                                if (record && record.positionKind === 'cell') cellsSeen++; else hitsSeen++;
                                 var mappedRecord = ariadneRecord(record);
                                 if (mappedRecord) collected.push(mappedRecord);
                             });
@@ -146,13 +204,27 @@
                             tileErrors.push(String(error && error.message || error));
                         }
                     }
-                    // Only hits count; a disabled role or a grid-only answer leaves nothing.
-                    // Overlapping tiles repeat a site near an edge: count it once.
-                    var uniqueAriadne = merge.dedupeWithin(collected, merge.distanceM);
+                    // Overlapping tiles repeat a site near an edge: count it once. The
+                    // duplicate-by-id pass is cheap; the distance pass runs on the
+                    // already-reduced list, and the whole path is budgeted.
+                    var byId = new Map();
+                    collected.forEach(function (r) { if (!byId.has(r.id)) byId.set(r.id, r); });
+                    var uniqueList = [];
+                    byId.forEach(function (r) { uniqueList.push(r); });
+                    if (uniqueList.length > config.maxAriadnePoints) {
+                        droppedOverBudget = uniqueList.length - config.maxAriadnePoints;
+                        uniqueList = uniqueList.slice(0, config.maxAriadnePoints);
+                    }
+                    var uniqueAriadne = merge.dedupeWithin(uniqueList, merge.distanceM);
                     stats.ariadne.ok = uniqueAriadne.records.length > 0 || tileErrors.length === 0;
                     stats.ariadne.records = uniqueAriadne.records.length;
                     stats.ariadne.received = collected.length;
+                    stats.ariadne.points = uniqueAriadne.records.filter(function (r) { return r.positionKind !== 'cell'; }).length;
+                    stats.ariadne.cellPoints = uniqueAriadne.records.filter(function (r) { return r.positionKind === 'cell'; }).length;
                     stats.ariadne.repeated = uniqueAriadne.dropped;
+                    stats.ariadne.droppedOverBudget = droppedOverBudget;
+                    stats.ariadne.sawHits = hitsSeen;
+                    stats.ariadne.sawCells = cellsSeen;
                     stats.ariadne.tiles = tileList.length;
                     if (tileErrors.length) stats.ariadne.error = tileErrors[0];
                     // The portal's own period vocabulary for this area, largest first.
@@ -164,6 +236,25 @@
                     stats.ariadne = { ok: false, records: 0, requests: 0, error: 'not configured', mode: null };
                 }
 
+                // A grid cell that contains a DARE point adds nothing: DARE already
+                // places that place precisely. Cells are dropped, never DARE.
+                var ariadneGroup = groups.filter(function (g) { return g.source === 'ariadne'; })[0];
+                var dareGroup = groups.filter(function (g) { return g.source === 'dare'; })[0];
+                if (ariadneGroup && dareGroup && dareGroup.records.length && ariadneGroup.records.length) {
+                    var keptCells = ariadneGroup.records.filter(function (r) {
+                        if (r.positionKind !== 'cell') return true;
+                        for (var i = 0; i < dareGroup.records.length; i++) {
+                            if (merge.distanceM(r, dareGroup.records[i]) <= merge.DEFAULTS.distanceM) return false;
+                        }
+                        return true;
+                    });
+                    stats.ariadne.droppedNearDare = ariadneGroup.records.length - keptCells.length;
+                    stats.ariadne.records = keptCells.length;
+                    stats.ariadne.points = keptCells.filter(function (r) { return r.positionKind !== 'cell'; }).length;
+                    stats.ariadne.cellPoints = keptCells.filter(function (r) { return r.positionKind === 'cell'; }).length;
+                    ariadneGroup.records = keptCells;
+                }
+
                 var merged = merge.merge(groups, mergeOptions);
                 var records = merged.records.map(function (r) { return Object.assign({}, r, { type: 'settlement' }); });
                 records._meta = {
@@ -172,6 +263,7 @@
                     outsideRomania: false,          // a real catalogue answered here
                     sources: stats,
                     merged: merged.stats.merged,
+                    attestedByBoth: merged.stats.crossSource || 0,
                     overlaps: merged.stats.overlaps.slice(0, 50),
                     attestedBy: merged.stats.sources,
                     returned: records.length,

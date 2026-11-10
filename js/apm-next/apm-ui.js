@@ -461,7 +461,11 @@
     function renderSiteCount() {
         if (!els.countNote) return;
         if (!state.records || !state.centre) { els.countNote.textContent = ''; els.countNote.className = 'apm-note'; state.siteCount = null; return; }
-        var pool = isHoard() ? hoardRecords().filter(state.records,state.centre,state.period) : sites().filterSites(state.records, { center: state.centre, radiusKm: 50, period: state.period, dedupeM: state.siteInput === 'csv' ? 50 : -1 });
+        var pool = isHoard() ? hoardRecords().filter(state.records,state.centre,state.period) : sites().filterSites(state.records, { center: state.centre, radiusKm: 50, period: state.period, dedupeM: state.siteInput === 'csv' ? 50 : -1,
+            // Outside Romania the merged catalogues include ARIADNE grid-cell points
+            // (one per 152 m cell, 110 m positional error): the shared 100 m ceiling
+            // would silently drop every one of them.
+            maxAccuracyM: outsideRegion() ? outsideAcceptAccuracyM() : undefined });
         var n = isHoard() && state.records._meta && state.records._meta.insufficient ? state.records._meta.usable : pool.sites.length;
         state.siteCount = n;
         var st = pipe().trainSiteStatus(n, 10, 30);
@@ -518,6 +522,12 @@
         return root.DetectLabRomaniaApmSites.createProvider().getSites(centre, radiusKm, { token: token });
     }
 
+    /** The position-accuracy ceiling the outside catalogues need (see apm-outside-sites). */
+    function outsideAcceptAccuracyM() {
+        var api = root.DetectLabApmOutsideSites;
+        return api && api.CONFIG && api.CONFIG.acceptAccuracyM ? api.CONFIG.acceptAccuracyM : 150;
+    }
+
     /** True when the loaded site list is the DARE + ARIADNE answer for a non-Romanian point. */
     function outsideRegion() {
         return !!(state.records && state.records._meta && state.records._meta.region === 'outside-romania');
@@ -528,16 +538,39 @@
         var dare = sources.dare || {}, ariadne = sources.ariadne || {};
         var parts = [];
         if (dare.ok) parts.push('DARE ' + dare.records);
-        if (ariadne.ok && ariadne.records) parts.push('ARIADNE ' + ariadne.records);
-        var failed = [];
+        // Both catalogues are always named. "Answered with nothing usable" and
+        // "never asked" are different facts and must not look the same.
+        if (ariadne.records) {
+            parts.push('ARIADNE ' + ariadne.records + (ariadne.cellPoints
+                ? ' (' + T('train.outsideCells', { n: ariadne.cellPoints }) + ')' : ''));
+        } else if (ariadne.ok) {
+            parts.push('ARIADNE 0 (' + T('train.outsidePortalEmpty', { detail: outsideAriadneDetail(ariadne) }) + ')');
+        } else {
+            parts.push('ARIADNE 0 (' + T('train.outsidePortalEmpty', { detail: ariadne.error || T('train.outsidePortalNotAsked') }) + ')');
+        }
+        var failed = [], notes = [];
         if (!dare.ok && dare.error) failed.push('DARE: ' + dare.error);
-        if (ariadne.error && (!ariadne.ok || !ariadne.records)) failed.push('ARIADNE: ' + ariadne.error);
+        if (ariadne.droppedOverBudget) notes.push('ARIADNE: ' + T('train.outsidePortalBudget', { n: ariadne.droppedOverBudget }));
+        if (ariadne.cellsCapped) notes.push('ARIADNE: ' + T('train.outsidePortalCapped', { n: ariadne.cellsCapped }));
+        if (ariadne.droppedNearDare) notes.push('ARIADNE: ' + T('train.outsidePortalNearDare', { n: ariadne.droppedNearDare }));
         return T('train.outsideLoaded', {
             n: (meta && meta.returned) || 0,
             parts: parts.join(' + ') || '—',
-            merged: (meta && meta.merged) || 0,
-            failed: failed.length ? ' ' + T('train.outsideFailed', { msg: failed.join('; ') }) : ''
+            merged: meta && meta.attestedByBoth != null ? meta.attestedByBoth : ((meta && meta.merged) || 0),
+            failed: failed.length ? ' ' + T('train.outsideFailed', { msg: failed.join('; ') }) : '',
+            notes: notes.length ? T('train.outsideNotes', { msg: notes.join('; ') }) : ''
         });
+    }
+
+    /** Why ARIADNE contributed no point: what it answered, and what we had to drop. */
+    function outsideAriadneDetail(ariadne) {
+        var rej = ariadne.rejected || {};
+        var rejected = Object.keys(rej).reduce(function (n, k) { return n + rej[k]; }, 0);
+        var bits = [];
+        bits.push(T('train.outsidePortalSaw', { hits: ariadne.sawHits || 0, cells: ariadne.sawCells || 0 }));
+        if (rejected) bits.push(T('train.outsidePortalRejected', { n: rejected }));
+        if (!ariadne.sawHits && !ariadne.sawCells && ariadne.requests) bits.push(T('train.outsidePortalNoReply', { n: ariadne.requests }));
+        return bits.join(', ');
     }
 
     function cancelSiteLoad() {
@@ -725,7 +758,7 @@
                     siteSource: { id: state.siteInput === 'csv' ? 'csv' : isHoard() ? 'hoards' : outsideRegion() ? 'dare+ariadne' : 'romania-repertory',
                         label: state.siteInput === 'csv' ? 'Uploaded CSV' : isHoard() ? 'DARMC / RAN hoards' : outsideRegion() ? 'DARE + ARIADNE (outside Romania)' : 'Romanian National Archaeological Repertory',
                         selectedPeriod: state.period || 'all', url: state.siteInput === 'csv' ? null : isHoard() ? 'Supabase apm_hoards_within RPC' : outsideRegion() ? 'DARE geojson.php + ARIADNE portal /api/search' : 'Supabase archaeological_sites_a RPC',
-                        retrievedAt: state.sitesRetrievedAt, positionAccuracy: state.siteInput === 'csv' ? 'CSV supplied accuracy' : outsideRegion() ? 'Merged catalogues; DARE points and ARIADNE geopoints' : 'COORD=DA; empty opt-in=' + !!root.DetectLabRomaniaApmConfig.includeEmptyCoord },
+                        retrievedAt: state.sitesRetrievedAt, positionAccuracy: state.siteInput === 'csv' ? 'CSV supplied accuracy' : outsideRegion() ? 'Merged catalogues; DARE points and ARIADNE geopoints or 152 m grid cells (110 m)' : 'COORD=DA; empty opt-in=' + !!root.DetectLabRomaniaApmConfig.includeEmptyCoord },
                     // Restricted to Romanian territory only when the Romanian repertory is
                     // the site source. Outside Romania (DARE + ARIADNE) the box itself defines
                     // the background: a Romania-only predicate there rejects every candidate
