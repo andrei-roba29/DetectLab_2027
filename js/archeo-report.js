@@ -2028,34 +2028,79 @@
     function setRunning(running) {
         var btn = el('archReportRunBtn');
         if (btn) {
-            btn.disabled = running || !_state.point;
-            btn.classList.toggle('running', running);
+            btn.disabled = !!running || !zonePicked();
+            btn.classList.toggle('running', !!running);
             btn.innerHTML = running
                 ? '<span class="arch-report-spinner" aria-hidden="true"></span><span class="t" data-key="arch_report_run_running">Analyzing…</span>'
                 : '<span class="t" data-key="arch_report_run_btn">Generate report</span>';
         }
         var pdfBtn = el('archReportPdfBtn');
-        if (pdfBtn) pdfBtn.disabled = running;
+        if (pdfBtn) pdfBtn.disabled = !!running;
         // Every window control that feeds the next run is locked while one is
-        // running — the ignore switch, the three bonus ticks, the baseline
-        // tabs and the training-period select.
-        ['archReportIgnoreLidar', 'archReportBonusRoads', 'archReportBonusPotential',
-         'archReportBonusLidar', 'archReportPeriod'].forEach(function (id) {
-            var node = el(id);
-            if (node) node.disabled = running;
-        });
-        ['archReportBaselineApm20', 'archReportBaselineCustom', 'archReportBaselineTrain'].forEach(function (id) {
-            var node = el(id);
-            if (node) node.disabled = running;
-        });
+        // running, and they stay locked if no area has been chosen yet.
+        applyGate();
         var ov = el('archReportLoading');
         if (ov) ov.classList.toggle('visible', !!running);
+        if (!running) updateRunButton();
     }
 
-    // The run button only makes sense once a point has been picked.
+    /* Everything the window configures before a run. Until an area is chosen
+     * they are disabled and dimmed: the report has nothing to analyse without a
+     * centre, and the LiDAR-3D card asks for its point the same way. */
+    var CONFIG_CONTROL_IDS = [
+        'archReportBaselineApm20', 'archReportBaselineCustom', 'archReportBaselineTrain',
+        'archReportPeriod', 'archReportBonusRoads', 'archReportBonusPotential',
+        'archReportBonusLidar', 'archReportIgnoreLidar', 'archReportDistance',
+        'archReportResultCount', 'archReportResultsToggle'
+    ];
+
+    function zonePicked() { return !!_state.point; }
+
+    /** Disabled state + zone prompt for every control in the window. */
+    function applyGate() {
+        var locked = !zonePicked();
+        var busy = !!_state.running;
+        CONFIG_CONTROL_IDS.forEach(function (id) {
+            var node = el(id);
+            if (node) node.disabled = locked || busy;
+        });
+        var panel = el('archReportPanel');
+        if (panel && panel.classList) panel.classList.toggle('is-awaiting-zone', locked);
+        var pick = el('archReportZonePickBtn');
+        if (pick) {
+            pick.classList.toggle('is-move', !locked);
+            pick.disabled = busy;
+            if (pick.setAttribute) pick.setAttribute('aria-label', locked ? tr('arch_report_zone_pick') : tr('arch_report_zone_move'));
+        }
+        var pickLabel = el('archReportZonePickLabel');
+        if (pickLabel) pickLabel.textContent = locked ? tr('arch_report_zone_pick') : tr('arch_report_zone_move');
+        var value = el('archReportZoneValue');
+        if (value) {
+            value.textContent = locked
+                ? tr('arch_report_zone_none')
+                : _state.point.lat.toFixed(5) + ', ' + _state.point.lng.toFixed(5) + ' · ' + currentRadiusKm() + ' km';
+            value.classList.toggle('is-set', !locked);
+        }
+        var note = el('archReportZoneNote');
+        if (note && !note.dataset.archReportMessage) {
+            note.textContent = locked ? tr('arch_report_zone_required') : tr('arch_report_zone_ready');
+        }
+    }
+
+    function setZoneNote(text) {
+        var note = el('archReportZoneNote');
+        if (!note) return;
+        if (text == null) { delete note.dataset.archReportMessage; }
+        else { note.dataset.archReportMessage = '1'; note.textContent = text; }
+        if (text == null) applyGate();
+    }
+
+    // The run button only makes sense once a point has been picked, and it lives
+    // in the window — it is never moved to the on-screen action dock.
     function updateRunButton() {
+        applyGate();
         var btn = el('archReportRunBtn');
-        var show = !!_state.point;
+        var show = zonePicked();
         if (btn) {
             if (!_state.running) btn.disabled = !show;
             if (btn.style) btn.style.display = show ? '' : 'none';
@@ -3370,20 +3415,61 @@
         drawSearchCircle(latlng);
     }
 
+    /** The map says what the next tap does while an area is being placed. */
+    function setZonePicking(on) {
+        _state.awaitingZone = !!on;
+        var body = (typeof document !== 'undefined') && document.body;
+        if (body && body.classList) body.classList.toggle('arch-zone-picking', !!on);
+    }
+
+    /* Mirrors the LiDAR 3D card: the window steps aside, the whole map becomes
+     * clickable, Escape backs out and the area stays as it was. */
+    function startZonePick() {
+        if (!_state.active || _state.running) return;
+        setPanelOpen(false);
+        setZonePicking(true);
+        setZoneNote(null);
+        setStatus(zonePicked() ? 'arch_report_move_prompt' : 'arch_report_pick_prompt');
+    }
+
+    function endZonePick() {
+        if (!_state.awaitingZone) return;
+        setZonePicking(false);
+        setPanelOpen(true);
+    }
+
+    function cancelZonePick() {
+        if (!_state.awaitingZone) return;
+        setZonePicking(false);
+        setPanelOpen(true);
+        setStatus(zonePicked() ? 'arch_report_point_set' : 'arch_report_hint', false,
+            zonePicked() ? { lat: _state.point.lat.toFixed(5), lng: _state.point.lng.toFixed(5) } : undefined);
+    }
+
     function onMapClick(e) {
         if (window.dlApmPicking) return;   // APM point picking owns this map click
         if (!_state.active || _state.running) return;
         // taps belong to the offline polygon while that is being drawn
         try { if (window._dlOfflineDrawActive) return; } catch (err) {}
+        var first = !_state.point;
         _state.point = { lat: e.latlng.lat, lng: e.latlng.lng };
         try { window._dlSearchAreaPin = { lat: e.latlng.lat, lng: e.latlng.lng }; } catch (err) {}
         drawPointMarker(e.latlng);
+        // Results belong to the area they were computed for: a new area clears
+        // them instead of leaving a report about somewhere else on the map.
+        if (!first) {
+            clearResults();            // removes the layer and resets the model
+            _state.figures = null;
+            setSummary('');
+        }
+        endZonePick();
         setStatus('arch_report_point_set', false, {
             lat: _state.point.lat.toFixed(5), lng: _state.point.lng.toFixed(5)
         });
         updateRunButton();
         // A new centre means a new 50 km training pool for the Next-Gen train
-        // baseline — refresh the period list the window offers.
+        // baseline — refresh the period list the window offers. Choosing a
+        // period never starts the analysis by itself.
         if (readSettings().baseline === 'nextgen_train') refreshPeriodOptions();
     }
 
@@ -3419,6 +3505,7 @@
         if (!map) return;
         if (!_state.active) {
             map.off('click', onMapClick);
+            setZonePicking(false);
             if (_pointMarker) { map.removeLayer(_pointMarker); _pointMarker = null; }
             clearSearchCircle();
             clearResults();
@@ -3433,7 +3520,10 @@
         }
         ensurePanes(map);
         map.on('click', onMapClick);
-        setStatus(_state.point ? 'arch_report_point_set' : 'arch_report_hint');
+        // Zone first: the window opens asking for the area, and nothing below it
+        // can be configured until one exists.
+        setStatus(_state.point ? 'arch_report_point_set' : 'arch_report_hint', false,
+            _state.point ? { lat: _state.point.lat.toFixed(5), lng: _state.point.lng.toFixed(5) } : undefined);
         updateUi();
         updateRunButton();
         notifyDistanceMirror(true);
@@ -3538,7 +3628,7 @@
         });
     }
 
-    function setBaseline(value, rerun) {
+    function setBaseline(value) {
         if (CONFIG.BASELINE.MODES.indexOf(value) === -1) value = CONFIG.BASELINE.DEFAULT;
         var input = el('archReportBaseline');
         if (input) input.value = value;
@@ -3552,13 +3642,19 @@
         var row = el('archReportPeriodRow');
         if (row) row.hidden = value !== 'nextgen_train';
         if (value === 'nextgen_train') refreshPeriodOptions();
-        if (rerun !== false && _state.point && !_state.running) runReport();
+        settingsChanged();
     }
 
-    /* Any window setting that feeds the score re-runs the analysis in place —
-     * exactly like the ignore-LIDAR switch has always done. */
+    /* A setting that feeds the score never starts the analysis on its own: the
+     * user asked for the report to run only when "Generate report" is pressed.
+     * The window says the map is showing an older answer until then. */
     function settingsChanged() {
-        if (_state.point && !_state.running) runReport();
+        if (_state.running) return;
+        if (_state.model && _state.model.results && _state.model.results.length) {
+            setStatus('arch_report_settings_stale');
+            return;
+        }
+        if (zonePicked()) setStatus('arch_report_ready');
     }
 
     function wireUI() {
@@ -3598,6 +3694,18 @@
                 node.addEventListener('change', function () { settingsChanged(); });
             }
         });
+        var zonePick = el('archReportZonePickBtn');
+        if (zonePick && !zonePick.dataset.archReportWired) {
+            zonePick.dataset.archReportWired = '1';
+            zonePick.addEventListener('click', function () { startZonePick(); });
+        }
+        // Escape backs out of placing the area, exactly like the LiDAR 3D card.
+        if (typeof document !== 'undefined' && !_state.escWired) {
+            _state.escWired = true;
+            document.addEventListener('keydown', function (e) {
+                if (e && (e.key === 'Escape' || e.key === 'Esc') && _state.awaitingZone) cancelZonePick();
+            });
+        }
         var run = el('archReportRunBtn');
         if (run && !run.dataset.archReportWired) {
             run.dataset.archReportWired = '1';
@@ -3626,9 +3734,7 @@
         var ignore = el('archReportIgnoreLidar');
         if (ignore && !ignore.dataset.archReportWired) {
             ignore.dataset.archReportWired = '1';
-            ignore.addEventListener('change', function () {
-                if (_state.point && !_state.running) runReport();
-            });
+            ignore.addEventListener('change', function () { settingsChanged(); });
         }
         // How many results: restored from the last visit, then any change
         // re-runs the analysis in place (same contract as the bonus ticks).
@@ -3640,7 +3746,7 @@
             else if (countSel.value == null || countSel.value === '') countSel.value = String(CONFIG.RESULT_COUNT_DEFAULT);
             countSel.addEventListener('change', function () {
                 storeResultCount(currentResultCount());
-                if (_state.point && !_state.running) runReport();
+                settingsChanged();
             });
         }
         var slider = el('archReportDistance');
@@ -3674,6 +3780,7 @@
             pendingValue = null;
             if (value == null) return;
             if (valueLabel) valueLabel.textContent = value + ' km';
+            if (_state.point) applyGate();   // the zone line quotes the radius
             if (_state.point && _searchCircle && _searchCircle.setRadius) {
                 _searchCircle.setRadius(value * 1000);
             }
@@ -3810,6 +3917,13 @@
         buildApmGrid: buildApmGrid,
         apmClassAt: apmClassAt,
         readSettings: readSettings,
+        applyGate: applyGate,
+        onMapClick: onMapClick,
+        startZonePick: startZonePick,
+        endZonePick: endZonePick,
+        cancelZonePick: cancelZonePick,
+        zonePicked: zonePicked,
+        settingsChanged: settingsChanged,
         currentResultCount: currentResultCount,
         clampResultCount: clampResultCount,
         storeResultCount: storeResultCount,

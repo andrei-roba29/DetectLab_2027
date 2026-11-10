@@ -169,12 +169,28 @@ const sandbox = {
 sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
 sandbox.self = sandbox;
+function classListStub() {
+    return {
+        _c: {},
+        add(c) { this._c[c] = 1; },
+        remove(c) { delete this._c[c]; },
+        contains(c) { return !!this._c[c]; },
+        toggle(c, on) {
+            const next = on === undefined ? !this._c[c] : !!on;
+            if (next) this._c[c] = 1; else delete this._c[c];
+            return next;
+        }
+    };
+}
 sandbox.document = {
     readyState: 'complete',
-    addEventListener() {},
+    _handlers: {},
+    addEventListener(type, fn) { (this._handlers[type] = this._handlers[type] || []).push(fn); },
+    dispatchEvent(ev) { (this._handlers[ev.type] || []).forEach(fn => fn(ev)); return true; },
     createElement(tag) { return tag === 'canvas' ? makeCanvas() : fakeEl('created-' + tag); },
     getElementById(id) { return fakeEl(id); },
-    body: { appendChild() {}, removeChild() {} },
+    body: { appendChild() {}, removeChild() {}, classList: classListStub() },
+    documentElement: { classList: classListStub() },
     fonts: { ready: Promise.resolve() },
     querySelectorAll() { return []; }
 };
@@ -869,6 +885,152 @@ section('Report window: baseline, period, bonuses');
         emptyGrid.available === false && R.apmClassAt(emptyGrid, CENTER.x, CENTER.y) === 0);
 }
 
+/* ═══════════════ 6d. zone first: the area before any configuration ═══════ */
+section('Zone first: the window asks for the area before anything else');
+{
+    const ZC = { lat: 46.8, lng: 23.6 };
+    // The harness has no js/translations.js; give the zone keys their English
+    // strings so the assertions read what a user would.
+    sandbox.translations = { en: {
+        arch_report_zone_none: 'No area chosen yet',
+        arch_report_zone_required: 'Choose the search area first — the settings below unlock after that.',
+        arch_report_zone_ready: 'Area set. Change the settings below, then press Generate report.',
+        arch_report_zone_pick: 'Choose the area on the map',
+        arch_report_zone_move: 'Move the search area',
+        arch_report_pick_prompt: 'Click on the map to place the centre of the search area.',
+        arch_report_move_prompt: 'Click on the map to move the search area. Escape keeps the current one.',
+        arch_report_settings_stale: 'Settings changed — the map still shows the previous area. Press Generate report to run again.',
+        arch_report_ready: 'Ready. Press Generate report.',
+        arch_report_hint: 'Switch the layer on and pick a point on the map.',
+        arch_report_point_set: 'Point set at {lat}, {lng}.'
+    } };
+    sandbox._currentLang = () => 'en';
+    const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+    check('the window opens with the area group above the settings',
+        html.indexOf('id="archReportZoneGroup"') !== -1 &&
+        html.indexOf('id="archReportZoneGroup"') < html.indexOf('data-key="arch_report_opt_baseline"'));
+    check('the area group has its own pick button and value line',
+        html.indexOf('id="archReportZonePickBtn"') !== -1 && html.indexOf('id="archReportZoneValue"') !== -1);
+    check('the run button lives inside the window, in its own actions row',
+        html.indexOf('id="archReportPanel"') < html.indexOf('id="archReportRunBtn"') &&
+        html.indexOf('id="archReportRunBtn"') < html.indexOf('/arch-report-host -->'));
+
+    // A layer switched on with no area: everything below stays locked.
+    sandbox.toggleArcheoReportLayer(false);
+    check('switching the layer off forgets the area', R.zonePicked() === false);
+    sandbox.toggleArcheoReportLayer(true);
+    check('the window is marked as awaiting the area',
+        fakeEl('archReportPanel').classList.contains('is-awaiting-zone') === true);
+    ['archReportBaselineApm20', 'archReportBaselineCustom', 'archReportBaselineTrain',
+     'archReportBonusRoads', 'archReportBonusPotential', 'archReportBonusLidar',
+     'archReportIgnoreLidar', 'archReportDistance', 'archReportResultCount'].forEach(id => {
+        check('#' + id + ' is locked until an area exists', fakeEl(id).disabled === true);
+    });
+    check('the zone line says nothing is chosen yet', /No area chosen/.test(fakeEl('archReportZoneValue').textContent),
+        fakeEl('archReportZoneValue').textContent);
+    check('the zone note explains the order', /Choose the search area first/.test(fakeEl('archReportZoneNote').textContent),
+        fakeEl('archReportZoneNote').textContent);
+    check('the pick button asks to choose the area', /Choose the area/.test(fakeEl('archReportZonePickLabel').textContent));
+    check('the run button is not offered before an area exists', fakeEl('archReportRunBtn').style.display === 'none');
+
+    // The LiDAR-3D pattern: the card steps aside and the map says what a tap does.
+    fakeEl('archReportZonePickBtn').fire('click');
+    check('picking steps the window aside', fakeEl('archReportPanel').hidden === true);
+    check('the map switches to picking', sandbox.document.body.classList.contains('arch-zone-picking'));
+    check('the status asks for a click on the map',
+        /Click on the map to place/.test(fakeEl('archReportStatus').textContent),
+        fakeEl('archReportStatus').textContent);
+
+    // Escape backs out without touching the area.
+    sandbox.document.dispatchEvent({ type: 'keydown', key: 'Escape' });
+    check('Escape brings the window back', fakeEl('archReportPanel').hidden === false);
+    check('Escape leaves picking mode', !sandbox.document.body.classList.contains('arch-zone-picking'));
+
+    // The click that sets the area unlocks the window — and runs nothing.
+    R.onMapClick({ latlng: { lat: ZC.lat, lng: ZC.lng } });
+    check('the chosen area is remembered', R.zonePicked() === true &&
+        Math.abs(sandbox._archeoReportState().point.lat - ZC.lat) < 1e-9);
+    check('the window comes back after the click', fakeEl('archReportPanel').hidden === false);
+    check('the lock is lifted', !fakeEl('archReportPanel').classList.contains('is-awaiting-zone') &&
+        fakeEl('archReportBaselineTrain').disabled === false &&
+        fakeEl('archReportBonusPotential').disabled === false &&
+        fakeEl('archReportResultCount').disabled === false);
+    check('the zone line shows the coordinates and the radius',
+        /46\.80000/.test(fakeEl('archReportZoneValue').textContent) && /km/.test(fakeEl('archReportZoneValue').textContent),
+        fakeEl('archReportZoneValue').textContent);
+    check('the pick button becomes a move button',
+        fakeEl('archReportZonePickBtn').classList.contains('is-move') === true &&
+        /Move the search area/.test(fakeEl('archReportZonePickLabel').textContent));
+    check('placing an area never starts the analysis by itself',
+        !sandbox._archeoReportState().results.length && sandbox._archeoReportState().model === null);
+    check('the run button is offered once an area exists', fakeEl('archReportRunBtn').style.display === '');
+
+    // Moving the area re-arms the picker the same way.
+    fakeEl('archReportZonePickBtn').fire('click');
+    check('moving steps the window aside too', fakeEl('archReportPanel').hidden === true &&
+        sandbox.document.body.classList.contains('arch-zone-picking'));
+    check('and asks to move, not to choose', /Click on the map to move/.test(fakeEl('archReportStatus').textContent),
+        fakeEl('archReportStatus').textContent);
+    R.cancelZonePick();
+    check('cancelling a move keeps the current area', R.zonePicked() === true &&
+        fakeEl('archReportPanel').hidden === false);
+    delete sandbox.translations;
+}
+
+/* ═══════════════ 6e. settings never start the report on their own ════════ */
+section('Settings never start the report by themselves');
+{
+    const ZC = { lat: 46.8, lng: 23.6 };
+    sandbox.translations = { en: {
+        arch_report_zone_none: 'No area chosen yet',
+        arch_report_zone_required: 'Choose the search area first — the settings below unlock after that.',
+        arch_report_zone_ready: 'Area set. Change the settings below, then press Generate report.',
+        arch_report_zone_pick: 'Choose the area on the map',
+        arch_report_zone_move: 'Move the search area',
+        arch_report_pick_prompt: 'Click on the map to place the centre of the search area.',
+        arch_report_move_prompt: 'Click on the map to move the search area. Escape keeps the current one.',
+        arch_report_settings_stale: 'Settings changed — the map still shows the previous area. Press Generate report to run again.',
+        arch_report_ready: 'Ready. Press Generate report.',
+        arch_report_hint: 'Switch the layer on and pick a point on the map.',
+        arch_report_point_set: 'Point set at {lat}, {lng}.'
+    } };
+    sandbox._currentLang = () => 'en';
+    // No area yet: a settings change is inert.
+    sandbox.toggleArcheoReportLayer(false);      // also forgets the area
+    sandbox.toggleArcheoReportLayer(true);
+    check('the layer is on again with no area', R.zonePicked() === false);
+    R.setBaseline('nextgen_train');
+    check('with no area, a baseline change starts nothing', sandbox._archeoReportState().model === null);
+
+    R.onMapClick({ latlng: { lat: ZC.lat, lng: ZC.lng } });
+    check('the window reports the chosen area',
+        /Point set/.test(fakeEl('archReportStatus').textContent), fakeEl('archReportStatus').textContent);
+
+    R.setBaseline('nextgen_custom');
+    fakeEl('archReportPeriod').value = 'bronz';
+    fakeEl('archReportPeriod').fire('change');
+    fakeEl('archReportBonusPotential').checked = false;
+    fakeEl('archReportBonusPotential').fire('change');
+    fakeEl('archReportResultCount').value = '7';
+    fakeEl('archReportResultCount').fire('change');
+    fakeEl('archReportIgnoreLidar').checked = true;
+    fakeEl('archReportIgnoreLidar').fire('change');
+    check('changing baseline, period, bonuses, count or the LIDAR switch runs nothing',
+        sandbox._archeoReportState().model === null &&
+        sandbox._archeoReportState().running === false);
+    check('the window says the analysis is still waiting for the button',
+        /Ready\. Press Generate report/.test(fakeEl('archReportStatus').textContent),
+        fakeEl('archReportStatus').textContent);
+    check('the changed values are read from the window', R.readSettings().resultCount === 7 &&
+        R.readSettings().ignoreLidar === true && R.readSettings().bonuses.potential === false);
+    fakeEl('archReportResultCount').value = '3';
+    fakeEl('archReportBonusPotential').checked = true;
+    fakeEl('archReportIgnoreLidar').checked = false;
+    fakeEl('archReportPeriod').value = 'all';
+    R.setBaseline('apm20');
+    delete sandbox.translations;
+}
+
 /* ═══════════════ 7. period estimation ═══════════════ */
 section('Period estimation');
 {
@@ -1246,6 +1408,19 @@ section('End-to-end analysis (runReport)');
         clamped10 && clamped10.meta.requestedResults === 10 && clamped10.results.length <= 10,
         clamped10 && clamped10.meta.requestedResults);
     fakeEl('archReportResultCount').value = '3';
+
+    // A finished report is never re-run by a settings change: the user presses
+    // "Generate report" when they want a new one.
+    const finished = sandbox._archeoReportState().model;
+    fakeEl('archReportBonusLidar').checked = false;
+    fakeEl('archReportBonusLidar').fire('change');
+    check('a settings change does not replace a finished report',
+        sandbox._archeoReportState().model === finished && sandbox._archeoReportState().running === false);
+    check('and the window says the map is showing the previous settings',
+        /arch_report_settings_stale|Settings changed/.test(fakeEl('archReportStatus').textContent),
+        fakeEl('archReportStatus').textContent);
+    fakeEl('archReportBonusLidar').checked = true;
+    fakeEl('archReportBonusLidar').fire('change');
 
     /* ═══════════════ 11. end-to-end PDF ═══════════════ */
     section('End-to-end PDF');

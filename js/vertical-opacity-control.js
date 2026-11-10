@@ -151,14 +151,18 @@
        Raport arheologic) au un slider de distanță/rază în panou. Când stratul
        e apăsat — clic pe rând sau comutatorul pornit — sliderul e oglindit
        vertical pe hartă exact ca opacitatea, iar butonul de acțiune al
-       stratului (Scan / Detectează / Generează raport) e mutat în dock-ul
-       centrat în partea de jos a ecranului principal. Înregistrarea e pe id
-       (nu după șablonul „Opacity”), ca unitatea, eticheta și acțiunile să
-       poată fi specifice fiecărui strat. */
+       stratului (Scan / Detectează) e mutat în dock-ul centrat în partea de jos
+       a ecranului principal. Înregistrarea e pe id (nu după șablonul
+       „Opacity”), ca unitatea, eticheta și acțiunile să poată fi specifice
+       fiecărui strat.
+
+       Raportul arheologic are `actions: []` intenționat: „Generează raportul”
+       stă numai în fereastra de configurare a stratului, nu plutind pe ecran.
+       Sliderul lui de rază își păstrează oglinda verticală. */
     var DISTANCE_SOURCES = [
         { id: 'lidarScannerDistance', toggle: 'lidarScannerToggle', actions: ['lidarScannerRun'], caption: 'distance' },
         { id: 'archeoPotDistance', toggle: 'archeoPotToggle', actions: ['archeoPotRunBtn'], caption: 'radius' },
-        { id: 'archReportDistance', toggle: 'archReportToggle', actions: ['archReportRunBtn'], caption: 'radius' }
+        { id: 'archReportDistance', toggle: 'archReportToggle', actions: [], caption: 'radius' }
     ];
 
     function distanceDef(sliderId) {

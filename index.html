@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="css/leaflet.photon.css">
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20261106-hoards">
+    <link rel="stylesheet" href="css/styles.css?v=20261109-arch-report-zone">
     <!-- 3D TERRAIN VIEW (2D ⇄ 3D) — MapLibre GL JS, vendored like Leaflet.
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
@@ -4410,7 +4410,26 @@
                         </div>
                     </header>
 
-                    <div class="apm-group">
+                    <!-- Zone first: the layer is useless without an area, so the window
+                         asks for it before anything else and the configuration below
+                         stays locked until a point exists. "Move" mirrors the LiDAR 3D
+                         card's "Mută punctul". -->
+                    <div class="apm-group arch-report-zone-group" id="archReportZoneGroup">
+                        <div class="apm-group-title t" data-key="arch_report_zone_title">1 · Search area</div>
+                        <div class="arch-report-zone">
+                            <button type="button" id="archReportZonePickBtn" class="arch-report-zone-btn">
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="flex-shrink:0">
+                                    <circle cx="6" cy="6" r="4.6" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 1.6"/>
+                                    <circle cx="6" cy="6" r="1.3" fill="currentColor"/>
+                                </svg>
+                                <span id="archReportZonePickLabel" class="t" data-key="arch_report_zone_pick">Choose the area on the map</span>
+                            </button>
+                            <span id="archReportZoneValue" class="arch-report-zone-value">—</span>
+                        </div>
+                        <div class="apm-note" id="archReportZoneNote" role="status"></div>
+                    </div>
+
+                    <div class="apm-group arch-report-config">
                         <div class="apm-group-title t" data-key="arch_report_opt_baseline">Baseline</div>
                         <input type="hidden" id="archReportBaseline" value="apm20">
                         <div class="apm-tabs" role="group" aria-label="Baseline">
@@ -4427,7 +4446,7 @@
                         <div class="apm-note" id="archReportPeriodNote" role="status"></div>
                     </div>
 
-                    <div class="apm-group">
+                    <div class="apm-group arch-report-config">
                         <div class="apm-group-title t" data-key="arch_report_opt_bonus">Bonus scoring</div>
                         <div class="apm-checks">
                             <label class="apm-check"><input type="checkbox" id="archReportBonusRoads" checked><span class="t" data-key="arch_report_bonus_roads">Roman road proximity</span></label>
@@ -4438,7 +4457,7 @@
                         <div class="apm-note t" data-key="arch_report_ignore_lidar_hint">Tick to exclude the scanner entirely (its 100 m result rings reject candidates). Unchecked, the points only raise the score of an area that is already optimal from the APM baseline and lies near a fortification, burgus or tumulus — never an automatic 100 %.</div>
                     </div>
 
-                    <div class="apm-group">
+                    <div class="apm-group arch-report-config">
                         <div class="arch-report-control"><span>Search radius / Rază</span><strong id="archReportDistanceValue">3 km</strong></div>
                         <input type="range" class="transp-slider" id="archReportDistance" min="1" max="10" value="3" step="1" aria-label="Search radius from 1 to 10 kilometres">
                         <label class="apm-field" for="archReportResultCount">
@@ -4463,7 +4482,7 @@
                         </label>
                     </div>
 
-                    <div class="apm-actions">
+                    <div class="apm-actions" id="archReportActions">
                         <button id="archReportRunBtn" type="button" class="arch-report-button" style="display:none" disabled>
                             <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style="flex-shrink:0">
                                 <circle cx="6.5" cy="6.5" r="4.4" fill="none" stroke="#66c8ff" stroke-width="1.2"/>
@@ -5359,7 +5378,7 @@
     </footer>
 
     <script src="js/ios-input-focus.js?v=20261102-ios-viewport-settle"></script>
-    <script src="js/translations.js?v=20261109-arch-report-results"></script>
+    <script src="js/translations.js?v=20261109-arch-report-zone"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
     <script src="js/leaflet.js"></script>
@@ -5561,7 +5580,7 @@
          overlays. Builds its own rows into #hoardsSubLayers and attaches
          itself to the live map once it exists. See HOARDS_LAYERS.md. -->
     <script src="js/hoards-layers.js?v=20261106-hoards"></script>
-    <script src="js/vertical-opacity-control.js?v=20261102-ro-heritage"></script>
+    <script src="js/vertical-opacity-control.js?v=20261109-arch-report-zone"></script>
     <!-- leaflet-heat rămâne în shell (pre-cache), dar nu mai e folosit de
          „Archeological Potential Sites": heatmap-ul de acolo e propriul raster de
          scoruri ancorat geografic, ca să nu alunece la zoom. -->
@@ -5601,9 +5620,9 @@
     <!-- Premium "Archeological Report" / "Raport arheologic": PDF writer →
          PDF layout → the analysis layer itself (this order matters). -->
     <script src="js/pdf-writer.js?v=20260827-arch-report"></script>
-    <script src="js/archeo-report-pdf.js?v=20261109-arch-report-results"></script>
-    <script src="js/archeo-report.js?v=20261109-arch-report-results"></script>
-    <script src="js/tutorial.js?v=20261109-arch-report-results"></script>
+    <script src="js/archeo-report-pdf.js?v=20261109-arch-report-zone"></script>
+    <script src="js/archeo-report.js?v=20261109-arch-report-zone"></script>
+    <script src="js/tutorial.js?v=20261109-arch-report-zone"></script>
 
     <!-- AUTH MODAL -->
     <style>
