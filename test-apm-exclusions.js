@@ -311,8 +311,8 @@ function assertTextureMasked(heatmap, sourceMask, label) {
     const TAG = '20261102-apm-continuous-heat', BOUNDED = '20261102-apm-train-bounded-grid';
     const PARALLEL = '20261102-apm-parallel-fetch';
     for (const [file, version] of [['apm-heatmap', TAG],
-        ['apm-raster', '20261109-apm-run-overlay'], ['apm-i18n', '20261109-apm-ariadne-grid'], ['apm-pipeline', '20261109-apm-ariadne-grid'],
-        ['apm-ui', '20261109-apm-ariadne-grid']]) {
+        ['apm-raster', '20261109-apm-run-overlay'], ['apm-i18n', '20261111-apm-denmark-train'], ['apm-pipeline', '20261111-apm-denmark-train'],
+        ['apm-ui', '20261111-apm-denmark-train']]) {
         const tag = 'js/apm-next/' + file + '.js?v=' + version;
         assert.ok(html.includes(tag) && sw.includes(tag), file + ' is versioned and precached');
     }
@@ -329,8 +329,11 @@ function assertTextureMasked(heatmap, sourceMask, label) {
     assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + BAND_TAG));
     assert.ok(sw.includes('js/apm-next/apm-polygonise.js?v=' + BAND_TAG));
     assert.ok(read('js/apm-next/apm-worker.js').includes("'apm-polygonise.js?v=" + BAND_TAG + "'"));
-    assert.ok(html.includes('js/archeo-potential.js?v=' + TAG));
+    // The potential layer was re-tagged for the Danish edition (v420); the older
+    // heat tag stays precached in sw.js for shells that have not refreshed.
+    assert.ok(html.includes('js/archeo-potential.js?v=20261110-arch-dk'));
     assert.ok(sw.includes('js/archeo-potential.js?v=' + TAG));
+    assert.ok(sw.includes('js/archeo-potential.js?v=20261110-arch-dk'));
     assert.ok(read('js/apm-next/apm-worker.js').includes("'apm-heatmap.js?v=" + TAG + "'"), 'worker imports the new heat module');
     // The shell cache keeps moving (v388 parallel-fetch → … → v392 report
     // window); only require that it never falls back below that release.

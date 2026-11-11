@@ -388,3 +388,23 @@ region from the console.
 * **The threshold values differ by country on purpose.** A Danish candidate may
   sit 130 m from a monument while a Romanian one must stay 700 m away; the two
   radii come from two different legal regimes, not from a tuning choice.
+
+### The same register as the TRAIN site source (2026-11-11)
+
+The potential layer and the report read `api/geo/dk-heritage`-style WFS queries;
+**APM Next-Gen TRAIN reads the same register separately**, through
+`js/apm-next/apm-denmark-sites.js`, because TRAIN needs a different shape
+(categories, periods, deduplication) and must not inherit the analysis cache or
+the 1 500-feature cap of the map layer. The swap point is `settlementGetSites()`
+in `apm-ui.js`:
+
+* centre inside the Danish bbox → `DetectLabApmDenmarkSites` (settlements:
+  `Kulturlag`, `%grube%`, `%ildsted%`, `%stolpehul%`; hoards: `%depotfund%`,
+  `%mønt%`);
+* centre anywhere else → the previous source, untouched.
+
+One record per locality (`stednr`), the register's own `datering` turned into a
+period through a reviewed table, 50 m working accuracy, 2 000 features per
+request / 4 000 per category, every cap and every failure surfaced in the status
+line and in `_meta`. Details, counts and limitations: `NEXT_GEN_APM.md`
+§ *TRAIN in Denmark*.

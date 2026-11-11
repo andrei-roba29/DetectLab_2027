@@ -18,7 +18,10 @@
     function groups(records){
         var meta=records._meta||{}, counts=meta.period_counts;
         if(!counts){counts={};records.forEach(function(r){(r.periodGroups||[]).forEach(function(k){counts[k]=(counts[k]||0)+1;});});}
-        return config.periodGroups.concat(config.romanianPeriods).filter(function(g){return counts[g.key]>0;}).map(function(g){
+        // Danish hoards (Fund og Fortidsminder) carry their own period keys, so the
+        // picker must offer them next to the Romanian and Roman-era groups.
+        var catalogue = config.periodGroups.concat(config.romanianPeriods, config.danishPeriodGroups || []);
+        return catalogue.filter(function(g){return counts[g.key]>0;}).map(function(g){
             return {key:g.key,group:g.key,label:g.label,start:g.start,end:g.end,count:counts[g.key],selectable:true};
         });
     }

@@ -515,11 +515,89 @@
         return outsideProviderCache;
     }
 
+    /* Denmark answers from Fund og Fortidsminder (CC0): settlements from the
+     * register's habitation vocabulary, hoards from Depotfund + Møntfund. The
+     * module is standalone; without it the previous behaviour stays. */
+    function denmarkApi() { return root.DetectLabApmDenmarkSites || null; }
+
+    function insideDenmark(centre) {
+        var api = denmarkApi();
+        return !!(api && centre && api.insideDenmark(centre.lat, centre.lon));
+    }
+
+    var denmarkProviderCache;
+    function denmarkProvider() {
+        if (denmarkProviderCache !== undefined) return denmarkProviderCache;
+        denmarkProviderCache = null;
+        try {
+            var api = denmarkApi();
+            if (api) denmarkProviderCache = api.createProvider();
+        } catch (error) {
+            denmarkProviderCache = null;
+        }
+        return denmarkProviderCache;
+    }
+
     function settlementGetSites(centre, radiusKm, token) {
+        // Denmark first: the national register is the only site source wired for
+        // Danish ground, and it says so in the status line.
+        var dk = denmarkProvider();
+        if (dk && insideDenmark(centre)) {
+            return dk.getSites(centre, radiusKm, { token: token, signal: token && token.signal });
+        }
         var provider = outsideProvider();
         var inside = root.DetectLabRomaniaApmSites.insideRomania(centre.lat, centre.lon);
         if (provider && !inside) return provider.getSites(centre, radiusKm, { token: token, signal: token.signal });
         return root.DetectLabRomaniaApmSites.createProvider().getSites(centre, radiusKm, { token: token });
+    }
+
+    /** True when the loaded site list came from the Danish register. */
+    function denmarkRegion() {
+        return !!(state.records && state.records._meta && state.records._meta.region === 'denmark');
+    }
+
+    /** Status line for the Danish register: counts, types, truncation, failures. */
+    function denmarkStatus(meta, isHoardRun) {
+        var src = (meta && meta.sources && meta.sources.register) || {};
+        var types = (meta && meta.featureTypes) || {};
+        var parts = Object.keys(types).map(function (k) { return k + ' ' + types[k]; });
+        var notes = [];
+        if (src.truncated) notes.push(T('train.denmarkTruncated', { n: src.truncated }));
+        if (src.droppedOverBudget) notes.push(T('train.denmarkBudget', { n: src.droppedOverBudget }));
+        if (src.failed && src.ok) notes.push(T('train.denmarkPartial', { n: src.failed }));
+        return T(isHoardRun ? 'hoard.denmarkLoaded' : 'train.denmarkLoaded', {
+            n: (meta && meta.returned) || 0,
+            features: src.features || 0,
+            parts: parts.join(', ') || '—',
+            failed: !src.ok ? ' ' + T('train.denmarkFailed', { msg: (src.errors || []).join('; ') || '—' }) : '',
+            notes: notes.length ? T('train.outsideNotes', { msg: notes.join('; ') }) : ''
+        });
+    }
+
+    /** Where the positives came from, for the exported result. */
+    function siteSourceInfo() {
+        if (state.siteInput === 'csv') {
+            return { id: 'csv', label: 'Uploaded CSV', url: null, positionAccuracy: 'CSV supplied accuracy' };
+        }
+        if (denmarkRegion()) {
+            return isHoard()
+                ? { id: 'denmark-heritage-hoards', label: 'Fund og Fortidsminder — Denmark (Depotfund / Møntfund)',
+                    url: 'kulturarv.dk WFS (public:fundogfortidsminder_punkt_*)', positionAccuracy: 'Feature points; 50 m working value' }
+                : { id: 'denmark-heritage', label: 'Fund og Fortidsminder — Denmark',
+                    url: 'kulturarv.dk WFS (public:fundogfortidsminder_punkt_*)', positionAccuracy: 'Feature points; 50 m working value' };
+        }
+        if (isHoard()) {
+            return { id: 'hoards', label: 'DARMC / RAN hoards', url: 'Supabase apm_hoards_within RPC',
+                positionAccuracy: 'Position class from the source row' };
+        }
+        if (outsideRegion()) {
+            return { id: 'dare+ariadne', label: 'DARE + ARIADNE (outside Romania)',
+                url: 'DARE geojson.php + ARIADNE portal /api/search',
+                positionAccuracy: 'Merged catalogues; DARE points and ARIADNE geopoints or 152 m grid cells (110 m)' };
+        }
+        return { id: 'romania-repertory', label: 'Romanian National Archaeological Repertory',
+            url: 'Supabase archaeological_sites_a RPC',
+            positionAccuracy: 'COORD=DA; empty opt-in=' + !!root.DetectLabRomaniaApmConfig.includeEmptyCoord };
     }
 
     /** The position-accuracy ceiling the outside catalogues need (see apm-outside-sites). */
@@ -592,7 +670,9 @@
         setStatus(T('train.loading'), 'busy');
         updateGate();
         (isHoard()
-            ? hoardRecords().createProvider().getSites(state.centre, trainingKm(), { token: token, filters: { include_approximate: state.includeApproximate } })
+            ? (insideDenmark(state.centre) && denmarkProvider()
+                ? denmarkProvider().getHoards(state.centre, trainingKm(), { token: token, signal: token && token.signal })
+                : hoardRecords().createProvider().getSites(state.centre, trainingKm(), { token: token, filters: { include_approximate: state.includeApproximate } }))
             : settlementGetSites(state.centre, trainingKm(), token)).then(function (records) {
             if (token.cancelled) return;
             state.records = records;
@@ -605,13 +685,19 @@
                 setStatus(T('train.outsideRomania'), 'error');
             }
             loadPeriods();
+            if (records._meta && records._meta.region === 'denmark') {
+                setStatus(denmarkStatus(records._meta, isHoard()), records._meta.incomplete ? 'warn' : 'ok');
+                // Below ten positives the run is blocked; a CSV stays the escape hatch.
+                if (records.length < 10) { state.csvAllowed = true; if (els.csvRow) els.csvRow.hidden = false; }
+            }
             if (records._meta && records._meta.region === 'outside-romania') {
                 setStatus(outsideStatus(records._meta), records._meta.incomplete ? 'warn' : 'ok');
                 // Same rule as the hoards: below ten the run is blocked, and a CSV is the
                 // way out. Offer it instead of leaving a dead end.
                 if (records.length < 10) { state.csvAllowed = true; if (els.csvRow) els.csvRow.hidden = false; }
             }
-            if (!(records._meta && records._meta.outsideRomania) && !(records._meta && records._meta.region === 'outside-romania')) {
+            if (!(records._meta && records._meta.outsideRomania) &&
+                !(records._meta && (records._meta.region === 'outside-romania' || records._meta.region === 'denmark'))) {
                 var meta = records._meta || {};
                 setStatus(T(isHoard() && meta.insufficient ? 'hoard.countBlock' : periodNoteKey(true), { n: meta.usable || 0 }), isHoard() && meta.insufficient ? 'error' : 'ok');
                 // A zero because the toggle is off is not the same as a zero because
@@ -755,15 +841,21 @@
                 params = {
                     centre: state.centre,
                     records: state.records,
-                    siteSource: { id: state.siteInput === 'csv' ? 'csv' : isHoard() ? 'hoards' : outsideRegion() ? 'dare+ariadne' : 'romania-repertory',
-                        label: state.siteInput === 'csv' ? 'Uploaded CSV' : isHoard() ? 'DARMC / RAN hoards' : outsideRegion() ? 'DARE + ARIADNE (outside Romania)' : 'Romanian National Archaeological Repertory',
-                        selectedPeriod: state.period || 'all', url: state.siteInput === 'csv' ? null : isHoard() ? 'Supabase apm_hoards_within RPC' : outsideRegion() ? 'DARE geojson.php + ARIADNE portal /api/search' : 'Supabase archaeological_sites_a RPC',
-                        retrievedAt: state.sitesRetrievedAt, positionAccuracy: state.siteInput === 'csv' ? 'CSV supplied accuracy' : outsideRegion() ? 'Merged catalogues; DARE points and ARIADNE geopoints or 152 m grid cells (110 m)' : 'COORD=DA; empty opt-in=' + !!root.DetectLabRomaniaApmConfig.includeEmptyCoord },
+                    siteSource: Object.assign({}, siteSourceInfo(), {
+                        selectedPeriod: state.period || 'all',
+                        retrievedAt: state.sitesRetrievedAt,
+                        label: siteSourceInfo().label,
+                        url: siteSourceInfo().url,
+                        positionAccuracy: siteSourceInfo().positionAccuracy
+                    }),
                     // Restricted to Romanian territory only when the Romanian repertory is
                     // the site source. Outside Romania (DARE + ARIADNE) the box itself defines
                     // the background: a Romania-only predicate there rejects every candidate
                     // and the fit ends with "needs both site and background samples".
-                    backgroundAllowed: state.siteInput === 'csv' || isHoard() || outsideRegion() ? null
+                    // The Romanian predicate answers "is this inside the national
+                    // repertory's territory?"; it is wrong for every non-Romanian source,
+                    // Denmark included, and would leave zero background samples.
+                    backgroundAllowed: state.siteInput === 'csv' || isHoard() || outsideRegion() || denmarkRegion() ? null
                         : function (lat, lon) { return root.DetectLabRomaniaApmSites.insideRomania(lat, lon); },
                     period: state.period,
                     // Same prediction window as settlements: the result must cover

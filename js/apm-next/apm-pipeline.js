@@ -584,6 +584,9 @@
         // Outside Romania the merged catalogues publish grid-cell points with a
         // 110 m positional error: filter them with the ceiling they were published for.
         var outsideRecords = !!(siteMeta && siteMeta.region === 'outside-romania');
+        // Denmark answers from its own register (Fund og Fortidsminder), not from
+        // the national repertory: same consequences for backgrounds, see below.
+        var denmarkRecords = !!(siteMeta && siteMeta.region === 'denmark');
         var sel = isHoard ? hoardProvider.filter(params.records, centre, params.period) : sites.filterSites(params.records, { center: centre, radiusKm: TRAIN_AREA_KM, period: params.period, dedupeM: -1,
             maxAccuracyM: outsideRecords ? 150 : undefined });
         var nSites = sel.sites.length;
@@ -619,8 +622,10 @@
             var outsideRomania = !!(siteMeta && siteMeta.region === 'outside-romania');
             if (outsideRomania) warnings.push(M('warn.outsideBackground', {},
                 'Sites came from the external catalogues queried for this area. Background points are terrain samples from the same 50 km box, not a national repertory.'));
+            if (denmarkRecords) warnings.push(M('warn.denmarkBackground', {},
+                'Sites came from Fund og Fortidsminder (Slots- og Kulturstyrelsen, CC0). Background points are terrain samples from the same 50 km box, not a national repertory.'));
             bg = sampleBackground(centre, areaM, params.bgCount || 5000, sel.sites, BG_EXCLUDE_M, params.rnd,
-                outsideRomania ? null : params.backgroundAllowed);
+                (outsideRomania || denmarkRecords) ? null : params.backgroundAllowed);
         }
         if (!bg.length) return Promise.reject(core.keyedError('err.noBackground', {},
             'No background samples could be placed inside the 50 km training area.'));
