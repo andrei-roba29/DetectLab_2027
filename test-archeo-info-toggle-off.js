@@ -259,7 +259,10 @@ console.log('\n[Cache busting]');
        ?v=20260922-vo-actions-both-slots), so read the live tag instead of a
        frozen one; the check below still requires sw.js to pre-cache it. */
     const stylesV = ((html.match(/href="css\/styles\.css\?v=([^"]+)"/) || [])[1]) || '';
-    const archeoV = '20261020-3d-analysis-points';
+    /* Tag-ul se citește din pagină (ca styles.css mai sus): fiecare release
+       care atinge stratul îl re-versează, iar un tag înghețat aici doar
+       raportează o regresie care nu există. */
+    const archeoV = ((html.match(/src="js\/archeo-potential\.js\?v=([^"]+)"/) || [])[1]) || '';
     check('index.html requests the bumped styles.css', !!stylesV);
     const translationUrl = (html.match(/src="(js\/translations\.js\?v=[^"]+)"/) || [])[1];
     check('index.html requests versioned translations.js', !!translationUrl);

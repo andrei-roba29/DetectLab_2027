@@ -212,7 +212,7 @@ function load(file) {
 
 const context = vm.createContext(sandbox);
 sandbox.window = sandbox;
-[ 'js/pdf-writer.js', 'js/archeo-report-pdf.js', 'js/archeo-potential.js', 'js/archeo-report.js' ].forEach(function (f) {
+[ 'js/pdf-writer.js', 'js/archeo-report-pdf.js', 'js/archeo-dk-source.js', 'js/archeo-potential.js', 'js/archeo-report.js' ].forEach(function (f) {
     const code = fs.readFileSync(path.join(__dirname, f), 'utf8');
     vm.runInContext(code, context, { filename: f });
 });
@@ -1905,6 +1905,139 @@ section('End-to-end analysis (runReport)');
             const file = ['js/archeo-report.js', 'js/translations.js', 'css/styles.css'][i];
             check('the SW pre-caches ' + file + tag, sw.indexOf("'" + file + tag + "'") !== -1);
         });
+    }
+
+    /* ═══════════════ 12b. Denmark edition ═══════════════ */
+    section('Denmark edition (potential bonus + report)');
+    {
+        const DK = { lat: 56.16, lng: 10.20 };
+        const REG = sandbox.DetectLabArcheoRegions;
+        check('the source module is loaded before the report',
+            !!REG && typeof REG.loadDanishSites === 'function');
+        check('regionFor() picks Denmark for a Danish point', R.regionFor(DK.lat, DK.lng).id === 'DK');
+        check('regionFor() picks Romania for a Romanian point', R.regionFor(46.8, 23.6).id === 'RO');
+        const dkRegion = REG.REGIONS.DK;
+        check('no UAT exclusion outside Romania', R.regionUatApplied(dkRegion) === false &&
+            R.regionUatApplied(REG.REGIONS.RO) === true);
+        const dkRadii = R.regionSiteRadii(dkRegion);
+        check('Danish protection radii are 100 + 25 m',
+            dkRadii.radiusM === 100 && dkRadii.bufferM === 25, dkRadii.radiusM + '+' + dkRadii.bufferM);
+
+        // ── exclusion A disappears, B/C stay ──
+        const baseCtxDk = {
+            center: { x: 0, y: 0 }, lat0: DK.lat, radius: 3000, square: sandbox._archeoReportDebug.analysisArea(DK.lat, DK.lng, 3000),
+            bubbles: [], siteRecords: [], polygons: [], lidarPoints: [], ignoreLidar: false,
+            romanRoadSegs: [], bonus: { roads: false, potential: false, lidar: false },
+            apmGrid: mkApmGrid(4, 4, 100, 5), uatGrid: null, uatApplied: false,
+            siteRadiusM: 100, siteBufferM: 25
+        };
+        const seed = { x: 0, y: 0 };
+        const noUat = R.evaluateSeed(seed, baseCtxDk);
+        check('a seed is evaluated without any UAT grid', noUat.ok === true, JSON.stringify(noUat));
+        const withUat = R.evaluateSeed(seed, Object.assign({}, baseCtxDk, { uatApplied: true }));
+        check('the same seed fails closed when UAT is applied but unreadable',
+            withUat.ok === false && withUat.reason === 'uat_not_red', JSON.stringify(withUat));
+
+        // ── Danish site records read Danish attributes ──
+        const dkRec = { layerId: 0, oid: 'f1', isPolygon: false, lat: DK.lat, lng: DK.lng,
+            props: { __dk: true, anlaegstype: 'Rundhøj', datering: 'Jernalder', frednr: '1234',
+                     url: 'https://www.kulturarv.dk/fundogfortidsminder/Lokalitet/detaljer/?id=1234' } };
+        const info = R.siteInfo(dkRec);
+        check('a Danish site is named by its monument type and dating',
+            info.name === 'Rundhøj' && info.type === 'Rundhøj' && info.period === 'Jernalder',
+            JSON.stringify({ n: info.name, t: info.type, p: info.period }));
+        check('the link goes to Fund og Fortidsminder, never to RAN / CIMEC',
+            /kulturarv\.dk/.test(info.url) && info.ran === null, info.url);
+        const roRec = { layerId: 0, oid: 'r1', isPolygon: false, lat: 46.8, lng: 23.6,
+            props: { NUMESIT: 'Așezarea hallstattiană', CODSIT: '54984', COORD: 'DA' } };
+        const roInfo = R.siteInfo(roRec);
+        check('a Romanian site still links to RAN / CIMEC',
+            /ran\.cimec\.ro/.test(roInfo.url) && roInfo.ran === '54984', roInfo.url);
+
+        // ── end-to-end: APM 2.0 is refused, Next-Gen runs ──
+        const toLatLngDk = (dx, dy) => ({ lat: DK.lat + dy / 111320,
+            lng: DK.lng + dx / (111320 * Math.cos(DK.lat * Math.PI / 180)) });
+        const dkFeatures = [];
+        for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2 + 0.4;
+            const p = toLatLngDk(1600 * Math.cos(a), 1600 * Math.sin(a));
+            dkFeatures.push({
+                type: 'Feature', id: 'dk' + i,
+                geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+                properties: { anlaegstype: 'Rundhøj', datering: 'Jernalder', frednr: '10' + i, url: 'https://www.kulturarv.dk/x' }
+            });
+        }
+        sandbox.fetch = function (url) {
+            const json = (o) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(o) });
+            if (String(url).indexOf('kulturarv.dk') !== -1) {
+                return json(/areal_fredet|linje_fredet/.test(url)
+                    ? { type: 'FeatureCollection', features: [] }
+                    : { type: 'FeatureCollection', features: dkFeatures });
+            }
+            return json({ type: 'FeatureCollection', features: [] });
+        };
+        sandbox._lidarScannerApi = { getPoints: () => [], ensureLoaded: () => Promise.resolve(null) };
+        sandbox._archeoPotentialResetCache();
+
+        sandbox.toggleArcheoReportLayer(true);
+        sandbox._archeoReportSetPoint(DK.lat, DK.lng);
+        R.setBaseline('apm20', false);
+        const refused = await sandbox.runArcheoReport();
+        check('APM 2.0 is refused outside Romania, not silently switched',
+            refused === null && /APM 2\.0/.test(domNodes['archReportStatus'].textContent),
+            domNodes['archReportStatus'].textContent);
+
+        // Next-Gen baseline covering the whole area with the top class.
+        sandbox.DetectLabApmUi = {
+            report: {
+                run: function () {
+                    return Promise.resolve({
+                        geojson: {
+                            type: 'FeatureCollection',
+                            features: [{
+                                type: 'Feature', properties: { class: 'veryhigh' },
+                                geometry: { type: 'Polygon', coordinates: [[
+                                    [DK.lng - 0.10, DK.lat - 0.10], [DK.lng + 0.10, DK.lat - 0.10],
+                                    [DK.lng + 0.10, DK.lat + 0.10], [DK.lng - 0.10, DK.lat + 0.10],
+                                    [DK.lng - 0.10, DK.lat - 0.10]
+                                ]] }
+                            }]
+                        }
+                    });
+                }
+            }
+        };
+        R.setBaseline('nextgen_custom', false);
+        const dkModel = await sandbox.runArcheoReport();
+        check('the Danish report runs on a Next-Gen baseline', !!dkModel);
+        if (dkModel) {
+            check('the model is attributed to Denmark', dkModel.meta.region === 'DK', dkModel.meta.region);
+            check('the model declares that no UAT exclusion was applied',
+                dkModel.meta.uatApplied === false && dkModel.meta.uatAvailable === false,
+                JSON.stringify({ applied: dkModel.meta.uatApplied, available: dkModel.meta.uatAvailable }));
+            check('the clearance threshold is not claimed either',
+                dkModel.thresholds.uatClearanceM === null && dkModel.thresholds.siteRadiusM === 100,
+                JSON.stringify(dkModel.thresholds));
+            check('candidates are scored with the Danish radii',
+                dkModel.results.length > 0, dkModel.results.length);
+            check('the potential zones feed the bonus in Denmark',
+                dkModel.results.every(function (r) {
+                    return r.parts && r.parts.potentialApplied === true &&
+                        typeof r.parts.potentialComp === 'number';
+                }), JSON.stringify(dkModel.results[0] && dkModel.results[0].parts &&
+                    { applied: dkModel.results[0].parts.potentialApplied, comp: dkModel.results[0].parts.potentialComp }));
+            check('the Danish sites are named from Fund og Fortidsminder',
+                dkModel.results.some(function (r) {
+                    return (r.nearestSites || []).some(function (s) { return /kulturarv\.dk/.test(s.url || ''); });
+                }), JSON.stringify(dkModel.results[0] && dkModel.results[0].nearestSites));
+            check('the status names the Denmark edition',
+                /Denmark|Danemarca|CC0/i.test(domNodes['archReportStatus'].textContent),
+                domNodes['archReportStatus'].textContent);
+        }
+
+        // restart the potential layer cache for anything that follows
+        sandbox._archeoPotentialResetCache();
+        R.setBaseline('apm20', false);
     }
 
     /* ═══════════════ 13. translations (RO + EN) ═══════════════ */

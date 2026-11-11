@@ -5385,7 +5385,7 @@
     </footer>
 
     <script src="js/ios-input-focus.js?v=20261102-ios-viewport-settle"></script>
-    <script src="js/translations.js?v=20261109-apm-train-parity"></script>
+    <script src="js/translations.js?v=20261110-arch-dk"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
     <script src="js/leaflet.js"></script>
@@ -5601,9 +5601,9 @@
     <script src="js/apm-next/apm-sites.js?v=20261101-train-source"></script>
     <script src="js/apm-next/romania-periods.config.js?v=20261101-train-source"></script>
     <script src="js/apm-next/apm-providers.js?v=20261101-train-source"></script>
-    <script src="js/apm-next/hoards.config.js?v=20261109-apm-run-overlay"></script>
+    <script src="js/apm-next/hoards.config.js?v=20261111-apm-denmark-train"></script>
     <script src="js/apm-next/apm-hoards.js?v=20261109-apm-run-overlay"></script>
-    <script src="js/apm-next/apm-hoard-provider.js?v=20261109-apm-run-overlay"></script>
+    <script src="js/apm-next/apm-hoard-provider.js?v=20261111-apm-denmark-train"></script>
     <script src="js/apm-next/apm-hoard-scale.js?v=20261109-apm-run-overlay"></script>
     <script src="js/apm-next/apm-romania-sites.js?v=20261109-apm-run-overlay"></script>
     <script src="js/apm-next/ariadne/ariadne.config.js?v=20261109-apm-ariadne-grid"></script>
@@ -5615,21 +5615,28 @@
     <script src="js/apm-next/apm-site-merge.js?v=20261109-apm-ariadne-grid"></script>
     <script src="js/apm-next/apm-dare-sites.js?v=20261109-apm-ariadne-grid"></script>
     <script src="js/apm-next/apm-outside-sites.js?v=20261109-apm-ariadne-grid"></script>
-    <script src="js/apm-next/apm-i18n.js?v=20261109-apm-ariadne-grid"></script>
+    <!-- Denmark: Fund og Fortidsminder as the TRAIN site source (settlements +
+         hoards). Loaded before apm-ui.js, which asks it about Danish points. -->
+    <script src="js/apm-next/apm-denmark-sites.js?v=20261111-apm-denmark-train"></script>
+    <script src="js/apm-next/apm-i18n.js?v=20261111-apm-denmark-train"></script>
     <script src="js/apm-next/apm-train-cache.js?v=20261105-apm-mobile-train"></script>
-    <script src="js/apm-next/apm-pipeline.js?v=20261109-apm-ariadne-grid"></script>
+    <script src="js/apm-next/apm-pipeline.js?v=20261111-apm-denmark-train"></script>
     <script src="js/apm-next/apm-loading-preview.js?v=20261109-apm-run-overlay"></script>
     <script src="js/apm-next/apm-run-overlay.js?v=20261109-apm-run-overlay"></script>
-    <script src="js/apm-next/apm-ui.js?v=20261109-apm-ariadne-grid"></script>
-    <script src="js/archeo-potential.js?v=20261102-apm-continuous-heat"></script>
+    <script src="js/apm-next/apm-ui.js?v=20261111-apm-denmark-train"></script>
+    <!-- Sursa de patrimoniu pe regiuni (RO: RAN în memorie, DK: Fund og
+         Fortidsminder prin WFS). Trebuie încărcată ÎNAINTE de
+         archeo-potential.js, care o întreabă ce regiune are la un punct. -->
+    <script src="js/archeo-dk-source.js?v=20261110-arch-dk"></script>
+    <script src="js/archeo-potential.js?v=20261110-arch-dk"></script>
     <script src="js/lidar-geo.js?v=20260811-latlon"></script>
     <script src="js/lidar-scanner.js?v=20261104-remove-fortification-45-90249"></script>
     <script src="js/library-of-babel.js?v=20261101-ios-flow-keyboard"></script>
     <!-- Premium "Archeological Report" / "Raport arheologic": PDF writer →
          PDF layout → the analysis layer itself (this order matters). -->
     <script src="js/pdf-writer.js?v=20260827-arch-report"></script>
-    <script src="js/archeo-report-pdf.js?v=20261109-apm-train-parity"></script>
-    <script src="js/archeo-report.js?v=20261109-apm-train-parity"></script>
+    <script src="js/archeo-report-pdf.js?v=20261110-arch-dk"></script>
+    <script src="js/archeo-report.js?v=20261110-arch-dk"></script>
     <script src="js/tutorial.js?v=20261109-arch-report-zone"></script>
 
     <!-- AUTH MODAL -->

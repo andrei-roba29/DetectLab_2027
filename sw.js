@@ -1016,7 +1016,7 @@
 //   din vecinii pe care îi acoperă fereastra mutată, iar image-overlay-urile
 //   își mută cele patru colțuri cu aceiași metri. O poziție aliniată o dată
 //   e aceeași în ambele vizualizări. Vezi HISTORICAL_MAP_SHIFT.md §5.
-const CACHE_NAME = 'detectlab-v419-apm-ariadne-grid';
+const CACHE_NAME = 'detectlab-v421-apm-denmark-train';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1056,6 +1056,24 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 //   scale bar (measured as --m3d-basemap-lift) — instead of disappearing with
 //   the rest of the Leaflet control container. Re-tags css/map3d-terrain.css
 //   and js/map3d-terrain.js.
+// v421: TRAIN gains the Danish site source. Inside Denmark the positives come from
+//   Fund og Fortidsminder (CC0): settlements from the register's habitation
+//   vocabulary (kulturlag / grube / ildsted / stolpehul, matched by CQL and named
+//   type-by-type) and hoards from Depotfund + Møntfund only — one point per
+//   locality (`stednr`), never one per feature, and `Enkeltfund` is excluded on
+//   purpose. Danish periods come from the register's own `datering` text through a
+//   reviewed table. Backgrounds in Denmark are terrain samples from the same 50 km
+//   box, not the Romanian repertory predicate. Re-tags apm-ui.js, apm-pipeline.js,
+//   apm-i18n.js, hoards.config.js and apm-hoard-provider.js.
+// v420: the archaeological potential layer and the archaeological report gain a
+//   Denmark edition. The scoring, triangulation, bubbles and heat are unchanged;
+//   only the site source and the exclusions differ. js/archeo-dk-source.js maps
+//   the public Fund og Fortidsminder WFS (CC0) onto the same {0: points,
+//   6: polygons} collections the map already feeds from RAN, so Danes use
+//   100 m + 25 m protection radii instead of 600 + 100 m and no UAT exclusion
+//   (Denmark has no built-up raster in the app); the report refuses APM 2.0
+//   outside Romania and asks for a Next-Gen baseline. Re-tags archeo-potential.js,
+//   archeo-report.js, archeo-report-pdf.js and translations.js.
 // v419: outside Romania, the ARIADNE portal's density-grid answer is no longer
 //   thrown away: one point per 152 m cell (110 m error, named as a cell), always
 //   named next to DARE in the status, with the portal's own counts. The six
@@ -1094,9 +1112,15 @@ const PRECACHE_URLS = [
   'js/apm-next/apm-site-merge.js?v=20261109-apm-ariadne-grid',
   'js/apm-next/apm-dare-sites.js?v=20261109-apm-ariadne-grid',
   'js/apm-next/apm-outside-sites.js?v=20261109-apm-ariadne-grid',
-  'js/archeo-report.js?v=20261109-apm-train-parity',
-  'js/archeo-report-pdf.js?v=20261109-apm-train-parity',
-  'js/translations.js?v=20261109-apm-train-parity',
+  'js/apm-next/apm-denmark-sites.js?v=20261111-apm-denmark-train',
+  'js/apm-next/apm-i18n.js?v=20261111-apm-denmark-train',
+  'js/apm-next/apm-pipeline.js?v=20261111-apm-denmark-train',
+  'js/apm-next/apm-ui.js?v=20261111-apm-denmark-train',
+  'js/apm-next/hoards.config.js?v=20261111-apm-denmark-train',
+  'js/apm-next/apm-hoard-provider.js?v=20261111-apm-denmark-train',
+  'js/archeo-report.js?v=20261110-arch-dk',
+  'js/archeo-report-pdf.js?v=20261110-arch-dk',
+  'js/translations.js?v=20261110-arch-dk',
 
   // v399: Romanian Heritage sublayers (reader dependencies are local).
   'js/map-app.js?v=20261102-ro-heritage',
@@ -1183,7 +1207,8 @@ const PRECACHE_URLS = [
   'js/apm-next/apm-heatmap.js?v=20261102-apm-continuous-heat',
   'js/apm-next/apm-ui.js?v=20261102-apm-continuous-heat',
   'js/apm-next/apm-worker.js?v=20261102-apm-continuous-heat',
-  'js/archeo-potential.js?v=20261102-apm-continuous-heat',
+  'js/archeo-dk-source.js?v=20261110-arch-dk',
+  'js/archeo-potential.js?v=20261110-arch-dk',
   // v396: exclusion mask applied as a raster band, not thousands of clipping
   // rings — the TRAIN heatmap no longer exhausts the phone at display time.
   'js/apm-next/apm-polygonise.js?v=20261102-apm-mask-band',
@@ -1941,6 +1966,8 @@ const PRECACHE_URLS = [
   // the layer is switched off (click-through pane + renderer detach).
   'js/archeo-potential.js?v=20261017-archeo-3d-projection',
   'js/archeo-potential.js?v=20261102-apm-train-heat',
+  // Still requested by shells built before the Danish edition re-tagged it (v420).
+  'js/archeo-potential.js?v=20261102-apm-continuous-heat',
   'js/lidar-scanner.js?v=20260922-distance-mirror-close',
   'js/archeo-report.js?v=20260922-distance-mirror-close',
   'js/archeo-report.js?v=20261030-report-exclusions',

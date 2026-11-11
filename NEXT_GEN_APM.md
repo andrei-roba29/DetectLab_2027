@@ -464,3 +464,81 @@ Nothing about safety moved out of the data: `warn.hoardOverride` still travels
 in every result produced under the operator switch, and the result panel lists
 it, so an export cannot be mistaken for a reviewed model. `test-apm-train-network.js`
 asserts the panel no longer contains those texts and that the result still does.
+
+## TRAIN in Denmark — Fund og Fortidsminder as the site source (2026-11-11)
+
+APM Next-Gen TRAIN used to have exactly one settlement source (the Romanian
+National Archaeological Repertory) and one hoard source (DARMC / RAN through
+Supabase). A centre inside the Danish box (54.3–58.0 N, 7.5–16.0 E) now reads
+its positives from **Fund og Fortidsminder** (Slots- og Kulturstyrelsen, CC0)
+instead — for **both** TRAIN categories. Nothing about the Romanian path moved:
+the same point outside Denmark still queries `archaeological_sites_a`, and the
+module is loaded but never called.
+
+| | Settlements (`AȘEZĂRI`) | Hoards (`TEZAURE`) |
+|---|---|---|
+| module | `js/apm-next/apm-denmark-sites.js` (`DetectLabApmDenmarkSites`) | same module, `getHoards()` |
+| layers | `public:fundogfortidsminder_punkt_fredet` + `_punkt_ikkefredet` | same two point layers |
+| CQL (`anlaegstype ILIKE …`) | `Kulturlag`, `%grube%`, `%ildsted%`, `%stolpehul%` | `%depotfund%`, `%mønt%` |
+| verified counts in the DK box, 2026-11-11 | 3 004 / 10 045 / 466 / 366 | 1 117 / 2 193 |
+| record | one per locality (`stednr`) — a place with a cultural layer *and* four pits is one site, `featureCount: 5` | one per locality, `hoardType` from the register's own `anlaegstype` |
+| period | `datering` free text → the reviewed table below | same |
+| position accuracy | 50 m (working value, `positionAccepted: true`) | same |
+
+`Enkeltfund` (44 210 features) is a **single find**, not a hoard, and is
+deliberately left out of the hoard class. `%skattefund%`, `%offerfund%`,
+`%bebyggelse%`, `%boplads%` and `%hustomt%` all answer **0** on this service, so
+no "settlement" or "hoard" flag exists to filter on: the settlement class is the
+register's habitation vocabulary (a cultural layer or a house's post-holes *is*
+a settlement trace) and the hoard class is the two deposit types above. Both
+derivations are ours and are named as such in the status line.
+
+### Dating
+
+`datering` is the only dating the register publishes, and it is coarse
+("Jernalder", "Romersk jernalder", "Oldtid"). The period table in
+`CONFIG.danishPeriods` is consulted **specific → general**, first hit wins, so a
+record that says "Germansk jernalder" is `germansk` and never also plain
+`jernalder`; "Oldtid" is only the fallback. Unrecognised text stays **undated**
+rather than becoming a date. The year ranges are conventional Danish
+boundaries — broad envelopes for filtering, **not** excavated dates — and the
+same table is repeated in `js/apm-next/hoards.config.js`
+(`danishPeriodGroups`) so the hoard period picker can offer the Danish groups
+next to the Roman-era ones.
+
+### Backgrounds — the same trap as outside Romania
+
+`params.backgroundAllowed` is the Romanian repertory predicate. A Danish box
+answers "no" for every candidate, so the fit ends with *needs both site and
+background samples*. The pipeline now recognises `_meta.region === 'denmark'`
+(`denmarkRecords`) and passes `null` — backgrounds are terrain samples from the
+same 50 km box, and the run says so in a `warn.denmarkBackground` line.
+
+### What the panel shows
+
+`train.denmarkLoaded` / `hoard.denmarkLoaded` (RO + EN) name the register, the
+number of localities, the number of raw features behind them, and the per-type
+breakdown; a reached feature cap, the per-run budget or a failed query are
+appended, never swallowed. Below ten positives the run blocks as everywhere else
+and the CSV upload stays available. The exported result records
+`siteSource.id = 'denmark-heritage'` (or `'denmark-heritage-hoards'`) with the
+WFS URL and "Feature points; 50 m working value".
+
+### Known limitations
+
+* **Heritage register, not a settlement census.** Only what has been recorded and
+  left a trace on that layer; a Danish village with no register entry is not a
+  positive. The TRAIN result in Denmark is a comparison against *recorded* sites.
+* **Capped queries.** 2 000 features per request, 4 000 per category, 25 s per
+  request, 8 requests per category. A reached cap is reported as `truncated`.
+* **Accuracy is a working value.** The register publishes no per-feature
+  positional accuracy; 50 m passes the 100 m filter but is not a measurement.
+* **No find-level detail.** The record points at the register's locality page
+  (`url`); the app does not pull the individual find lists.
+* **Easting/northing.** The service silently answers in EPSG:25832 metres when
+  `CQL_FILTER` is sent without `bbox`; every request here always carries
+  `bbox=W,S,E,N,EPSG:4326` (asserted in `test-apm-denmark-sites.js`).
+* `witx.dk` remains disabled — no request is made to that host.
+* Verified against the live service on 2026-11-11 from a machine that could reach
+  `kulturarv.dk`; the sandbox that built this cannot, so the test suite uses
+  fixtures and the counts above are the recorded probe answers.

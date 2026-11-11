@@ -30,6 +30,22 @@
             { key: 'late-roman', label: 'Late Roman / Roman târziu', start: 200, end: 700, source: 'Hobbs 2006; layers 15–16 date range supplied by the user; review required' },
             { key: 'carolingian', label: 'Carolingian / Carolingian', start: 751, end: 987, source: 'Coupland 2011, A Checklist of Carolingian Coin Hoards 751–987, Numismatic Chronicle 171; review required' }
         ],
+        /* Danish period groups for the Fund og Fortidsminder hoards (Denmark has no
+         * national repertory in this app). Same conventional Danish boundaries as
+         * js/apm-next/apm-denmark-sites.js; broad envelopes for filtering, not
+         * excavated dates. */
+        danishPeriodGroups: [
+            { key: 'stenalder', label: 'Stenalder', start: -10000, end: -1700, source: 'Conventional Danish period boundary; broad envelope, review required' },
+            { key: 'bronzealder', label: 'Bronzealder', start: -1700, end: -500, source: 'Conventional Danish period boundary; broad envelope, review required' },
+            { key: 'foerromersk', label: 'Førromersk jernalder', start: -500, end: 1, source: 'Conventional Danish period boundary; broad envelope, review required' },
+            { key: 'romersk', label: 'Romersk jernalder', start: 1, end: 400, source: 'Conventional Danish period boundary; broad envelope, review required' },
+            { key: 'germansk', label: 'Germansk jernalder', start: 400, end: 800, source: 'Conventional Danish period boundary; broad envelope, review required' },
+            { key: 'jernalder', label: 'Jernalder', start: -500, end: 800, source: 'Conventional Danish period boundary; broad envelope, review required' },
+            { key: 'vikingetid', label: 'Vikingetid', start: 793, end: 1066, source: 'Conventional Danish period boundary; broad envelope, review required' },
+            { key: 'middelalder', label: 'Middelalder', start: 1066, end: 1536, source: 'Conventional Danish period boundary; broad envelope, review required' },
+            { key: 'nyere', label: 'Nyere tid', start: 1536, end: 2000, source: 'Conventional Danish period boundary; broad envelope, review required' },
+            { key: 'oldtid', label: 'Oldtid (broad)', start: -10000, end: 1066, source: 'Conventional Danish period boundary; broad envelope, review required' }
+        ],
         // Astronomical ranges. Editorial proposals only; objects, NOT burial dates.
         // Specific phrases are consumed before general ones, while distinct periods survive.
         romanianPeriods: [

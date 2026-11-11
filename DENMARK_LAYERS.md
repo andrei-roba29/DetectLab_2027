@@ -309,3 +309,102 @@ whose licence is unclear or non-commercial ships `enabled: false` with
   checked against the 375 px layout and every switch, slider and info button is
   reachable by keyboard (`Tab`, `Space`, arrow keys, `Escape` for the info
   panel).
+
+## The archaeological layers, Danish edition (2026-11-10)
+
+The two Premium archaeological layers — **„Zone cu potențial arheologic"** and
+**„Raport arheologic"** — are not Romanian-only any more. Their scoring,
+triangulation, bubble packing, heatmap, legend, exclusions and PDF layout are
+**unchanged**; only two inputs are swapped per country, and both swap points are
+explicit in the code:
+
+| | Romania | Denmark |
+|---|---|---|
+| sites | `window._localLayerData[0\|5\|6]` (RAN points, tumuli, RAN polygons) | `js/archeo-dk-source.js` → public `Fund og Fortidsminder` **WFS** (`public:fundogfortidsminder_punkt_fredet`, `_punkt_ikkefredet`, `_areal_fredet`, `_linje_fredet`), CC0 |
+| protection radius | 600 m + 100 m clearance | **100 m + 25 m** (the 100 m `beskyttelseslinje` around ancient monuments, § 18 naturbeskyttelsesloven, plus a 25 m allowance) |
+| built-up (UAT) exclusion | UAT red raster, fail-closed, 500 m clearance in the report | **none** — see below |
+| APM baseline in the report | APM 2.0 or Next-Gen | **Next-Gen only** (APM 2.0's raster stops at the Romanian border) |
+
+### How the Danish sites reach the existing engine
+
+`js/archeo-dk-source.js` is a source adapter, not a second algorithm. It maps
+each WFS `Feature` onto the exact shape `buildGlobalSiteIndex()` already reads
+from `_localLayerData`:
+
+```
+{ 0: FeatureCollection(points), 6: FeatureCollection(polygons) }
+```
+
+* points → layer `0`; `areal_fredet` polygons → layer `6`; `linje_fredet`
+  lines → one point at the **midpoint** of the line (a linear monument is still
+  a monument);
+* properties are trimmed to `anlaegstype`, `datering`, `frednr`, `stednr`,
+  `url`, `betegnelse`, `kommune`, `sogn` and flagged with `__dk: true`, so the
+  report knows `frednr` is not a RAN code and links to
+  `kulturarv.dk/fundogfortidsminder` instead of `ran.cimec.ro`;
+* one request per type, `bbox` in `W,S,E,N` + `EPSG:4326`, capped at 1500
+  features per type and 4000 per run; a reached cap is reported as
+  `truncated`, never hidden;
+* `areal_fredet` falls back to the same-origin proxy `/api/geo/dk-heritage`
+  (400-feature cap) when the direct WFS answer is refused;
+* a 10-minute in-memory cache keyed by the bbox keeps a repeated run off the
+  network; `_archeoPotentialResetCache()` clears it.
+
+If **every** type fails, the run ends with `heritage_unavailable` and says so —
+no empty map, no invented sites. The status line, the info window and the
+report's site table all name the actual source (Slots- og Kulturstyrelsen, CC0).
+
+### Why Denmark gets no UAT exclusion
+
+The `zona roșie` in Romania is the UAT built-up raster: candidates are only
+allowed on land *outside* the built-up area. Denmark has no equivalent raster in
+this app (no Danish UAT/GBB tiles are wired), and inventing one from a WMS
+overlay would be a different product decision. So:
+
+* the potential layer sets `field.uat.applied = false` and never requests a
+  single UAT tile (asserted in `test-archeo-denmark.js`);
+* the report writes `meta.uatApplied: false`, `meta.uatAvailable: false` and
+  `thresholds.uatClearanceM: null`, and the PDF does not claim a UAT clearance;
+* all the *real* exclusions stay: site protection radii (100 + 25 m), site
+  polygon outlines, the analysis circle, and the chosen APM baseline.
+
+Country detection is geometric — a point inside the Danish bbox
+(54.3–58.0 N, 7.5–16.0 E) runs the Danish path, a point inside the Romanian bbox
+runs the Romanian one, and a point in neither keeps the legacy Romanian
+behaviour. `ARCH_POTENTIAL_CONFIG.REGION.OVERRIDE = 'DK'` (or `'RO'`) forces a
+region from the console.
+
+### Known limitations of the Danish edition
+
+* **Bulk coverage is not the goal.** The WFS is queried per analysis window,
+  capped, and never used to replicate the register; the sanctioned route for the
+  full dataset is the official CSV/MapInfo/shp dump (see `DATA_SOURCES.md`).
+* **No dating field per record.** `datering` is free text ("Jernalder",
+  "Bronzealder", "Oldtid"); the report shows it verbatim and only derives a
+  period key when the text matches a known rule — same policy as the Romanian
+  names, which also carry the dating instead of a column.
+* **APM 2.0 cannot be used in Denmark.** The report refuses it with an explicit
+  status message instead of silently switching to Next-Gen.
+* **The threshold values differ by country on purpose.** A Danish candidate may
+  sit 130 m from a monument while a Romanian one must stay 700 m away; the two
+  radii come from two different legal regimes, not from a tuning choice.
+
+### The same register as the TRAIN site source (2026-11-11)
+
+The potential layer and the report read `api/geo/dk-heritage`-style WFS queries;
+**APM Next-Gen TRAIN reads the same register separately**, through
+`js/apm-next/apm-denmark-sites.js`, because TRAIN needs a different shape
+(categories, periods, deduplication) and must not inherit the analysis cache or
+the 1 500-feature cap of the map layer. The swap point is `settlementGetSites()`
+in `apm-ui.js`:
+
+* centre inside the Danish bbox → `DetectLabApmDenmarkSites` (settlements:
+  `Kulturlag`, `%grube%`, `%ildsted%`, `%stolpehul%`; hoards: `%depotfund%`,
+  `%mønt%`);
+* centre anywhere else → the previous source, untouched.
+
+One record per locality (`stednr`), the register's own `datering` turned into a
+period through a reviewed table, 50 m working accuracy, 2 000 features per
+request / 4 000 per category, every cap and every failure surfaced in the status
+line and in `_meta`. Details, counts and limitations: `NEXT_GEN_APM.md`
+§ *TRAIN in Denmark*.

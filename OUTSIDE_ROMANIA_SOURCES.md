@@ -188,3 +188,15 @@ Supabase call happens outside Romania, and the existing CSV path still completes
 - Whether the portal's hits response for a 33 km box is small enough to be quick.
 - What ARIADNE publishes per hit beyond title/subject/geopoint; if a period is
   present in the response it is not being read yet.
+
+## Denmark is a third source, not part of this merge (2026-11-11)
+
+A centre inside Denmark does **not** go through DARE + ARIADNE. It is answered by
+`js/apm-next/apm-denmark-sites.js` (Fund og Fortidsminder, CC0) with
+`_meta.region === 'denmark'`, one record per locality, and the same rule about
+backgrounds: the Romanian repertory predicate cannot be applied outside Romania,
+so the pipeline passes `null` for `region === 'denmark'` exactly as it does for
+`'outside-romania'`. The two providers are deliberately not merged — different
+geometry (register points vs. DARE/ARIADNE cells), different dating policy
+(register `datering` vs. no per-site dates), different provenance label in the
+exported result.
