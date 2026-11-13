@@ -1,0 +1,73 @@
+# Cloudflare Pages response headers for DetectLab.
+# ─────────────────────────────────────────────────────────────────────────────
+# This file is the Cloudflare twin of the single [[headers]] block of
+# netlify.toml. It is NOT placed at the repository root: Netlify publishes "."
+# and reads any _headers file it finds there, so a root-level copy would have
+# changed the live Netlify site. tools/build-cloudflare-dist.mjs copies it into
+# the Cloudflare build output directory instead, and netlify.toml is untouched.
+#
+# Scope notes, from the Cloudflare Pages documentation:
+#   • _headers applies to STATIC ASSET responses only. It is never applied to a
+#     response produced by a Pages Function — those set their own headers in
+#     code (functions/_lib/pages-adapter.js translates the Netlify CDN
+#     directives, so the 7-day tile pins are preserved).
+#   • Rules are merged: a request matching several blocks inherits all of them,
+#     and a header set twice is joined with a comma. The blocks below are
+#     therefore written so that no header is ever set twice for one path.
+#   • The file itself is not served as an asset.
+
+# ── site-wide hardening (additive; Netlify sends no equivalent today) ────────
+# Deliberately minimal. A Content-Security-Policy is NOT added: index.html and
+# the layer modules carry inline scripts and styles and load tiles from dozens
+# of allow-listed government hosts, so a CSP would break the existing frontend,
+# which this migration must not touch. Permissions-Policy is not added either,
+# because the app uses geolocation for the live-location button.
+/*
+  X-Content-Type-Options: nosniff
+
+# ── Google OAuth one-time PKCE callback ──────────────────────────────────────
+# Byte-for-byte the [[headers]] block of netlify.toml: the callback URL carries
+# a one-time code, so it must never be stored, never leak a referrer and never
+# be indexed. Preserved exactly as required by the migration brief.
+/google-auth-callback.html
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+  X-Robots-Tag: noindex, nofollow
+
+# ── the SAME callback, at its extensionless URL ──────────────────────────────
+# wrangler.jsonc sets `assets.html_handling: "none"`, so Pages serves
+# google-auth-callback.html at BOTH `/google-auth-callback.html` and
+# `/google-auth-callback` as a direct 200 — no redirect in either direction
+# (measured with `wrangler pages dev`; see the comment there for the full table).
+#
+# Both spellings must therefore carry the three headers. A `_headers` rule is
+# matched against the URL that produced the response, and each of these URLs now
+# produces its own response, so the block is repeated byte-for-byte. Keeping the
+# extensionless spelling working matters: it is the URL the Cloudflare side has
+# been serving, and any bookmark, shared link or in-flight OAuth attempt that
+# lands there must not lose `no-store`.
+#
+# This is a Cloudflare-only configuration file: nothing in google-auth-callback.html,
+# sw.js or js/pwa-google-auth.js is changed, and netlify.toml keeps its single
+# block. The sign-in itself is unaffected — the page reads the credential from
+# `location.search`/`location.hash` and correlates the attempt through same-origin
+# localStorage, never through the URL (PWA_GOOGLE_SIGN_IN.md §1).
+# CLOUDFLARE_DASHBOARD_CHECKLIST.md still requires a real Google sign-in on the
+# *.pages.dev preview before any DNS is moved.
+/google-auth-callback
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+  X-Robots-Tag: noindex, nofollow
+
+# ── PWA shell ────────────────────────────────────────────────────────────────
+# The service worker and the manifest must be revalidated on every navigation,
+# otherwise an installed PWA keeps running an older sw.js (the file's own
+# version comments exist precisely to force that replacement). "no-cache" means
+# "store, but revalidate" — it does not disable the offline cache the service
+# worker builds itself, and it matches what Netlify's default asset headers
+# already achieve, so no PWA behaviour changes.
+/sw.js
+  Cache-Control: no-cache
+
+/manifest.json
+  Cache-Control: no-cache

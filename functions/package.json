@@ -1,0 +1,7 @@
+{
+  "name": "detectlab-pages-functions",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Cloudflare Pages Functions for DetectLab — the Cloudflare twin of netlify/functions. \"type\": \"module\" only, no dependencies: the shared business logic is imported from netlify/lib and backend/src/lib and bundled by wrangler.",
+  "type": "module"
+}

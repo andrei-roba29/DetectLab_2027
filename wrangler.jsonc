@@ -1,0 +1,156 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Cloudflare Pages configuration for DetectLab — additive, parallel to Netlify.
+// netlify.toml is untouched and stays the configuration of the live site.
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  // ── the Pages project slug ────────────────────────────────────────────────
+  // NOT a guess, and NOT confirmed against the Dashboard either — read this
+  // before deploying.
+  //
+  // This sandbox has no Cloudflare credentials (`wrangler whoami` → "You are not
+  // authenticated") and no route to api.cloudflare.com, so the project name could
+  // not be read from the Dashboard. What the repository itself states is this:
+  //
+  //     netlify/lib/map3d-country-modules.mjs:141   (present at HEAD 27dd935,
+  //     i.e. pre-existing — not added by this migration)
+  //
+  //     win.location = { href: 'https://detectlab-4i1.pages.dev/',
+  //                      protocol: 'https:', hostname: 'detectlab-4i1.pages.dev' };
+  //
+  // That is the `location` the server-side country-module sandbox is given so the
+  // embedded LiDAR builders can emit absolute URLs, and `git grep -ho
+  // "[a-z0-9-]*\.pages\.dev" HEAD` shows `detectlab-4i1.pages.dev` is the ONLY
+  // *.pages.dev hostname anywhere in the repository at HEAD (two occurrences, both
+  // on that line). A Pages project's apex preview domain is
+  // `<project-name>.pages.dev`, and Cloudflare suffixes the project name itself
+  // when the plain name is already taken — which is what `-4i1` looks like.
+  //
+  // So `detectlab-4i1` is the slug the code already assumes. It replaces the
+  // earlier placeholder `detectlab`, which had no evidence behind it at all and
+  // would have made `wrangler pages deploy` create a SECOND, stray project.
+  //
+  // ⚠ BEFORE ANY DEPLOY: open Dashboard → Workers & Pages and read the real
+  // project name. If it differs, change this one string and the two documents —
+  // CLOUDFLARE_MIGRATION.md §7.1 and CLOUDFLARE_DASHBOARD_CHECKLIST.md §1.2 —
+  // which group 11 of test-cloudflare-config.mjs keeps in step with this file and
+  // with the hostname in netlify/lib/map3d-country-modules.mjs. Nothing else
+  // depends on it: functions/_middleware.js canonicalises only the two explicit
+  // www hosts and passes every *.pages.dev preview host straight through, and the
+  // static site root stays `cloudflare-dist` either way.
+  "name": "detectlab-4i1",
+  "compatibility_date": "2026-11-01",
+  "pages_build_output_dir": "cloudflare-dist",
+
+  // The static site is NOT published from the repository root here. Netlify
+  // publishes "." (see the [build] block of netlify.toml), and Netlify also
+  // reads any _headers / _redirects file it finds in the publish directory.
+  // Putting the Cloudflare _headers / _redirects at the root would therefore
+  // have silently changed the live Netlify site, which this migration must not
+  // do. tools/build-cloudflare-dist.mjs assembles cloudflare-dist/ instead: the
+  // same repository content Netlify publishes, plus the three Cloudflare
+  // configuration files from cloudflare/.
+  //
+  // Pages Functions live in ./functions (filesystem routing, project root) and
+  // are bundled by wrangler relative to this file.
+  //
+  // compatibility_flags is deliberately EMPTY: nodejs_compat is NOT enabled.
+  // The only Node APIs the migrated server code needs are process.env and
+  // Buffer, and functions/_lib/runtime-shims.js provides both on top of Web
+  // APIs. The three modules that need node:module / node:fs / node:vm are
+  // transformed at build time by tools/sync-cloudflare-generated.mjs, and
+  // tools/cloudflare-parity-check.mjs proves the result behaves identically.
+  //
+  // No bindings are declared here on purpose: every credential is a Dashboard
+  // secret (see CLOUDFLARE_MIGRATION.md §5), and nothing this project needs —
+  // no KV, D1, R2, Durable Objects or Queues — may be inferred from the
+  // repository. caches.default, used by functions/_lib/corona-cache.mjs, needs
+  // no binding.
+  //
+  // The existing detectlab-feedback Worker (detectlab-feedback/wrangler.toml) is
+  // a separate Cloudflare project and is untouched by this file.
+  "compatibility_flags": [],
+
+  // ── html handling: the Google OAuth callback fix ───────────────────────────
+  // Pages' default, "auto-trailing-slash", serves every `foo.html` asset at
+  // `/foo` AND answers a request for `/foo.html` with `308 Permanent Redirect →
+  // /foo`. On this site that default broke two things:
+  //
+  //   1. The Google OAuth callback. js/pwa-google-auth.js registers
+  //      https://detectlab.ro/google-auth-callback.html as the redirect URI
+  //      (pinned by test-pwa-google-auth.js), so Google sends the browser to the
+  //      `.html` URL with a one-time PKCE `code` in the query. Under the default
+  //      that request was a 308 to /google-auth-callback, and because a `_headers`
+  //      rule is matched against the URL that PRODUCED the response, the
+  //      no-store / no-referrer / noindex,nofollow trio landed on the redirect
+  //      rather than on the document. google-auth-callback.html then
+  //      history.replaceState()s the address bar back to the `.html` path, so a
+  //      reload of the finished sign-in was a second 308 as well.
+  //   2. sw.js precaches 13 documents BY THEIR `.html` URL and stores a response
+  //      only when `response.status === 200` (sw.js:2414). With the default, all
+  //      13 came back as 308s, so the offline shell was never built.
+  //
+  // "none" serves each HTML file at its own path and stops there. Measured with
+  // `wrangler pages dev` after setting it:
+  //
+  //   GET /google-auth-callback.html   200  3651 B  Cache-Control: no-store
+  //                                                 Referrer-Policy: no-referrer
+  //                                                 X-Robots-Tag: noindex, nofollow
+  //   GET /google-auth-callback        200  3651 B  the same three headers
+  //   GET /index.html /checkout.html /tehnologie.html /technology.html
+  //       /proces.html /process.html /europe-roman-atlas.html
+  //       /europe-roman-atlas.html?embed=1   all 200, redirect_url empty
+  //
+  // BOTH spellings of the callback therefore stay live — the `.html` URL Google
+  // uses, and the extensionless one Pages was already serving — neither is a
+  // redirect, and no header is duplicated (a `_headers` block matching both
+  // spellings would otherwise be joined with a comma). sw.js:2347 already returns
+  // early for the `.html` pathname, so the callback still never enters Cache
+  // Storage; sw.js itself is unchanged.
+  //
+  // Nothing else changes: `/` still serves index.html, clean URLs such as
+  // /checkout still resolve, and not_found_handling below still answers an
+  // unmatched path with a real 404. Regression coverage: group 9 of
+  // test-cloudflare-config.mjs (static) and group 2 of tools/cloudflare-smoke.mjs
+  // (live, both URLs, with and without ?code=).
+  //
+  // A Dashboard-managed project has the same two switches under
+  // Settings → Builds & deployments → Assets ("HTML handling" and "404
+  // handling"); CLOUDFLARE_DASHBOARD_CHECKLIST.md lists them so the two
+  // configurations cannot drift.
+  //
+  // ── not-found handling ─────────────────────────────────────────────────────
+  // Cloudflare's asset router answers an unmatched path with a real HTTP 404
+  // only when a 404 asset exists in the deployment. Without one it serves
+  // index.html with status 200 — measured against `wrangler pages dev`:
+  //
+  //   no 404.html : GET /netlify.toml        → 200 text/html (the 636 KB shell)
+  //                 GET /api/does-not-exist  → 200 text/html
+  //   404.html    : GET /netlify.toml        → 404
+  //                 GET /api/does-not-exist  → 404
+  //
+  // That would have been a silent behaviour change, because Netlify publishes
+  // "." with no catch-all rewrite and answers an unknown path with a real 404.
+  // It is also a genuine hazard: the frontend distinguishes a JSON API error
+  // from an HTML document, and sw.js caches any same-origin 200.
+  //
+  // So cloudflare/404.html is published (a 2 KB self-contained page, no script,
+  // no external asset, noindex — never at the repository root, where Netlify
+  // would pick it up) and this setting points the router at it. "404-page"
+  // rather than "none": with a 404 asset present both answer 404, but this
+  // value states the intent and keeps working if Cloudflare changes the
+  // fallback for "none". The repository has no root 404.html, so Netlify's
+  // error page is untouched.
+  //
+  // `assets.directory` must repeat pages_build_output_dir: wrangler validates
+  // that an `assets` block names its directory, while a Pages deployment
+  // resolves the upload directory from pages_build_output_dir. Keeping the two
+  // identical is asserted by test-cloudflare-config.mjs so they cannot drift.
+  //
+  // Verified live with tools/cloudflare-smoke.mjs against `wrangler pages dev`.
+  "assets": {
+    "directory": "./cloudflare-dist",
+    "html_handling": "none",
+    "not_found_handling": "404-page"
+  }
+}

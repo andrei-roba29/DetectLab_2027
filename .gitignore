@@ -35,3 +35,17 @@ rvt_service/cache/
 # fixtures are small and are meant to be committed.
 data/hoards/darmc_hoards_layers.json
 data/hoards/*.sql
+
+# ── Cloudflare Pages (the parallel deployment — see CLOUDFLARE_MIGRATION.md) ──
+# The Pages build output directory, assembled from the repository root by
+# tools/build-cloudflare-dist.mjs. It is a copy of what Netlify publishes from
+# "." plus cloudflare/_headers, _redirects and _routes.json, so it is never
+# committed. Netlify is unaffected: it publishes "." and ignores this path.
+cloudflare-dist/
+
+# wrangler's local state (caches.default, KV/D1 stubs) and its logs
+.wrangler/
+
+# Local-only Cloudflare bindings for `wrangler pages dev`. Real secrets are set
+# with `wrangler pages secret put` or in the Dashboard — never committed.
+.dev.vars

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "include": [
+    "/api/corona/rasters",
+    "/api/map3d/tile",
+    "/api/geo/se-hojdmodell",
+    "/api/geo/dk-dhm",
+    "/api/geo/dk-dtk25",
+    "/api/geo/dk-orto",
+    "/api/geo/dk-heritage",
+    "/api/geo/finland",
+    "/api/geo/asig-heritage"
+  ],
+  "exclude": []
+}
