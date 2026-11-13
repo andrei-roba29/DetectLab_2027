@@ -1,0 +1,51 @@
+# Cloudflare Pages redirects for DetectLab.
+# ─────────────────────────────────────────────────────────────────────────────
+# This file is intentionally EMPTY of rules, and that is the correct state.
+# It is the Cloudflare twin of the two [[redirects]] hostname rules in
+# netlify.toml — but Cloudflare Pages cannot express them here.
+#
+# netlify.toml (untouched, still live):
+#   from = "https://www.detectlab.eu/*"  to = "https://detectlab.eu/:splat"  status = 301 force = true
+#   from = "https://www.detectlab.ro/*"  to = "https://detectlab.ro/:splat"  status = 301 force = true
+#
+# 1. HOSTNAME RULES ARE NOT SUPPORTED BY PAGES `_redirects`
+#    The Pages redirects documentation lists "Domain-level redirects ❌"
+#    (example given: `workers.example.com/* workers.example.com/blog/:splat 301`).
+#    A `_redirects` source is a path, never a host, so `www.detectlab.ro/*`
+#    cannot be matched here. The two canonicalisations are therefore implemented
+#    in two places instead, and BOTH are required:
+#
+#      a) functions/_middleware.js — a 301 from www.detectlab.ro/.eu to its own
+#         apex, preserving path and query. It runs for every request that
+#         reaches Pages Functions, i.e. the nine /api/… paths listed in
+#         cloudflare/_routes.json.
+#
+#      b) A Cloudflare Redirect Rule (or Bulk Redirect list) — MANUAL, in the
+#         Dashboard, because it is the only mechanism that also covers static
+#         asset requests, which `_routes.json` deliberately keeps away from
+#         Functions. Exact expressions, one rule per zone, in
+#         CLOUDFLARE_MIGRATION.md §6.4 and CLOUDFLARE_DASHBOARD_CHECKLIST.md.
+#
+# 2. THE TWO COUNTRY DOMAINS MUST NEVER REDIRECT TO EACH OTHER
+#    detectlab.ro is the Romanian market and detectlab.eu the European one; they
+#    share one deployment and one account database, but a .ro request must never
+#    be answered from .eu or vice versa (DOMAIN_SETUP.md, and js/site-config.js
+#    derives the market, the default language and the contact address from the
+#    hostname). Consequently there is ONE rule per zone, each matching only its
+#    own `www` host, and no rule may use a wildcard host or a shared list that
+#    spans both zones. functions/_middleware.js encodes the same invariant as an
+#    explicit host → apex table, and test-cloudflare-config.mjs asserts that the
+#    table contains no cross-market pair.
+#
+# 3. THE NINE API ROUTES NEED NO REDIRECT HERE
+#    netlify.toml reaches its functions with `status = 200` rewrites
+#    (/api/geo/dk-dhm → /.netlify/functions/dk-dhm). Cloudflare Pages does not
+#    need an equivalent: functions/ uses filesystem routing, so
+#    functions/api/geo/dk-dhm.js already IS /api/geo/dk-dhm. Pages `_redirects`
+#    proxying only supports relative URLs on the same site anyway, and adding a
+#    catch-all here would risk shadowing the PWA assets, the map tiles and the
+#    application paths — which the migration brief forbids.
+#
+# 4. NOTHING ELSE IS REDIRECTED
+#    No catch-all, no trailing-slash normalisation, no extension stripping.
+#    Every path that resolves on Netlify resolves identically here.

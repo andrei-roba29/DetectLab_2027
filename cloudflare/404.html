@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>404 — pagina nu există · DetectLab</title>
+<!--
+  cloudflare/404.html
+  ────────────────────────────────────────────────────────────────────────────
+  CLOUDFLARE-ONLY FILE. It is copied into cloudflare-dist/ by
+  tools/build-cloudflare-dist.mjs (CONFIG_FILES). It is NOT placed at the
+  repository root: Netlify publishes "." and would pick up a root 404.html as
+  the live site's error page, which this migration must not change. Netlify
+  therefore keeps answering an unknown path with its own generic 404.
+
+  WHY IT IS NEEDED
+    Cloudflare's asset router only answers an unmatched path with a real HTTP
+    404 when a 404 asset exists. Without one it serves index.html with status
+    200 — verified locally against `wrangler pages dev`:
+
+      not_found_handling "none" / "404-page", no 404.html in the output dir
+        → GET /netlify.toml          200 text/html (the 636 KB app shell)
+        → GET /api/does-not-exist    200 text/html
+      the same, with 404.html present
+        → GET /netlify.toml          404
+        → GET /api/does-not-exist    404
+
+    Serving the app shell for a mistyped API path is a behaviour change from
+    Netlify and a real hazard: the frontend distinguishes a JSON API error from
+    an HTML document, and a 200 would be cached and retried as if it were data.
+    wrangler.jsonc sets assets.not_found_handling = "404-page" to go with this
+    file, and tools/cloudflare-smoke.mjs asserts the 404s.
+
+  CONSTRAINTS OBSERVED
+    • No external CSS, JS, font or image: a 404 page whose own assets 404 is
+      worse than no page, and the service worker must never have to fetch
+      anything for it. Everything is inline; the payload is ~2 KB.
+    • No script at all, so it cannot interfere with sw.js, Supabase, Stripe or
+      the map, and no Content-Security-Policy is required for it.
+    • noindex: an error page must never enter a search index.
+    • The service worker never caches it: sw.js only stores same-origin
+      responses with status 200 (sw.js line 2414), so this page cannot be
+      replayed offline.
+    • Bilingual, mirroring the site's Romanian-first copy with an English line.
+    • No link to the OTHER country domain: DOMAIN_SETUP.md keeps detectlab.ro
+      and detectlab.eu apart, and the same rule that forbids a cross-market
+      redirect forbids inviting one from an error page.
+-->
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 24px; background: #0b1020; color: #e8ecf8;
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  main { max-width: 34rem; width: 100%; text-align: center; }
+  p.code {
+    margin: 0 0 .25rem; font-size: 4rem; line-height: 1; font-weight: 700; letter-spacing: .04em;
+    color: #7fb2ff;
+  }
+  h1 { margin: 0 0 .5rem; font-size: 1.25rem; font-weight: 600; }
+  p { margin: .35rem 0; color: #b9c3dd; font-size: .95rem; }
+  a.button {
+    display: inline-block; margin-top: 1.25rem; padding: .6rem 1.15rem; border-radius: 999px;
+    background: #1d4ed8; color: #fff; text-decoration: none; font-weight: 600; font-size: .95rem;
+  }
+  a.button:hover { background: #2563eb; }
+  a.plain { color: #7fb2ff; }
+</style>
+</head>
+<body>
+<main>
+  <p class="code">404</p>
+  <h1>Pagina nu există</h1>
+  <p>Adresa cerută nu face parte din DetectLab. Poate fi o legătură veche sau o adresă scrisă greșit.</p>
+  <p>This page does not exist on DetectLab — the link may be outdated or mistyped.</p>
+  <a class="button" href="/">Deschide harta · Open the map</a>
+  <!-- No cross-market link here on purpose: DOMAIN_SETUP.md keeps detectlab.ro
+       and detectlab.eu apart, and an error page must never invite a hop between
+       the two. The page is served on whichever host asked for it. -->
+</main>
+</body>
+</html>
