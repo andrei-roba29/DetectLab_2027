@@ -117,7 +117,7 @@ check(reducedMotion.includes('.danish-group-sublayers'),
 check(danishTest.includes('createElementNS'), 'the Danish DOM stub supports SVG elements');
 check(danishTest.includes('danish-group-chevron'), 'the Danish suite asserts the new SVG chevron');
 check(danishTest.includes('aria-hidden'), 'the Danish suite asserts the accessible collapsed state');
-check(panelRowsTest.includes("const STYLES_TAG = '20261114-danish-country-rows';"),
+check(panelRowsTest.includes("const STYLES_TAG = '20261114-firing-vector';"),
     'the stylesheet-tag test follows the live tag');
 check(mobileTest.includes("'js/danish-layers.js': '20261114-lidar-switch-fix'"),
     'the mobile cache test follows the live renderer tag');

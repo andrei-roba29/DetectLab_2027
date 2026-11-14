@@ -10221,14 +10221,21 @@
                             window._austrianMapLayer.addTo(map);
                         }
                     }
-                    // Firing Plans
+                    // Firing Plans (unless the vector tiles replaced the raster)
                     if (window._firingPlansLayer) {
                         var fToggle = document.getElementById('firingPlansToggle');
+                        var fVectorOn = !!(window.FiringPlansVector && window.FiringPlansVector.state.vectorOn);
                         if (!on) {
                             map.hasLayer(window._firingPlansLayer) && map.removeLayer(window._firingPlansLayer);
-                        } else if (fToggle && fToggle.checked) {
+                        } else if (fToggle && fToggle.checked && !fVectorOn) {
                             window._firingPlansLayer.addTo(map);
                         }
+                    }
+                    /* Keep the vector layer in step with the master switch: it
+                     * has no switch of its own, only the row's. */
+                    if (typeof window.setFiringPlansRowActive === 'function') {
+                        var fToggleRow = document.getElementById('firingPlansToggle');
+                        window.setFiringPlansRowActive(!!(on && fToggleRow && fToggleRow.checked));
                     }
                     // Soviet Map
                     if (window._sovietMapLayer) {
@@ -13102,17 +13109,91 @@
                         window.toggleHistLayer(true);
                         histOn = true;
                     }
-                    if (on && histOn) {
+                    /* With „Dezactivează fundal” ticked the vector tiles stand in
+                     * for this raster (js/firing-plans-vector.js owns them), so
+                     * the switch below must not put the aged sheet back. */
+                    var vectorOn = !!(window.FiringPlansVector && window.FiringPlansVector.state.vectorOn);
+                    if (on && histOn && !vectorOn) {
                         window._firingPlansLayer.addTo(map);
                     } else {
                         map.hasLayer(window._firingPlansLayer) && map.removeLayer(window._firingPlansLayer);
                     }
+                    if (typeof window.setFiringPlansRowActive === 'function') {
+                        window.setFiringPlansRowActive(!!on);
+                    }
+                    /* The vector's own opacity line is only meaningful while
+                     * the sub-option is in use. */
+                    var bgRow = document.getElementById('firingPlansVectorOpacityRow');
+                    if (bgRow) bgRow.classList.toggle('is-on', vectorOn);
                 };
 
                 window.setFiringPlansOpacity = function (val) {
                     document.getElementById('firingPlansPct').textContent = val + '%';
                     window._firingPlansLayer.setOpacity(val / 100);
                 };
+
+                /* The vector-tile module (js/firing-plans-vector.js) is a small
+                 * lazy add-on: it is fetched the first time the visitor ticks
+                 * „Dezactivează fundal”, so a session that never opens this row
+                 * never downloads Leaflet.VectorGrid's ~100 kB bundle. */
+                window._loadFiringPlansVector = function (done) {
+                    if (window.FiringPlansVector) { if (done) done(); return; }
+                    var id = 'firingPlansVectorModule';
+                    if (document.getElementById(id)) {
+                        var tries = 0;
+                        var timer = window.setInterval(function () {
+                            tries += 1;
+                            if (window.FiringPlansVector) { window.clearInterval(timer); if (done) done(); }
+                            else if (tries > 100) window.clearInterval(timer);
+                        }, 100);
+                        return;
+                    }
+                    var script = document.createElement('script');
+                    script.id = id;
+                    script.src = 'js/firing-plans-vector.js?v=20261114-firing-vector';
+                    script.async = true;
+                    script.onload = function () { if (done) done(); };
+                    (document.head || document.documentElement).appendChild(script);
+                };
+
+                /* The checkbox's inline onchange calls this; the real handler
+                 * lives in the lazily loaded module, so the first tick both
+                 * loads it and remembers the choice. */
+                window.setFiringPlansVectorBackground = function (enabled) {
+                    try {
+                        window.localStorage.setItem('detectlab.firingPlansVectorOn', enabled ? '1' : '0');
+                    } catch (e) { /* private mode */ }
+                    window._loadFiringPlansVector(function () {
+                        if (window.FiringPlansVector && window.FiringPlansVector.setBackground) {
+                            window.FiringPlansVector.setBackground(enabled);
+                        }
+                        if (typeof window.setFiringPlansRowActive === 'function') {
+                            var rowToggle = document.getElementById('firingPlansToggle');
+                            window.setFiringPlansRowActive(!!(rowToggle && rowToggle.checked));
+                        }
+                    });
+                };
+
+                /* The vector module's own opacity helper, available immediately
+                 * (the pane may not exist yet; it is applied on attach). */
+                window.setFiringPlansVectorOpacity = function (value) {
+                    window._pendingFiringPlansVectorOpacity = value;
+                    if (window.FiringPlansVector && window.FiringPlansVector.setOpacity) {
+                        window.FiringPlansVector.setOpacity(value);
+                    }
+                };
+
+                /* A remembered choice is restored once the map exists, but the
+                 * module is only needed if the visitor actually wants the
+                 * vector — so the restore path asks for it too. */
+                try {
+                    var storedVector = window.localStorage.getItem('detectlab.firingPlansVectorOn') === '1';
+                    if (storedVector) {
+                        var storedBox = document.getElementById('firingPlansDisableBg');
+                        if (storedBox) storedBox.checked = true;
+                        if (window._loadFiringPlansVector) window._loadFiringPlansVector();
+                    }
+                } catch (e) { /* private mode */ }
             })();
 
             // ── SOVIET MAP 1970s WMS LAYER ──

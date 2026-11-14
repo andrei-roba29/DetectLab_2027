@@ -9996,3 +9996,79 @@ a.dl-gmaps-directions-btn {
         line-height: 1.25;
     }
 }
+
+/* ── Planuri de tragere · „Dezactivează fundal” (vector tiles) ─────────────
+   The checkbox and the vector opacity line under the firing-plans row
+   (js/firing-plans-vector.js). Same glass material as the rows around it:
+   small, indented under the row, with an orange accent that matches the
+   outline drawn on the map (#ff7a00). The block is hidden while the row's own
+   switch is off, so the sub-option never reads as a second layer. */
+.firingplans-bg-toggle {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 7px;
+    padding: 5px 7px;
+    border: 1px solid rgba(255,122,0,0.28);
+    border-radius: 6px;
+    background: rgba(255,122,0,0.07);
+    font-size: 0.72rem;
+    color: rgba(245,240,235,0.82);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.firingplans-bg-toggle:hover {
+    background: rgba(255,122,0,0.13);
+    border-color: rgba(255,122,0,0.45);
+}
+
+.firingplans-bg-toggle input[type="checkbox"] {
+    width: 13px;
+    height: 13px;
+    margin: 0;
+    accent-color: #ff7a00;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.firingplans-bg-toggle input[type="checkbox"]:focus-visible {
+    outline: 2px solid #ff7a00;
+    outline-offset: 2px;
+}
+
+.firingplans-bg-label {
+    line-height: 1.25;
+    min-width: 0;
+}
+
+/* The vector's own opacity, only useful while the box is ticked. */
+.firingplans-bg-opacity {
+    display: none;
+    align-items: center;
+    gap: 7px;
+    margin-top: 5px;
+    padding-left: 2px;
+}
+
+.firingplans-bg-opacity.is-on {
+    display: flex;
+}
+
+.firingplans-bg-opacity .transp-slider {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* One line, hidden until there is something to say (loading / failure). */
+.firingplans-bg-status {
+    margin-top: 5px;
+    font-size: 0.68rem;
+    line-height: 1.35;
+    color: rgba(255,176,102,0.92);
+}
+
+.firingplans-bg-status:empty {
+    display: none;
+}

@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="css/leaflet.photon.css">
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20261114-danish-country-rows">
+    <link rel="stylesheet" href="css/styles.css?v=20261114-firing-vector">
     <!-- 3D TERRAIN VIEW (2D ⇄ 3D) — MapLibre GL JS, vendored like Leaflet.
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
@@ -2132,6 +2132,28 @@
                                 <input type="range" class="transp-slider" id="firingPlansOpacitySlider"
                                        min="0" max="100" value="80"
                                        oninput="setFiringPlansOpacity(this.value)">
+
+                                <!-- Vector tiles instead of the raster mosaic. When this box is
+                                     ticked the 1:20 000 WMS background is taken off the map and
+                                     the traced MVT tiles (Supabase, planuri_tragere_vector) are
+                                     drawn in its place as an orange outline with no fill, so the
+                                     basemap stays readable underneath. js/firing-plans-vector.js
+                                     owns the layer; the firing-plans switch above stays the
+                                     master. -->
+                                <label class="firingplans-bg-toggle" for="firingPlansDisableBg">
+                                    <input type="checkbox" id="firingPlansDisableBg"
+                                           onchange="setFiringPlansVectorBackground(this.checked)">
+                                    <span class="firingplans-bg-label t" data-key="layer_disable_background">Dezactivează fundal</span>
+                                </label>
+                                <div class="firingplans-bg-opacity" id="firingPlansVectorOpacityRow">
+                                    <span style="font-size:0.7rem;opacity:0.6">Opacity</span>
+                                    <input type="range" class="transp-slider firingplans-vector-slider" id="firingPlansVectorOpacity"
+                                           min="0" max="100" value="100"
+                                           aria-label="Vector outline opacity"
+                                           oninput="setFiringPlansVectorOpacity(this.value)">
+                                </div>
+                                <div class="firingplans-bg-status" id="firingPlansVectorStatus"
+                                     role="status" style="display:none;"></div>
                             </div>
 
                             <!-- Sub-layer: Harta Sovietică 1970 / Soviet Map 1970s -->
@@ -5506,7 +5528,7 @@
          See ROMAN_ROADS_PERFORMANCE.md. -->
     <script src="js/roman-roads-parser.js?v=20261015-roman-roads"></script>
     <script src="js/roman-roads.js?v=20261015-roman-roads"></script>
-    <script src="js/map-app.js?v=20261114-lidar-switch-fix"></script>
+    <script src="js/map-app.js?v=20261114-firing-vector"></script>
     <script src="js/romania-heritage.js?v=20261102-ro-heritage"></script>
     <link rel="stylesheet" href="css/romania-heritage.css?v=20261102-ro-heritage">
     <link rel="stylesheet" href="css/rvt-panel.css?v=20261101-robust-train">
