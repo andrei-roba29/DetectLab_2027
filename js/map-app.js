@@ -7637,6 +7637,17 @@
                             _lidarGroup.addLayer(cfg.leafletLayer);
                         }
                     });
+                    /* The Danish LiDAR rows are not part of LIDAR_SUB_LAYERS
+                     * (js/danish-layers.js owns them), so the master switch
+                     * used to leave them in whatever state they had — including
+                     * "on" with the accordion collapsed, i.e. unreachable.
+                     * Turning the family off takes them with it. */
+                    try {
+                        var dkLidar = window.DetectLabDanishLayers;
+                        if (!on && dkLidar && typeof dkLidar.deactivatePanelGroup === 'function') {
+                            dkLidar.deactivatePanelGroup('lidar');
+                        }
+                    } catch (eDk) {}
                 } else {
                     map.removeLayer(_lidarGroup);
                     // Oprirea switch-ului mare "LIDAR" oprește automat toate
@@ -7992,14 +8003,19 @@
                     setSubLayersMaxHeight(panel, true, 1100);
                     if (europeanPanel) { europeanPanel.style.opacity = '1'; europeanPanel.style.marginTop = '10px'; }
                     if (panel) { panel.style.opacity = '1'; panel.style.marginTop = '10px'; }
-                    icon.style.transform = 'rotate(0deg)';
+                    if (icon) icon.style.transform = 'rotate(0deg)';
                 } else {
                     setSubLayersMaxHeight(europeanPanel, false);
                     setSubLayersMaxHeight(panel, false);
                     if (europeanPanel) { europeanPanel.style.opacity = '0'; europeanPanel.style.marginTop = '0'; }
                     if (panel) { panel.style.opacity = '0'; panel.style.marginTop = '0'; }
-                    icon.style.transform = 'rotate(-90deg)';
+                    if (icon) icon.style.transform = 'rotate(-90deg)';
                 }
+                /* The chevron is the only way to reach the country rows (the
+                 * Danish LiDAR rows live in this accordion), so it has to say
+                 * out loud whether they are on screen. */
+                var expandBtn = document.getElementById('lidarExpandBtn');
+                if (expandBtn) expandBtn.setAttribute('aria-expanded', _lidarSubExpandedState ? 'true' : 'false');
                 setTimeout(function() {
                     if (typeof window.checkLayerVisibility === 'function') window.checkLayerVisibility();
                 }, 350);

@@ -119,7 +119,7 @@ check(danishTest.includes('danish-group-chevron'), 'the Danish suite asserts the
 check(danishTest.includes('aria-hidden'), 'the Danish suite asserts the accessible collapsed state');
 check(panelRowsTest.includes("const STYLES_TAG = '20261114-danish-country-rows';"),
     'the stylesheet-tag test follows the live tag');
-check(mobileTest.includes("'js/danish-layers.js': '20261114-danish-country-rows'"),
+check(mobileTest.includes("'js/danish-layers.js': '20261114-lidar-switch-fix'"),
     'the mobile cache test follows the live renderer tag');
 
 const cssUrl = (html.match(/href="(css\/styles\.css\?v=[^"]+)"/) || [])[1];

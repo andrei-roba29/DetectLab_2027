@@ -1016,7 +1016,7 @@
 //   din vecinii pe care îi acoperă fereastra mutată, iar image-overlay-urile
 //   își mută cele patru colțuri cu aceiași metri. O poziție aliniată o dată
 //   e aceeași în ambele vizualizări. Vezi HISTORICAL_MAP_SHIFT.md §5.
-const CACHE_NAME = 'detectlab-v422-danish-country-rows';
+const CACHE_NAME = 'detectlab-v423-lidar-switch-fix';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -2235,8 +2235,14 @@ const PRECACHE_URLS = [
   // never existed at all), a raster row below its minZoom now says so
   // instead of painting nothing, and a language change keeps the sections
   // open. See DENMARK_LAYERS.md §"The panel".
-  'js/danish-layers.js?v=20261114-danish-country-rows',
-  'css/styles.css?v=20261114-danish-country-rows'
+  'js/danish-layers.js?v=20261114-lidar-switch-fix',
+  'css/styles.css?v=20261114-danish-country-rows',
+  // v423: the LiDAR accordion's chevron is a real touch target with an
+  // aria-expanded state, the LiDAR master switch now reaches the Danish rows
+  // (js/danish-layers.js deactivatePanelGroup), a rejected Dataforsyningen
+  // credential is reported as such instead of "not configured", and a
+  // switch-on the visitor just flipped always re-probes the deployment.
+  'js/map-app.js?v=20261114-lidar-switch-fix'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

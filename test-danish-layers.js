@@ -807,6 +807,55 @@ async function testMapModule() {
     assert.strictEqual(API.isActive('lidar_hillshade_historik'), false, 'unconfigured LiDAR does not silently appear active');
     ok('LiDAR rows are lazy and show only generic credential status');
 
+    /* The probe block below builds real layers; keep the recorded call list
+     * clean for the assertions that follow (they index into it). */
+    const wmsCallsBeforeProbeFaults = leaflet.calls.tileLayerWms.length;
+    /* A rejected credential (401/403) is a DIFFERENT fault from a missing one
+     * (503) and must not be reported as "not configured": that wording sent
+     * every operator looking for a variable that was already set. */
+    sandbox.fetch = () => Promise.resolve(new Response('{}', {
+        status: 401, headers: { 'Content-Type': 'application/json' }
+    }));
+    delete API.state.guard.lidar_dhm_terrain_hillshade;
+    API.activate('lidar_dhm_terrain_hillshade');
+    await settle();
+    const rejectedText = dom.byId['danishStatus_lidar_dhm_terrain_hillshade'].textContent;
+    assert.ok(/rejected by Dataforsyningen/.test(rejectedText),
+        'a 401 says the credential was refused (got: ' + rejectedText + ')');
+    assert.ok(/401/.test(rejectedText), 'and names the status it saw');
+    assert.ok(!/not configured/.test(rejectedText),
+        'it never claims the deployment is unconfigured when it answered 401');
+    assert.strictEqual(API.isActive('lidar_dhm_terrain_hillshade'), false,
+        'a refused credential leaves the switch off');
+
+    /* …and a fixed deployment is picked up by the next switch-on: a cached
+     * verdict must not keep a row dead until the page is reloaded. */
+    sandbox.fetch = () => Promise.resolve(new Response('<WMS_Capabilities/>', {
+        status: 200, headers: { 'Content-Type': 'text/xml' }
+    }));
+    API.activate('lidar_dhm_terrain_hillshade');
+    await settle();
+    assert.strictEqual(API.isActive('lidar_dhm_terrain_hillshade'), true,
+        'a manual switch-on re-probes and works once the credential is fixed');
+    API.deactivate('lidar_dhm_terrain_hillshade', {});
+
+    /* The shared LiDAR accordion master must not leave the Danish LiDAR rows
+     * switched on inside a collapsed accordion, where they are unreachable. */
+    sandbox.fetch = () => Promise.resolve(new Response('<WMS_Capabilities/>', {
+        status: 200, headers: { 'Content-Type': 'text/xml' }
+    }));
+    API.activate('lidar_dhm_terrain_hillshade');
+    await settle();
+    assert.strictEqual(API.isActive('lidar_dhm_terrain_hillshade'), true);
+    assert.strictEqual(API.deactivatePanelGroup('lidar'), 1,
+        'the LiDAR group API switches the whole section off');
+    assert.strictEqual(API.isActive('lidar_dhm_terrain_hillshade'), false,
+        'and the Danish LiDAR row goes with it');
+    assert.strictEqual(dom.byId['danishToggle_lidar_dhm_terrain_hillshade'].checked, false,
+        'the row switch follows the state');
+    leaflet.calls.tileLayerWms.length = wmsCallsBeforeProbeFaults;
+    ok('credential faults are distinguished and the LiDAR master reaches the Danish rows');
+
     /* A public overlay is built on demand, with the documented request format. */
     API.activate('naturtyper');
     const nature = leaflet.calls.tileLayerWms[0];

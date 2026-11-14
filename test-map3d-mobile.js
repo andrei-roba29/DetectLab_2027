@@ -294,7 +294,7 @@ const TAGS = {
     'js/map3d-terrain.js': '20261106-hist-shift-3d',
     'css/map3d-terrain.css': '20261102-report-lidar-window',
     'js/danish-layers.config.js': '20261103-layer-i18n',
-    'js/danish-layers.js': '20261114-danish-country-rows'
+    'js/danish-layers.js': '20261114-lidar-switch-fix'
 };
 ['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css',
     'js/danish-layers.config.js'].forEach(function (asset) {

@@ -202,6 +202,18 @@
         missingCredentials: {
             da: 'Kortlaget er ikke konfigureret på serveren endnu.',
             en: 'This map layer is not configured on the server yet.'
+        },
+        /* The deployment answered, but the upstream refused the credential it
+         * was given (401/403 from Dataforsyningen). Saying "not configured"
+         * here sent everyone looking for a missing variable when the real
+         * problem was an expired or wrong DATAFORSYNINGEN_TOKEN. */
+        badCredential: {
+            da: 'Serverens legitimationsoplysninger blev afvist af Dataforsyningen — forny DATAFORSYNINGEN_TOKEN.',
+            en: 'The server credential was rejected by Dataforsyningen — renew DATAFORSYNINGEN_TOKEN.'
+        },
+        retrying: {
+            da: 'Prøver igen…',
+            en: 'Retrying…'
         }
     };
 
@@ -222,7 +234,8 @@
         expanded: true,
         wfs: { timer: null, controller: null, running: false, dirty: false, last: '', layer: null },
         notices: {},        /* id → { text, kind }                 */
-        guard: {}           /* id → 'unknown' | 'ok' | 'unconfigured' | 'absent' */
+        guard: {},          /* id → 'unknown' | 'ok' | 'unconfigured' | 'rejected' | 'absent' */
+        guardStatus: {}     /* id → the HTTP status the probe saw (0 when offline) */
     };
 
     var MASTER_ID = 'danishToggle';
@@ -330,32 +343,38 @@
     /* Does the deployment answer the proxy route (and is it configured)? 503 →
      * the route exists but server credentials are unavailable. 404/403/network →
      * there is no usable proxy at this origin (for example, a static preview). */
-    function probeProxy(layer, done) {
+    function probeProxy(layer, done, force) {
         var cached = runtime.guard[layer.id];
-        if (cached && cached !== 'unknown') { done(cached); return; }
+        if (!force && cached && cached !== 'unknown') { done(cached); return; }
         var settled = false;
-        function finish(state) {
+        function finish(state, status) {
             if (settled) return;
             settled = true;
             runtime.guard[layer.id] = state;
-            done(state);
+            runtime.guardStatus[layer.id] = status || 0;
+            done(state, status || 0);
         }
-        var timer = window.setTimeout(function () { finish('absent'); }, 6000);
+        var timer = window.setTimeout(function () { finish('absent', 0); }, 6000);
         try {
             window.fetch(proxyProbeUrl(layer), { method: 'GET', credentials: 'same-origin' })
                 .then(function (response) {
                     window.clearTimeout(timer);
-                    if (response.status === 503) return finish('unconfigured');
-                    if (response.ok) return finish('ok');
-                    return finish('absent');
+                    /* 503 = the route exists but the deployment holds no
+                     * credential. 401/403 = it holds one and Dataforsyningen
+                     * refused it. Both used to collapse into "not
+                     * configured", which pointed at the wrong problem. */
+                    if (response.status === 503) return finish('unconfigured', 503);
+                    if (response.status === 401 || response.status === 403) return finish('rejected', response.status);
+                    if (response.ok) return finish('ok', response.status);
+                    return finish('absent', response.status);
                 })
                 .catch(function () {
                     window.clearTimeout(timer);
-                    finish('absent');
+                    finish('absent', 0);
                 });
         } catch (e) {
             window.clearTimeout(timer);
-            finish('absent');
+            finish('absent', 0);
         }
     }
 
@@ -958,6 +977,18 @@
         activate(alternative, {});
     }
 
+    /* The deployment holds a credential and the upstream refused it (401/403):
+     * an expired token, a token for another service, or a revoked one. The row
+     * must say that, not "not configured" — that wording sends the operator
+     * hunting for a variable that is already there. */
+    function handleRejectedCredential(layer, status) {
+        setStatus(layer.id, tr(TEXT.badCredential) + (status ? ' (HTTP ' + status + ')' : ''), 'error');
+        runtime.active[layer.id] = false;
+        var built = runtime.built[layer.id];
+        if (runtime.map && built && runtime.map.hasLayer(built)) runtime.map.removeLayer(built);
+        syncUI();
+    }
+
     /* A workstation preview: no proxy routes exist, but the page may have been
      * handed a token (Dataforsyningen) and the public WFS answers directly. */
     function tryDirectFallback(layer) {
@@ -982,16 +1013,20 @@
             return;
         }
         setStatus(layer.id, tr(TEXT.loading), 'info');
-        probeProxy(layer, function (state) {
+        /* A switch the visitor just flipped is always re-probed: a credential
+         * can be fixed on the deployment while the page is open, and a cached
+         * verdict would keep the row dead until a full reload. */
+        probeProxy(layer, function (state, status) {
             if (state === 'ok') {
                 setStatus(layer.id, '', 'info');
                 activate(layer, {});
                 return;
             }
+            if (state === 'rejected') { handleRejectedCredential(layer, status); return; }
             if (state === 'unconfigured') { handleUnconfigured(layer); return; }
             if (layer.directFallback) { tryDirectFallback(layer); return; }
             handleUnconfigured(layer);
-        });
+        }, true);
     }
 
     /* ── the panel ───────────────────────────────────────────────────────── */
@@ -1895,6 +1930,24 @@
         },
         activate: function (id) { var l = CONFIG.byId(id); if (l) switchOn(l); },
         deactivate: function (id) { var l = CONFIG.byId(id); if (l) deactivate(l, {}); },
+        /* Switch an entire panel section off (js/map-app.js calls this when the
+         * shared LiDAR accordion master is turned off, so the Danish LiDAR rows
+         * never stay "on" inside a collapsed accordion). */
+        deactivatePanelGroup: function (groupId) {
+            var group = (CONFIG.panelGroups || []).filter(function (g) { return g.id === groupId; })[0];
+            if (!group) return 0;
+            var count = 0;
+            (group.layers || []).forEach(function (id) {
+                var layer = CONFIG.byId(id);
+                if (!layer || layer.enabled === false) return;
+                if (runtime.active[layer.id]) { deactivate(layer, {}); count++; }
+            });
+            /* Drop the remembered probe verdict too: the next switch-on must be
+             * allowed to ask the deployment again, not replay an old answer. */
+            (group.layers || []).forEach(function (id) { runtime.guard[id] = 'unknown'; });
+            syncUI();
+            return count;
+        },
         setOpacity: function (id, value) { var l = CONFIG.byId(id); if (l) setOpacity(l, value, false); },
         opacityOf: function (id) { return runtime.opacity[id]; },
         isActive: function (id) { return !!runtime.active[id]; },
