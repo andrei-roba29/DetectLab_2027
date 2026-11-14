@@ -1016,7 +1016,7 @@
 //   din vecinii pe care îi acoperă fereastra mutată, iar image-overlay-urile
 //   își mută cele patru colțuri cu aceiași metri. O poziție aliniată o dată
 //   e aceeași în ambele vizualizări. Vezi HISTORICAL_MAP_SHIFT.md §5.
-const CACHE_NAME = 'detectlab-v421-apm-denmark-train';
+const CACHE_NAME = 'detectlab-v422-danish-country-rows';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -2227,7 +2227,16 @@ const PRECACHE_URLS = [
   // offset covers). See HISTORICAL_MAP_SHIFT.md §5.
   'js/hist-shift.js?v=20261106-hist-shift-3d',
   'js/map3d-mirror.js?v=20261106-hist-shift-3d',
-  'js/map3d-terrain.js?v=20261106-hist-shift-3d'
+  'js/map3d-terrain.js?v=20261106-hist-shift-3d',
+  // v422: Denmark's Heritage / Historical maps / Ortophoto sections start
+  // open (three collapsed headers made the whole Dataforsyningen catalogue
+  // look absent), the group ⓘ no longer throws on a strict `dataset`
+  // assignment (that exception aborted the first row build, so the sections
+  // never existed at all), a raster row below its minZoom now says so
+  // instead of painting nothing, and a language change keeps the sections
+  // open. See DENMARK_LAYERS.md §"The panel".
+  'js/danish-layers.js?v=20261114-danish-country-rows',
+  'css/styles.css?v=20261114-danish-country-rows'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

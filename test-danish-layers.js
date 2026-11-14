@@ -648,8 +648,11 @@ async function testMapModule() {
             group.id + ': the SVG polyline is rendered');
         assert.strictEqual(icon.style.transition, 'transform 0.25s ease',
             group.id + ': LiDAR rotation transition');
-        assert.strictEqual(icon.style.transform, 'rotate(-90deg)',
-            group.id + ': the collapsed arrow is rotated like LiDAR');
+        /* The sections open by default (see "Heritage starts expanded"), so
+         * the arrow ships in its open state; collapsing rotates it back to
+         * LiDAR's -90° further down. */
+        assert.strictEqual(icon.style.transform, 'rotate(0deg)',
+            group.id + ': the open arrow is not rotated');
         assert.strictEqual(icon.style.color, 'rgba(79,195,247,0.8)',
             group.id + ': LiDAR blue at rest');
         assert.ok(icon.children.length >= 1 &&
@@ -670,8 +673,8 @@ async function testMapModule() {
             group.id + ': shared expand-button class');
         assert.strictEqual(expandBtn.getAttribute('aria-controls'), groupBodyId(group),
             group.id + ': the arrow controls its section body');
-        assert.strictEqual(expandBtn.getAttribute('aria-expanded'), 'false',
-            group.id + ': the arrow starts collapsed');
+        assert.strictEqual(expandBtn.getAttribute('aria-expanded'), 'true',
+            group.id + ': the arrow starts open (the rows must be visible)');
         assert.strictEqual(expandBtn.getAttribute('data-lidar-arrow'), 'true',
             group.id + ': the button is marked as a LiDAR arrow');
         assert.strictEqual(expandBtn.style.color, 'rgba(79,195,247,0.8)',
@@ -688,13 +691,13 @@ async function testMapModule() {
         assert.strictEqual(wrap.getAttribute('role'), 'group', group.id + ': accessible group');
         assert.strictEqual(wrap.getAttribute('aria-labelledby'), 'danishGroupTitle_' + group.id,
             group.id + ': labelled by its translated title');
-        assert.strictEqual(body.getAttribute('aria-hidden'), 'true',
-            group.id + ': collapsed body is hidden from assistive tech');
+        assert.strictEqual(body.getAttribute('aria-hidden'), 'false',
+            group.id + ': an open body is exposed to assistive tech');
         assert.strictEqual(body.getAttribute('role'), 'region', group.id + ': accessible body region');
         assert.strictEqual(body.style.borderLeftColor, 'rgba(79,195,247,0.3)',
             group.id + ': LiDAR blue section rail');
-        assert.strictEqual(body.style.maxHeight, '0',
-            group.id + ' starts collapsed, like the Romanian Historical Maps group');
+        assert.strictEqual(body.style.maxHeight, '6000px',
+            group.id + ' starts expanded — its rows are the point of the section');
     }
 
     /* Every rendered row has the shared Romania style: a glass sublayer
@@ -884,13 +887,24 @@ async function testMapModule() {
     const heritageBody = dom.byId['danishHeritageSubLayers'];
     const heritageBtn = dom.byId['danishGroupExpandBtn_heritage'];
     const heritageIcon = dom.byId['danishGroupExpandIcon_heritage'];
-    assert.strictEqual(heritageBody.style.maxHeight, '0', 'Heritage starts collapsed');
+    /* The sections start OPEN: a Danish visitor must see the Dataforsyningen
+     * and Kulturarv rows without having to find a chevron first (three
+     * collapsed headers were being reported as "the maps are not there"). */
+    assert.strictEqual(heritageBody.style.maxHeight, '6000px', 'Heritage starts expanded');
+    assert.strictEqual(heritageBody.getAttribute('aria-hidden'), 'false', 'its rows are exposed at once');
+    assert.strictEqual(heritageBtn.getAttribute('aria-expanded'), 'true');
+    assert.strictEqual(heritageIcon.style.transform, 'rotate(0deg)', 'the chevron shows the open state');
     heritageBtn.dispatch('mouseover');
     assert.strictEqual(heritageBtn.style.color, '#4fc3f7', 'hover brightens the LiDAR arrow');
     heritageBtn.dispatch('mouseout');
     assert.strictEqual(heritageBtn.style.color, 'rgba(79,195,247,0.8)', 'mouseout restores LiDAR blue');
     heritageBtn.dispatch('click');
-    assert.strictEqual(heritageBody.style.maxHeight, '6000px', 'the chevron expands the section');
+    assert.strictEqual(heritageBody.style.maxHeight, '0', 'the chevron collapses the section');
+    assert.strictEqual(heritageBtn.getAttribute('aria-expanded'), 'false');
+    assert.strictEqual(heritageIcon.style.transform, 'rotate(-90deg)',
+        'the LiDAR chevron points right again when collapsed');
+    heritageBtn.dispatch('click');
+    assert.strictEqual(heritageBody.style.maxHeight, '6000px', 'and expands it again');
     assert.strictEqual(heritageBtn.getAttribute('aria-expanded'), 'true');
     assert.strictEqual(heritageIcon.style.transform, 'rotate(0deg)',
         'the LiDAR chevron rotates to 0 degrees when expanded');
@@ -903,6 +917,50 @@ async function testMapModule() {
     heritageMaster.checked = false;
     heritageMaster.dispatch('change');
     assert.strictEqual(API.isActive('naturtyper'), false, 'the master switches the whole section off');
+
+    /* A language change rebuilds the panel. The sections must come back in the
+     * state the visitor left them: a rebuild that silently collapsed them is
+     * the same "the layers are gone" symptom by another route. */
+    sandbox.detectlabLang = 'da';
+    /* Whatever ran before: put Heritage open and Historical maps closed. */
+    if (dom.byId['danishGroupExpandBtn_heritage'].getAttribute('aria-expanded') !== 'true') {
+        dom.byId['danishGroupExpandBtn_heritage'].dispatch('click');
+    }
+    const histBtn = dom.byId['danishGroupExpandBtn_historical'];
+    const histBody = dom.byId['danishHistoricalSubLayers'];
+    assert.strictEqual(histBody.style.maxHeight, '6000px', 'Historical maps starts expanded');
+    histBtn.dispatch('click');                     /* the visitor closes it */
+    assert.strictEqual(histBody.style.maxHeight, '0');
+    dom.document.dispatch('detectlab:langchange', { detail: { lang: 'da' } });
+    const rebuiltHist = dom.byId['danishHistoricalSubLayers'];
+    const rebuiltHeritage = dom.byId['danishHeritageSubLayers'];
+    assert.ok(rebuiltHist, 'the language change rebuilt the rows');
+    assert.strictEqual(rebuiltHist.style.maxHeight, '0',
+        'a section the visitor closed stays closed across a language change');
+    assert.strictEqual(rebuiltHeritage.style.maxHeight, '6000px',
+        'and one that was open stays open');
+    ok('a language change keeps every section in the state the visitor left it');
+
+    /* Rows whose map only starts drawing above the current zoom used to switch
+     * on silently and paint nothing ("the sheet is not there"). The row says
+     * why, and the note clears once the map is inside range. */
+    const histLayer = CONFIG.byId('hist_hoeje');
+    assert.ok(histLayer && histLayer.minZoom > 0, 'the measuring-table sheets have a zoom gate');
+    map.zoom = histLayer.minZoom - 2;
+    API.activate(histLayer.id);
+    await settle();
+    const gateStatus = dom.byId['danishStatus_' + histLayer.id];
+    assert.strictEqual(gateStatus.style.display, 'block', 'a below-zoom activation is explained, not silent');
+    assert.ok(gateStatus.textContent.indexOf(String(histLayer.minZoom)) !== -1,
+        'the note names the zoom the sheet starts at (got: ' + gateStatus.textContent + ')');
+    assert.strictEqual(API.isActive(histLayer.id), true, 'the layer still counts as switched on');
+    map.zoom = histLayer.minZoom + 1;
+    map.fire('zoomend');
+    assert.strictEqual(gateStatus.style.display, 'none',
+        'once inside range the note goes away by itself');
+    API.deactivate(histLayer.id, {});
+    map.zoom = 14;
+    ok('a layer that cannot paint at the current zoom says so instead of drawing nothing');
     heritageMaster.checked = true;
     heritageMaster.dispatch('change');
     await settle();
@@ -1042,6 +1100,40 @@ async function testMapModule() {
     });
     ok('the country filter keeps all requested free sublayers for Denmark and hides them elsewhere');
 
+    /* The panel is built ONCE, in a single pass: every row and every section
+     * comes out of the same synchronous walk. So one exception anywhere in
+     * that walk silently truncates the catalogue — a strict-mode
+     * `this.dataset.x = …` in the group header used to abort buildPanel()
+     * right after the LiDAR mount, leaving the Denmark mount empty and the
+     * Dataforsyningen maps with no rows at all. Pin both properties. */
+    const jsSource = read('js/danish-layers.js');
+    assert.ok(!/\b\w+(\.\w+)*\.dataset\s*=[^=]/.test(jsSource),
+        'the renderer never assigns `.dataset` itself (a [PutForwards] attribute — ' +
+        'strict-mode assignment throws and aborts the row build)');
+    assert.ok(jsSource.indexOf("this.setAttribute('data-info-handled','true')") !== -1,
+        'the inline info handler writes the guard attribute instead');
+    ['heritage', 'historical', 'orthophoto'].forEach((groupId) => {
+        assert.ok(dom.byId['danishGroup_' + groupId], groupId + ' section exists in the panel');
+        assert.ok(dom.byId['danishGroup_' + groupId + 'SubLayers'.replace(/^/, '')] ||
+            dom.byId['danish' + groupId.charAt(0).toUpperCase() + groupId.slice(1) + 'SubLayers'],
+            groupId + ' section rendered its rows');
+    });
+    /* Every enabled catalogue layer is in the panel unless it is deliberately
+     * row-less (the spring orthophoto years, the Danish OSM base, the WITX
+     * placeholders). Nothing else may go missing. */
+    const rowless = (layer) => layer.enabled === false || /^witx_/.test(layer.id) ||
+        layer.id === 'orto' || layer.id === 'osm' || /^orto_foraar_/.test(layer.id);
+    const rendered = Object.keys(API.state.rows);
+    CONFIG.layers.filter((layer) => !rowless(layer)).forEach((layer) => {
+        assert.ok(rendered.indexOf(layer.id) !== -1,
+            layer.id + ' has a row (the whole catalogue must survive the build pass)');
+    });
+    /* Without DATAFORSYNINGEN_TOKEN the historical rows are still THERE and
+     * say why they cannot paint — they must never silently disappear. */
+    const dtkRow = dom.byId['danishRow_dtk25'];
+    assert.ok(dtkRow, 'DTK25 keeps its row when the deployment has no token');
+    ok('one interrupted build pass cannot empty the Denmark mount again');
+
     /* The basemap control mirror. */
     const controlButtons = dom.byId['arcgisBasemapCtrl'].descendants
         .filter((n) => n.attributes && n.attributes['data-danish-basemap']);
@@ -1148,14 +1240,18 @@ function testWiring() {
         'reduced motion disables the dynamic chevron transition');
     assert.ok(css.indexOf('layer-group-arrow-highlight') === -1,
         'the forbidden arrow highlight class is absent from CSS');
-    const cssUrl = 'css/styles.css?v=20261106-hoards';
-    const jsUrl = 'js/danish-layers.js?v=20261103-danish-lidar-chevron';
-    assert.ok(html.indexOf('href="' + cssUrl + '"') !== -1, 'index.html loads the restyled stylesheet');
-    assert.ok(html.indexOf('src="' + jsUrl + '"') !== -1, 'index.html loads the restyled renderer');
-    assert.ok(sw.indexOf("'" + cssUrl + "'") !== -1 && sw.indexOf("'" + jsUrl + "'") !== -1,
-        'sw.js precaches the live LiDAR-arrow assets');
-    assert.ok(Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]) >= 403,
-        'the service-worker shell is bumped for the LiDAR arrow');
+    /* Both live tags must match index.html AND the service-worker precache:
+     * a stale tag serves the old renderer out of Cache Storage and the fix
+     * never reaches an installed visitor. */
+    const liveAssets = [/href="(css\/styles\.css\?[^"]+)"/.exec(html),
+        /src="(js\/danish-layers\.js\?[^"]+)"/.exec(html)].filter(Boolean).map((m) => m[1]);
+    assert.strictEqual(liveAssets.length, 2, 'index.html loads both Danish assets with a cache tag');
+    liveAssets.forEach((asset) => {
+        assert.ok(sw.indexOf("'" + asset + "'") !== -1,
+            asset + ' is precached by sw.js under the same tag index.html loads');
+    });
+    assert.ok(Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]) >= 422,
+        'the service-worker shell is bumped for the Denmark row fix');
     assert.ok(fs.existsSync(path.join(__dirname, 'test-danish-lidar-chevron.js')),
         'the dedicated LiDAR-chevron regression suite is present');
     ok('Denmark’s three group arrows use LiDAR SVG, hover, reduced motion and fresh cache tags');
@@ -1288,7 +1384,16 @@ function buildDom() {
             return element;
         },
         getElementById: (id) => byId[id] || null,
-        addEventListener() {},
+        /* A tiny event registry: the module listens for
+         * `detectlab:langchange`, and the suite has to be able to fire it. */
+        listeners: {},
+        addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); },
+        removeEventListener(type, fn) {
+            this.listeners[type] = (this.listeners[type] || []).filter((f) => f !== fn);
+        },
+        dispatch(type, payload) {
+            (this.listeners[type] || []).forEach((fn) => fn(payload || { type, detail: {} }));
+        },
         createTextNode: (text) => ({ textContent: text })
     };
 
@@ -1373,8 +1478,11 @@ function buildMap() {
         addLayer(layer) { this._layers.push(layer); return this; },
         hasLayer(layer) { return this._layers.indexOf(layer) !== -1; },
         removeLayer(layer) { this._layers = this._layers.filter((l) => l !== layer); return this; },
-        on() { return this; },
-        getZoom() { return 14; },
+        handlers: {},
+        on(event, fn) { String(event).split(/\s+/).forEach((name) => {
+            (this.handlers[name] = this.handlers[name] || []).push(fn); }); return this; },
+        fire(event) { (this.handlers[event] || []).forEach((fn) => fn({ type: event })); return this; },
+        getZoom() { return this.zoom === undefined ? 14 : this.zoom; },
         getBounds() {
             return {
                 getWest: () => 10.15, getSouth: () => 56.10, getEast: () => 10.30, getNorth: () => 56.22,

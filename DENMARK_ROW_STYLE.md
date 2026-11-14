@@ -37,9 +37,28 @@ Only `CONFIG.panelGroups` (`js/danish-layers.config.js`) is rendered:
 
 Heritage / Historical maps / Ortophoto are Romania-style sections: a
 `.transp-layer-row` header (`danishGroup_<id>`) with title, expand chevron
-(`danishGroupExpandBtn_<id>`, collapsed by default) and a master on/off
-switch (`danishGroupToggle_<id>`, indeterminate for partial states) over a
-bordered `danish<Group>SubLayers` column.
+(`danishGroupExpandBtn_<id>`) and a master on/off switch
+(`danishGroupToggle_<id>`, indeterminate for partial states) over a bordered
+`danish<Group>SubLayers` column.
+
+**The sections start OPEN.** They used to start collapsed — like Romania's
+Hărți istorice group — but three closed headers with no visible rows read as
+“Denmark has no historical maps at all”. A collapse is still one click away
+and is remembered for the session, and a language change rebuilds the panel
+while keeping each section in the state the visitor left it
+(`isGroupExpanded()` in `js/danish-layers.js`).
+
+Two related rules keep the catalogue from looking empty:
+
+- The panel is built in ONE synchronous pass, so an exception anywhere in it
+  truncates the whole list. Never assign `element.dataset` (a `[PutForwards]`
+  attribute: a strict-mode assignment throws) — write `element.dataset.x`
+  instead. The group ⓘ handler used to do exactly that and aborted the build
+  right after the LiDAR mount, which is how the Denmark mount ended up empty.
+- A raster row whose `minZoom` is above the current zoom paints nothing by
+  design, so the row now says “This map draws from zoom N — zoom in to see
+  it.” (`reportZoomGates()`) until the map is inside range. The missing
+  `DATAFORSYNINGEN_TOKEN` case keeps its own explicit 503 message per row.
 
 ## Removed
 
