@@ -37,9 +37,57 @@ Only `CONFIG.panelGroups` (`js/danish-layers.config.js`) is rendered:
 
 Heritage / Historical maps / Ortophoto are Romania-style sections: a
 `.transp-layer-row` header (`danishGroup_<id>`) with title, expand chevron
-(`danishGroupExpandBtn_<id>`, collapsed by default) and a master on/off
-switch (`danishGroupToggle_<id>`, indeterminate for partial states) over a
-bordered `danish<Group>SubLayers` column.
+(`danishGroupExpandBtn_<id>`) and a master on/off switch
+(`danishGroupToggle_<id>`, indeterminate for partial states) over a bordered
+`danish<Group>SubLayers` column.
+
+**The sections start OPEN.** They used to start collapsed — like Romania's
+Hărți istorice group — but three closed headers with no visible rows read as
+“Denmark has no historical maps at all”. A collapse is still one click away
+and is remembered for the session, and a language change rebuilds the panel
+while keeping each section in the state the visitor left it
+(`isGroupExpanded()` in `js/danish-layers.js`).
+
+Two related rules keep the catalogue from looking empty:
+
+- The panel is built in ONE synchronous pass, so an exception anywhere in it
+  truncates the whole list. Never assign `element.dataset` (a `[PutForwards]`
+  attribute: a strict-mode assignment throws) — write `element.dataset.x`
+  instead. The group ⓘ handler used to do exactly that and aborted the build
+  right after the LiDAR mount, which is how the Denmark mount ended up empty.
+- A raster row whose `minZoom` is above the current zoom paints nothing by
+  design, so the row now says “This map draws from zoom N — zoom in to see
+  it.” (`reportZoomGates()`) until the map is inside range.
+
+## Credential faults are three different messages
+
+The deployment answers every gated row with a probe
+(`/api/geo/dk-dtk25?…&request=GetCapabilities`) before the first tile is
+requested. The probe's status decides what the row says, and the three cases
+must never be folded into one:
+
+| probe | meaning | row message |
+|---|---|---|
+| `200` | the proxy holds a working credential | *(nothing — the layer switches on)* |
+| `503` | **no** credential on the deployment | “This map layer is not configured on the server yet.” |
+| `401` / `403` | a credential **is** there and Dataforsyningen refused it | “The server credential was rejected by Dataforsyningen — renew `DATAFORSYNINGEN_TOKEN`. (HTTP 401)” |
+
+The 401/403 case used to read “not configured”, which sends the operator
+looking for a variable that is already set. A switch-on the visitor just
+flipped always re-probes (`probeProxy(…, force)`), so a token fixed on the
+deployment is picked up without a page reload.
+
+## The LiDAR rows live in the shared accordion
+
+`#danishLidarLayers` is mounted inside `#lidarEuropeanSubLayers`, which ships
+collapsed. Two invariants follow, and `test-lidar-accordion-reachability.js`
+pins both:
+
+- `#lidarExpandBtn` is the only way in: a real touch target (≥16 px) with
+  `aria-controls` / `aria-expanded` kept in step by `toggleLidarSubLayers()`.
+- The accordion's master switch (`#lidarToggle`) also switches the Danish LiDAR
+  rows off (`DetectLabDanishLayers.deactivatePanelGroup('lidar')`), so a row can
+  never stay on the map inside a collapsed container with no switch in reach.
 
 ## Removed
 

@@ -1638,9 +1638,12 @@
         /* Opacity in the id intentionally excludes the LIDAR Scanner distance
            range, which shares the panel's visual .transp-slider class. The
            Battles century range is the one deliberate non-opacity mirror: it
-           is registered explicitly and renders century labels, not %. */
+           is registered explicitly and renders century labels, not %.
+           .firingplans-vector-slider is excluded too: it is the outline
+           opacity of the firing-plans row's vector variant, a sub-control of
+           that row rather than a layer of its own. */
         var sources = document.querySelectorAll(
-            '#transpPanel input.transp-slider[type="range"][id*="Opacity"],' +
+            '#transpPanel input.transp-slider[type="range"][id*="Opacity"]:not(.firingplans-vector-slider),' +
             '#transpPanel input.transp-slider[type="range"]#battlesPeriodSlider'
         );
         for (var i = 0; i < sources.length; i++) registerSource(sources[i]);

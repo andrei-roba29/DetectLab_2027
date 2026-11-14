@@ -180,6 +180,17 @@
             da: 'Zoom ind for at se fredede fortidsminder (fra zoom',
             en: 'Zoom in to see scheduled ancient monuments (from zoom'
         },
+        /* A raster row that only starts drawing later than the current zoom
+         * used to switch on silently and paint nothing, which reads as "the
+         * Dataforsyningen maps are missing". The row now says why. */
+        zoomInLayer: {
+            da: 'Kortet vises fra zoom',
+            en: 'This map draws from zoom'
+        },
+        zoomInLayerEnd: {
+            da: '— zoom ind for at se det.',
+            en: '— zoom in to see it.'
+        },
         loading: { da: 'Indlæser…', en: 'Loading…' },
         noFeatures: { da: 'Ingen fredede fortidsminder i visningen', en: 'No scheduled monuments in this view' },
         features: { da: 'fortidsminder', en: 'monuments' },
@@ -191,6 +202,18 @@
         missingCredentials: {
             da: 'Kortlaget er ikke konfigureret på serveren endnu.',
             en: 'This map layer is not configured on the server yet.'
+        },
+        /* The deployment answered, but the upstream refused the credential it
+         * was given (401/403 from Dataforsyningen). Saying "not configured"
+         * here sent everyone looking for a missing variable when the real
+         * problem was an expired or wrong DATAFORSYNINGEN_TOKEN. */
+        badCredential: {
+            da: 'Serverens legitimationsoplysninger blev afvist af Dataforsyningen — forny DATAFORSYNINGEN_TOKEN.',
+            en: 'The server credential was rejected by Dataforsyningen — renew DATAFORSYNINGEN_TOKEN.'
+        },
+        retrying: {
+            da: 'Prøver igen…',
+            en: 'Retrying…'
         }
     };
 
@@ -211,7 +234,8 @@
         expanded: true,
         wfs: { timer: null, controller: null, running: false, dirty: false, last: '', layer: null },
         notices: {},        /* id → { text, kind }                 */
-        guard: {}           /* id → 'unknown' | 'ok' | 'unconfigured' | 'absent' */
+        guard: {},          /* id → 'unknown' | 'ok' | 'unconfigured' | 'rejected' | 'absent' */
+        guardStatus: {}     /* id → the HTTP status the probe saw (0 when offline) */
     };
 
     var MASTER_ID = 'danishToggle';
@@ -319,32 +343,38 @@
     /* Does the deployment answer the proxy route (and is it configured)? 503 →
      * the route exists but server credentials are unavailable. 404/403/network →
      * there is no usable proxy at this origin (for example, a static preview). */
-    function probeProxy(layer, done) {
+    function probeProxy(layer, done, force) {
         var cached = runtime.guard[layer.id];
-        if (cached && cached !== 'unknown') { done(cached); return; }
+        if (!force && cached && cached !== 'unknown') { done(cached); return; }
         var settled = false;
-        function finish(state) {
+        function finish(state, status) {
             if (settled) return;
             settled = true;
             runtime.guard[layer.id] = state;
-            done(state);
+            runtime.guardStatus[layer.id] = status || 0;
+            done(state, status || 0);
         }
-        var timer = window.setTimeout(function () { finish('absent'); }, 6000);
+        var timer = window.setTimeout(function () { finish('absent', 0); }, 6000);
         try {
             window.fetch(proxyProbeUrl(layer), { method: 'GET', credentials: 'same-origin' })
                 .then(function (response) {
                     window.clearTimeout(timer);
-                    if (response.status === 503) return finish('unconfigured');
-                    if (response.ok) return finish('ok');
-                    return finish('absent');
+                    /* 503 = the route exists but the deployment holds no
+                     * credential. 401/403 = it holds one and Dataforsyningen
+                     * refused it. Both used to collapse into "not
+                     * configured", which pointed at the wrong problem. */
+                    if (response.status === 503) return finish('unconfigured', 503);
+                    if (response.status === 401 || response.status === 403) return finish('rejected', response.status);
+                    if (response.ok) return finish('ok', response.status);
+                    return finish('absent', response.status);
                 })
                 .catch(function () {
                     window.clearTimeout(timer);
-                    finish('absent');
+                    finish('absent', 0);
                 });
         } catch (e) {
             window.clearTimeout(timer);
-            finish('absent');
+            finish('absent', 0);
         }
     }
 
@@ -875,8 +905,34 @@
             }
             if (layer.identify) ensureIdentifyHandler();
         }
+        reportZoomGate(layer);
         syncUI();
         save();
+    }
+
+    /* Leaflet requests no tile at all while the map is below a layer's
+     * minZoom, so switching such a row on at country scale painted nothing and
+     * said nothing: indistinguishable from a layer that does not exist. Say it
+     * in the row instead (and clear it as soon as the map is inside range). */
+    function reportZoomGate(layer) {
+        var map = runtime.map;
+        if (!map || typeof map.getZoom !== 'function') return;
+        if (layer.type === 'wfs') return;            /* refreshOneWfs says it itself */
+        var gate = layer.minZoom || 0;
+        if (gate <= 0) return;
+        var zoom = map.getZoom();
+        var existing = runtime.notices[layer.id];
+        if (zoom < gate) {
+            setStatus(layer.id, tr(TEXT.zoomInLayer) + ' ' + gate + ' ' + tr(TEXT.zoomInLayerEnd), 'info');
+        } else if (existing && existing.kind === 'info') {
+            setStatus(layer.id, '', 'info');
+        }
+    }
+
+    function reportZoomGates() {
+        LAYERS.forEach(function (layer) {
+            if (runtime.active[layer.id]) reportZoomGate(layer);
+        });
     }
 
     function deactivate(layer, options) {
@@ -921,6 +977,18 @@
         activate(alternative, {});
     }
 
+    /* The deployment holds a credential and the upstream refused it (401/403):
+     * an expired token, a token for another service, or a revoked one. The row
+     * must say that, not "not configured" — that wording sends the operator
+     * hunting for a variable that is already there. */
+    function handleRejectedCredential(layer, status) {
+        setStatus(layer.id, tr(TEXT.badCredential) + (status ? ' (HTTP ' + status + ')' : ''), 'error');
+        runtime.active[layer.id] = false;
+        var built = runtime.built[layer.id];
+        if (runtime.map && built && runtime.map.hasLayer(built)) runtime.map.removeLayer(built);
+        syncUI();
+    }
+
     /* A workstation preview: no proxy routes exist, but the page may have been
      * handed a token (Dataforsyningen) and the public WFS answers directly. */
     function tryDirectFallback(layer) {
@@ -945,16 +1013,20 @@
             return;
         }
         setStatus(layer.id, tr(TEXT.loading), 'info');
-        probeProxy(layer, function (state) {
+        /* A switch the visitor just flipped is always re-probed: a credential
+         * can be fixed on the deployment while the page is open, and a cached
+         * verdict would keep the row dead until a full reload. */
+        probeProxy(layer, function (state, status) {
             if (state === 'ok') {
                 setStatus(layer.id, '', 'info');
                 activate(layer, {});
                 return;
             }
+            if (state === 'rejected') { handleRejectedCredential(layer, status); return; }
             if (state === 'unconfigured') { handleUnconfigured(layer); return; }
             if (layer.directFallback) { tryDirectFallback(layer); return; }
             handleUnconfigured(layer);
-        });
+        }, true);
     }
 
     /* ── the panel ───────────────────────────────────────────────────────── */
@@ -1249,6 +1321,19 @@
         return 'danish' + group.id.charAt(0).toUpperCase() + group.id.slice(1) + 'SubLayers';
     }
 
+    /* Are a section's rows unfolded? `expandedGroups` only records an explicit
+     * visitor choice; until there is one, the answer is the section's own
+     * default, which is OPEN. (The sections used to start collapsed, so a
+     * Danish visitor landed on three closed headers and the catalogue looked
+     * absent — "the Dataforsyningen maps do not appear as layers at all".
+     * The accordion is still one click away, and an explicit collapse is
+     * remembered exactly as before.) */
+    function isGroupExpanded(group) {
+        if (!group) return false;
+        if (typeof runtime.expandedGroups[group.id] === 'boolean') return runtime.expandedGroups[group.id];
+        return true;
+    }
+
     function setGroupExpanded(groupId, expanded) {
         runtime.expandedGroups[groupId] = !!expanded;
         var entry = runtime.groupRows[groupId];
@@ -1284,10 +1369,11 @@
      * whose `.transp-layer-label` header carries the section title, an
      * expand chevron and the master `.apm-toggle-switch`, over a
      * left-bordered `…SubLayers` column of buildRow() rows. Sections start
-     * collapsed, like the Romanian group. */
+     * OPEN (see isGroupExpanded): the rows are the thing the section exists
+     * for, and a header-only section reads as "this country has no layers". */
     function buildGroup(group) {
         var title = tr(group.title);
-        var expanded = !!runtime.expandedGroups[group.id];
+        var expanded = isGroupExpanded(group);
         var bodyId = groupSubLayersId(group);
         var titleId = 'danishGroupTitle_' + group.id;
         var isLidarStyleGroup = LIDAR_STYLE_GROUP_IDS.indexOf(group.id) !== -1;
@@ -1341,7 +1427,7 @@
         expandBtn.addEventListener('click', function (event) {
             if (event && event.preventDefault) event.preventDefault();
             if (event && event.stopPropagation) event.stopPropagation();
-            setGroupExpanded(group.id, !runtime.expandedGroups[group.id]);
+            setGroupExpanded(group.id, !isGroupExpanded(group));
         });
 
         var marker = el('span', {
@@ -1368,18 +1454,31 @@
             'data-layer-info': 'showDanishInfo()',
             'data-lidar-style': 'true',
             'data-danish-group': group.id,
-            onclick: "event.preventDefault();event.stopPropagation();this.dataset.infoHandled='true';window.showDanishInfo()",
+            /* No `this.dataset.infoHandled = …` here: `dataset` is a
+             * [PutForwards] attribute and assigning the object back to it
+             * THROWS in a strict-mode inline handler, so the panel never
+             * opened. The data attribute carries the same intent and is what
+             * the listener below reads. */
+            onclick: 'event.preventDefault();event.stopPropagation();' +
+                "this.setAttribute('data-info-handled','true');window.showDanishInfo()",
             style: 'padding:0;background:none;border:none;color:inherit;cursor:pointer;display:inline-flex;align-items:center;'
         });
-        infoBtn.dataset = infoBtn.dataset || {};
+        /* Never assign `dataset` itself (read-only in some runtimes, and a
+         * strict-mode assignment kills the caller); always write through it. */
+        infoBtn.dataset.infoHandled = 'false';
         infoBtn.innerHTML = LIDAR_INFO_ICON_SVG;
         infoBtn.addEventListener('click', function (event) {
             if (event && event.preventDefault) event.preventDefault();
             if (event && event.stopPropagation) event.stopPropagation();
             /* The inline handler above already showed the panel in a real
-             * browser; the listener is the no-inline-JS / unit-test path. */
-            if (infoBtn.dataset.infoHandled === 'true') {
+             * browser (it sets data-info-handled first); the listener is the
+             * no-inline-JS / unit-test path. Read the attribute as well, so
+             * the guard works even where `dataset` is not writable. */
+            var handled = infoBtn.dataset.infoHandled === 'true' ||
+                (infoBtn.getAttribute && infoBtn.getAttribute('data-info-handled') === 'true');
+            if (handled) {
                 infoBtn.dataset.infoHandled = 'false';
+                if (infoBtn.setAttribute) infoBtn.setAttribute('data-info-handled', 'false');
                 return;
             }
             showDanishGroupInfo();
@@ -1660,7 +1759,24 @@
     /* ── language change ──────────────────────────────────────────────────── */
 
     function refreshTexts() {
+        /* buildPanel() throws the DOM away, so a section the visitor had
+         * opened would come back collapsed (and lose its rows on screen).
+         * Remember each section's current state and re-apply it after the
+         * rebuild: a language change must never look like "the layers
+         * disappeared". */
+        var wasOpen = {};
+        Object.keys(runtime.groupRows).forEach(function (groupId) {
+            wasOpen[groupId] = !!(runtime.groupRows[groupId] && runtime.groupRows[groupId].body &&
+                runtime.groupRows[groupId].body.getAttribute('aria-hidden') === 'false');
+        });
         buildPanel();
+        Object.keys(wasOpen).forEach(function (groupId) {
+            setGroupExpanded(groupId, wasOpen[groupId]);
+        });
+        /* Rows that no longer exist (a section added/removed by a config
+         * change) keep their default; explicit choices in `expandedGroups`
+         * are untouched. */
+        setExpanded(runtime.expanded);
         relabelControl();
         var title = document.getElementById('danishGroupTitle');
         if (title) title.textContent = tr(CONFIG.groupLabel);
@@ -1700,6 +1816,7 @@
 
     function onViewChange() {
         ensureActiveOnMap();
+        reportZoomGates();
         scheduleWfs();
     }
 
@@ -1742,6 +1859,7 @@
             PANEL_LAYERS.forEach(function (layer) {
                 if (runtime.active[layer.id]) switchOn(layer);
             });
+            reportZoomGates();
             syncUI();
         });
     }
@@ -1812,6 +1930,24 @@
         },
         activate: function (id) { var l = CONFIG.byId(id); if (l) switchOn(l); },
         deactivate: function (id) { var l = CONFIG.byId(id); if (l) deactivate(l, {}); },
+        /* Switch an entire panel section off (js/map-app.js calls this when the
+         * shared LiDAR accordion master is turned off, so the Danish LiDAR rows
+         * never stay "on" inside a collapsed accordion). */
+        deactivatePanelGroup: function (groupId) {
+            var group = (CONFIG.panelGroups || []).filter(function (g) { return g.id === groupId; })[0];
+            if (!group) return 0;
+            var count = 0;
+            (group.layers || []).forEach(function (id) {
+                var layer = CONFIG.byId(id);
+                if (!layer || layer.enabled === false) return;
+                if (runtime.active[layer.id]) { deactivate(layer, {}); count++; }
+            });
+            /* Drop the remembered probe verdict too: the next switch-on must be
+             * allowed to ask the deployment again, not replay an old answer. */
+            (group.layers || []).forEach(function (id) { runtime.guard[id] = 'unknown'; });
+            syncUI();
+            return count;
+        },
         setOpacity: function (id, value) { var l = CONFIG.byId(id); if (l) setOpacity(l, value, false); },
         opacityOf: function (id) { return runtime.opacity[id]; },
         isActive: function (id) { return !!runtime.active[id]; },

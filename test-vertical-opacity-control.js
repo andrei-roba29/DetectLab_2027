@@ -15,11 +15,23 @@ const stylesCss = fs.readFileSync(path.join(__dirname, 'css/styles.css'), 'utf8'
 const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 const rangeTags = indexHtml.match(/<input\b[^>]*>/gis) || [];
 const opacityIds = rangeTags.filter(function (tag) {
-    return /class="[^"]*transp-slider/.test(tag) && /type="range"/.test(tag) && /id="[^"]*Opacity/.test(tag);
+    // Mirrors the runtime selector: the firing-plans vector outline slider
+    // shares the visual class but is a sub-control of its row, opted out by
+    // .firingplans-vector-slider (js/vertical-opacity-control.js).
+    return /class="[^"]*transp-slider/.test(tag) && !/firingplans-vector-slider/.test(tag) &&
+        /type="range"/.test(tag) && /id="[^"]*Opacity/.test(tag);
 }).map(function (tag) {
     return (tag.match(/id="([^"]+)"/) || [])[1];
 });
 assert.strictEqual(opacityIds.length, 58, 'all 58 shipped opacity ranges are discoverable (including the Hoards group and Romania 5 m LiDAR)');
+// The firing-plans vector outline slider shares the panel's visual class but
+// is a SUB-control of that row (its own opacity), so the vertical mirror must
+// opt it out by class — otherwise it would get a duplicate vertical slider.
+assert.ok(/id="firingPlansVectorOpacity"[^>]*class="[^"]*firingplans-vector-slider"|class="[^"]*firingplans-vector-slider"[^>]*id="firingPlansVectorOpacity"/.test(indexHtml),
+    'the vector outline slider is marked as an in-row sub-slider');
+assert.ok(/id\*="Opacity"\]:not\(\.firingplans-vector-slider\)/.test(
+        fs.readFileSync(path.join(__dirname, 'js/vertical-opacity-control.js'), 'utf8')),
+    'the vertical opacity mirror excludes the in-row vector slider');
 assert(!opacityIds.includes('lidarScannerDistance'), 'scanner distance is not an opacity range');
 assert(indexHtml.includes('id="battlesPeriodSlider"'), 'battles period slider should be part of the panel');
 assert(indexHtml.includes('id="battlesPeriodValue"'), 'battles century bubble should exist in the panel');

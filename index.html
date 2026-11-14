@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="css/leaflet.photon.css">
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20261109-arch-report-zone">
+    <link rel="stylesheet" href="css/styles.css?v=20261114-firing-vector">
     <!-- 3D TERRAIN VIEW (2D ⇄ 3D) — MapLibre GL JS, vendored like Leaflet.
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
@@ -2132,6 +2132,28 @@
                                 <input type="range" class="transp-slider" id="firingPlansOpacitySlider"
                                        min="0" max="100" value="80"
                                        oninput="setFiringPlansOpacity(this.value)">
+
+                                <!-- Vector tiles instead of the raster mosaic. When this box is
+                                     ticked the 1:20 000 WMS background is taken off the map and
+                                     the traced MVT tiles (Supabase, planuri_tragere_vector) are
+                                     drawn in its place as an orange outline with no fill, so the
+                                     basemap stays readable underneath. js/firing-plans-vector.js
+                                     owns the layer; the firing-plans switch above stays the
+                                     master. -->
+                                <label class="firingplans-bg-toggle" for="firingPlansDisableBg">
+                                    <input type="checkbox" id="firingPlansDisableBg"
+                                           onchange="setFiringPlansVectorBackground(this.checked)">
+                                    <span class="firingplans-bg-label t" data-key="layer_disable_background">Dezactivează fundal</span>
+                                </label>
+                                <div class="firingplans-bg-opacity" id="firingPlansVectorOpacityRow">
+                                    <span style="font-size:0.7rem;opacity:0.6">Opacity</span>
+                                    <input type="range" class="transp-slider firingplans-vector-slider" id="firingPlansVectorOpacity"
+                                           min="0" max="100" value="100"
+                                           aria-label="Vector outline opacity"
+                                           oninput="setFiringPlansVectorOpacity(this.value)">
+                                </div>
+                                <div class="firingplans-bg-status" id="firingPlansVectorStatus"
+                                     role="status" style="display:none;"></div>
                             </div>
 
                             <!-- Sub-layer: Harta Sovietică 1970 / Soviet Map 1970s -->
@@ -2206,7 +2228,7 @@
                                 <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showLayerInfo('LiDAR','Free national LiDAR services: AHN / Kartverket / GUGiK / IGN / swisstopo / Environment Agency / Datafordeler.')" title="Layer info"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
                             </span>
                             <span style="display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0">
-                                <button onclick="toggleLidarSubLayers()" id="lidarExpandBtn" title="Expand/Collapse sublayers" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:rgba(79,195,247,0.8);display:flex;align-items:center;transition:color 0.2s;" onmouseover="this.style.color='#4fc3f7'" onmouseout="this.style.color='rgba(79,195,247,0.8)'">
+                                <button type="button" onclick="toggleLidarSubLayers()" id="lidarExpandBtn" aria-controls="lidarEuropeanSubLayers lidarSubLayers" aria-expanded="false" title="Expand/Collapse sublayers" style="background:none;border:none;cursor:pointer;padding:9px 8px;margin:-7px 0;color:rgba(79,195,247,0.8);display:flex;align-items:center;transition:color 0.2s;" onmouseover="this.style.color='#4fc3f7'" onmouseout="this.style.color='rgba(79,195,247,0.8)'">
                                     <svg id="lidarExpandIcon" width="12" height="12" viewBox="0 0 12 12" fill="none" style="transition:transform 0.25s ease;transform:rotate(-90deg)">
                                         <polyline points="2,4 6,8 10,4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
                                     </svg>
@@ -5506,7 +5528,7 @@
          See ROMAN_ROADS_PERFORMANCE.md. -->
     <script src="js/roman-roads-parser.js?v=20261015-roman-roads"></script>
     <script src="js/roman-roads.js?v=20261015-roman-roads"></script>
-    <script src="js/map-app.js?v=20261105-iosfree-retired"></script>
+    <script src="js/map-app.js?v=20261114-firing-vector"></script>
     <script src="js/romania-heritage.js?v=20261102-ro-heritage"></script>
     <link rel="stylesheet" href="css/romania-heritage.css?v=20261102-ro-heritage">
     <link rel="stylesheet" href="css/rvt-panel.css?v=20261101-robust-train">
@@ -5517,7 +5539,7 @@
     <script src="js/rvt-panel.js?v=20261101-desktop-3d-hint" defer></script>
     <!-- Danish layers: panel rows, basemap-control buttons and the lazy
          Leaflet layers, all built from js/danish-layers.config.js. -->
-    <script src="js/danish-layers.js?v=20261103-danish-lidar-chevron"></script>
+    <script src="js/danish-layers.js?v=20261114-lidar-switch-fix"></script>
     <!-- Albanian layers (ASIG): the catalogue panel of the single Albania group
          (#albaniaRow) — collapsible Romania-style sections (chevron + master
          switch), one pill on/off switch + opacity slider per layer, a search

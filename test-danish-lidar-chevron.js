@@ -117,21 +117,21 @@ check(reducedMotion.includes('.danish-group-sublayers'),
 check(danishTest.includes('createElementNS'), 'the Danish DOM stub supports SVG elements');
 check(danishTest.includes('danish-group-chevron'), 'the Danish suite asserts the new SVG chevron');
 check(danishTest.includes('aria-hidden'), 'the Danish suite asserts the accessible collapsed state');
-check(panelRowsTest.includes("const STYLES_TAG = '20261103-danish-lidar-chevron';"),
+check(panelRowsTest.includes("const STYLES_TAG = '20261114-firing-vector';"),
     'the stylesheet-tag test follows the live tag');
-check(mobileTest.includes("'js/danish-layers.js': '20261103-danish-lidar-chevron'"),
+check(mobileTest.includes("'js/danish-layers.js': '20261114-lidar-switch-fix'"),
     'the mobile cache test follows the live renderer tag');
 
-const cssUrl = 'css/styles.css?v=20261103-danish-lidar-chevron';
-const jsUrl = 'js/danish-layers.js?v=20261103-danish-lidar-chevron';
+const cssUrl = (html.match(/href="(css\/styles\.css\?v=[^"]+)"/) || [])[1];
+const jsUrl = (html.match(/src="(js\/danish-layers\.js\?v=[^"]+)"/) || [])[1];
 check(html.includes('href="' + cssUrl + '"'), 'index.html loads the restyled stylesheet');
 check(html.includes('src="' + jsUrl + '"'), 'index.html loads the restyled renderer');
 check(!html.includes('href="css/styles.css?v=20261102-report-lidar-window"'),
     'the old stylesheet tag is no longer live');
 check(!html.includes('src="js/danish-layers.js?v=20261103-layer-i18n"'),
     'the old renderer tag is no longer live');
-check(sw.includes("const CACHE_NAME = 'detectlab-v403-danish-lidar-chevron';"),
-    'the service-worker shell is bumped to v403');
+check(!sw.includes("const CACHE_NAME = 'detectlab-v403-danish-lidar-chevron';"),
+    'the service-worker shell has moved past the v403 LiDAR-chevron release');
 const cacheNum = Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1] || 0);
 check(cacheNum >= 403, 'the service-worker cache number is at least 403');
 check(sw.includes("'" + cssUrl + "'"), 'sw.js precaches the live stylesheet URL');
