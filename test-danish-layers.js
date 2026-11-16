@@ -57,7 +57,7 @@ const TOKEN = 'test-token-not-a-credential';
  * 1. the config
  * ══════════════════════════════════════════════════════════════════════════ */
 {
-    assert.strictEqual(CONFIG.layers.length, 43, 'the existing Danish layers plus the requested LiDAR, heritage and historical layers plus the ten Kulturarv sublayers are configured');
+    assert.strictEqual(CONFIG.layers.length, 41, 'the existing Danish layers plus the requested LiDAR, heritage and historical layers plus the Kulturarv sublayers are configured (the marine points and the relief raster were retired)');
     assert.strictEqual(CONFIG.country, 'DK');
     assert.deepStrictEqual(CONFIG.layers.slice(0, 6).map((l) => l.id),
         ['dtk25', 'orto', 'naturtyper', 'osm', 'historic-witx', 'fortidsminder']);
@@ -76,8 +76,7 @@ const TOKEN = 'test-token-not-a-credential';
             'fortidsminder_areal_alle', 'fortidsminder_areal_adm', 'fortidsminder_areal_ka',
             'fortidsminder_areal_beskyttelse', 'fortidsminder_areal_marin',
             'fortidsminder_linie_alle', 'fortidsminder_linje_fredet', 'fortidsminder_linie_marin',
-            'fortidsminder_punkt_fredet', 'fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_marin',
-            'kulturarv_relief']],
+            'fortidsminder_punkt_fredet', 'fortidsminder_punkt_ikkefredet']],
         ['historical', 'Historical maps', ['topo4cm_1980_2001', 'topo4cm_1953_1976', 'hist_lave', 'hist_hoeje', 'hist_preussen', 'dtk25']],
         ['orthophoto', 'Ortophoto', ['orto_sommer_2008', 'orto_sommer_2005', 'orto_sommer_2002', 'orto_sommer_1999']]
     ], 'the requested free Denmark groups and sublayer order are explicit in the catalogue');
@@ -196,11 +195,13 @@ const TOKEN = 'test-token-not-a-credential';
         'the denser unprotected points join one zoom in');
     ok('heritage points: public CC0 WMS, EPSG:3857, no credential, sensible zoom gates');
 
-    /* The COMPLETE official Kulturarv WMS family (the service's
-     * GetCapabilities, updateSequence 526 — checked 2026-10-28): every
-     * layer name it publishes must be reachable from the config, and the
-     * ten rows that were added after the initial three all follow the
-     * direct public-CC0 contract as Heritage sublayers. */
+    /* The official Kulturarv WMS family (the service's GetCapabilities,
+     * updateSequence 526 — checked 2026-10-28) publishes thirteen names.
+     * Eleven of them are wired. Two were retired from the panel on
+     * 2026-11-15 at the user's request — the marine point view
+     * (fundogfortidsminder_punkt_marin) and the service's own relief raster
+     * (relief) — and a retired layer must be gone completely: no config
+     * entry, no panelGroups id, no panel row, no registry mirror, no probe. */
     const KULTURARV_CAPABILITIES = [
         'fundogfortidsminder_areal_adm', 'fundogfortidsminder_areal_alle',
         'fundogfortidsminder_areal_beskyttelse', 'fundogfortidsminder_areal_fredet',
@@ -210,19 +211,37 @@ const TOKEN = 'test-token-not-a-credential';
         'fundogfortidsminder_punkt_ikkefredet', 'fundogfortidsminder_punkt_marin',
         'relief'
     ];
-    KULTURARV_CAPABILITIES.forEach((name) => {
+    const KULTURARV_RETIRED = ['fundogfortidsminder_punkt_marin', 'relief'];
+    const KULTURARV_WIRED = KULTURARV_CAPABILITIES.filter((name) => KULTURARV_RETIRED.indexOf(name) === -1);
+    assert.strictEqual(KULTURARV_WIRED.length, 11, 'eleven of the thirteen published names stay wired');
+    KULTURARV_WIRED.forEach((name) => {
         const owner = CONFIG.layers.filter((l) => l.layers === name || l.layers === 'public:' + name)[0];
         assert.ok(owner, name + ' of the live GetCapabilities is implemented as a layer');
         assert.strictEqual(owner.provider.indexOf('Slots- og Kulturstyrelsen'), 0,
             name + ' is served by the official agency');
         assert.strictEqual(owner.enabled, true, name + ' ships enabled');
     });
-    ok('every layer of the Kulturarv GetCapabilities is implemented (13/13)');
+    const configSource = read('js/danish-layers.config.js');
+    KULTURARV_RETIRED.forEach((name) => {
+        assert.strictEqual(
+            CONFIG.layers.filter((l) => l.layers === name || l.layers === 'public:' + name).length, 0,
+            name + ' is not configured any more');
+        assert.ok(configSource.indexOf("'" + name + "'") === -1,
+            name + ' survives nowhere in the catalogue source');
+    });
+    ['fortidsminder_punkt_marin', 'kulturarv_relief'].forEach((id) => {
+        assert.strictEqual(CONFIG.byId(id), null, id + ' is not in the catalogue');
+        assert.strictEqual(CONFIG.enabledLayers().filter((l) => l.id === id).length, 0, id + ' is not enabled');
+        assert.strictEqual(RENDERED.indexOf(id), -1, id + ' has no panel row');
+        assert.ok(configSource.indexOf("id: '" + id + "'") === -1, id + ' has no catalogue entry');
+        assert.ok(configSource.indexOf("'" + id + "'") === -1,
+            id + ' is quoted nowhere in the catalogue source (the retirement note names the WMS layer, not the id)');
+    });
+    ok('the Kulturarv GetCapabilities: 11/13 wired; the retired marine points and relief raster are gone');
 
     const KULTURARV_NEW = ['fortidsminder_areal_alle', 'fortidsminder_areal_adm',
         'fortidsminder_areal_ka', 'fortidsminder_areal_beskyttelse', 'fortidsminder_areal_marin',
-        'fortidsminder_linie_alle', 'fortidsminder_linje_fredet', 'fortidsminder_linie_marin',
-        'fortidsminder_punkt_marin'];
+        'fortidsminder_linie_alle', 'fortidsminder_linje_fredet', 'fortidsminder_linie_marin'];
     KULTURARV_NEW.forEach((id) => {
         const row = CONFIG.byId(id);
         assert.ok(row, id + ' exists');
@@ -246,26 +265,20 @@ const TOKEN = 'test-token-not-a-credential';
         assert.ok(row.minZoom >= 8 && row.minZoom <= 9 && row.maxZoom >= 20,
             id + ' opens at a sensible zoom gate (got ' + row.minZoom + ')');
     });
-    const relief = CONFIG.byId('kulturarv_relief');
-    assert.ok(relief, 'kulturarv_relief exists');
-    assert.strictEqual(relief.layers, 'relief', 'the service\'s own relief raster');
-    assert.strictEqual(relief.type, 'wms');
-    assert.strictEqual(relief.url, 'https://www.kulturarv.dk/ffgeoserver/public/wms');
-    assert.strictEqual(relief.crs, 'EPSG:3857');
-    assert.strictEqual(relief.transparent, true, 'the relief blends over the basemap');
-    assert.strictEqual(relief.panelGroup, 'heritage');
-    assert.strictEqual(relief.identify, null, 'a raster is not queryable');
-    assert.ok(relief.minZoom <= 6 && relief.maxNativeZoom >= 12 && relief.maxNativeZoom <= 16,
-        'the relief opens early and upscales beyond its unpublished native grid');
+    /* The relief raster is retired: no row may ask the heritage GeoServer for
+       its `relief` layer any more. */
+    assert.strictEqual(CONFIG.layers.filter((l) => l.layers === 'relief').length, 0,
+        'no configured layer requests the heritage relief raster');
+    assert.strictEqual(CONFIG.layers.filter((l) => /relief/i.test(l.id)).length, 0,
+        'and no Danish row is named after it (the LiDAR hillshades are separate layers)');
     const heritageGroup = CONFIG.panelGroups.filter((g) => g.id === 'heritage')[0];
     assert.deepStrictEqual(heritageGroup.layers.slice(2),
         ['fortidsminder_areal_alle', 'fortidsminder_areal_adm', 'fortidsminder_areal_ka',
             'fortidsminder_areal_beskyttelse', 'fortidsminder_areal_marin',
             'fortidsminder_linie_alle', 'fortidsminder_linje_fredet', 'fortidsminder_linie_marin',
-            'fortidsminder_punkt_fredet', 'fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_marin',
-            'kulturarv_relief'],
-        'the Kulturarv rows are sublayers of the Heritage section, grouped areas → lines → points → relief');
-    ok('the ten new Kulturarv rows: direct public CC0 WMS, EPSG:3857, Heritage sublayers');
+            'fortidsminder_punkt_fredet', 'fortidsminder_punkt_ikkefredet'],
+        'the Kulturarv rows are sublayers of the Heritage section, grouped areas → lines → points');
+    ok('the eight Kulturarv area/line rows: direct public CC0 WMS, EPSG:3857, Heritage sublayers');
 
     /* The scheduled-monuments areas are bright neon orange now: the user asked
        for an eye-catching colour, and the areas are the group's hero layer. */
@@ -343,6 +356,18 @@ const TOKEN = 'test-token-not-a-credential';
                 id + ': opting out of the guard is documented');
         }
     });
+    /* registerDanishLayers() mirrors the config, so the two rows retired on
+       2026-11-15 cannot leave a registry id behind — nothing to clean up in
+       js/layer-registry.js, and nothing for wms-health.js to probe. */
+    ['fortidsminder_punkt_marin', 'kulturarv_relief'].forEach((id) => {
+        assert.ok(!R.get('danish.' + id), 'danish.' + id + ' is not registered');
+        assert.ok(R.list('danish-overlay').filter((def) => def.id === 'danish.' + id).length === 0,
+            'danish.' + id + ' is not in the Danish overlay group');
+    });
+    assert.ok(R.list('danish-overlay').filter((def) => def.layer === 'relief').length === 0,
+        'no registered Danish layer asks for the relief raster');
+    assert.ok(R.list('danish-overlay').filter((def) => def.layer === 'fundogfortidsminder_punkt_marin').length === 0,
+        'and none asks for the marine point view');
     assert.ok(R.get('danish.dtk25').upstream.indexOf('api.dataforsyningen.dk') !== -1,
         'the provider endpoint behind the proxy is recorded');
     assert.ok(R.get('danish.orto').upstream.indexOf('services.datafordeler.dk') !== -1);
@@ -783,6 +808,21 @@ async function testMapModule() {
     });
     assert.ok(!dom.byId['danishSpringOrthoYear'], 'the spring-orthophoto year dropdown is gone');
     assert.ok(!dom.byId['danishSpringOrthoStatus'], 'and so is its status line');
+
+    /* The two Heritage rows retired on 2026-11-15 — "Finds and ancient
+       monuments (marine points)" and "Relief hillshade (Danish heritage
+       service)" — leave no furniture behind, and a stale localStorage entry
+       for them is ignored instead of re-adding a row. */
+    assert.ok(dom.byId['danishGroup_heritage'], 'the Heritage section itself is still rendered');
+    ['fortidsminder_punkt_marin', 'kulturarv_relief'].forEach((id) => {
+        assert.ok(!dom.byId['danishRow_' + id], id + ' has no panel row');
+        assert.ok(!dom.byId['danishToggle_' + id], id + ' has no panel switch');
+        assert.ok(!dom.byId['danishOpacity_' + id], id + ' has no opacity slider');
+        assert.ok(!dom.byId['danishGroupInfo_' + id], id + ' has no info button');
+        assert.strictEqual(API.isActive(id), false, id + ' cannot be switched on');
+        assert.strictEqual(Object.keys(dom.byId).filter((key) => key.indexOf(id) !== -1).length, 0,
+            id + ' is named by no element in the panel');
+    });
     ok('rows, pill switches, sliders and sections are generated from the config; removed rows stay removed');
 
     /* The info panel takes plain text: it links the URLs it finds and prints the
@@ -1256,6 +1296,102 @@ async function testMapModule() {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+ * 4b. a returning visitor whose localStorage still names the retired rows
+ * ══════════════════════════════════════════════════════════════════════════ */
+async function testRetiredStoredPreference() {
+    /* Somebody who used the panel before 2026-11-15 still has
+       "Finds and ancient monuments (marine points)" and "Relief hillshade
+       (Danish heritage service)" switched on in
+       localStorage['detectlab_danish_layers_v1'] — with an opacity, and the
+       relief even as the selected layer. applyStored() walks the layers the
+       config knows, so those keys are dropped: no row is built, no tile is
+       requested from kulturarv.dk, and the next save() rewrites the blob
+       without them. A live row from the same blob is still honoured, which is
+       what proves the restore path itself is untouched. */
+    const dom = buildDom();
+    const map = buildMap();
+    const leaflet = buildLeaflet(dom);
+    const stored = {
+        active: {
+            fortidsminder_punkt_marin: true,
+            kulturarv_relief: true,
+            fortidsminder_punkt_fredet: true
+        },
+        opacity: { kulturarv_relief: 55, fortidsminder_punkt_marin: 40 },
+        selected: 'kulturarv_relief',
+        expanded: true
+    };
+    const writes = [];
+    const sandbox = {
+        console: { warn() {}, log() {} },
+        document: dom.document,
+        localStorage: {
+            getItem: (key) => (key === 'detectlab_danish_layers_v1' ? JSON.stringify(stored) : null),
+            setItem: (key, value) => { writes.push({ key: key, value: JSON.parse(value) }); }
+        },
+        setTimeout: (fn) => { dom.timers.push(fn); return dom.timers.length; },
+        clearTimeout() {},
+        setInterval: () => 0,
+        clearInterval() {},
+        fetch: () => Promise.resolve(new Response('', { status: 503 })),
+        Response, Request, AbortController: function () { this.abort = () => {}; },
+        alert() {},
+        L: leaflet,
+        DANISH_LAYERS_CONFIG: CONFIG,
+        _dlMap: map,
+        _currentLang: () => 'en'
+    };
+    sandbox.window = sandbox;
+    vm.createContext(sandbox);
+    vm.runInContext(read('js/danish-layers.js'), sandbox, { filename: 'js/danish-layers.js' });
+    await settle();
+    const API = sandbox.DetectLabDanishLayers;
+
+    ['fortidsminder_punkt_marin', 'kulturarv_relief'].forEach((id) => {
+        assert.ok(!dom.byId['danishRow_' + id], id + ': a stored "on" builds no row');
+        assert.ok(!dom.byId['danishToggle_' + id], id + ': and no switch to turn it off with');
+        assert.strictEqual(API.isActive(id), false, id + ': the stored preference is not restored');
+        assert.strictEqual(API.opacityOf(id), undefined, id + ': its stored opacity is dropped too');
+    });
+    assert.strictEqual(API.isActive('fortidsminder_punkt_fredet'), true,
+        'a live row from the same stored blob IS restored');
+    assert.ok(CONFIG.byId(API.selectedBase()),
+        'the selection fell back to a configured layer, not the retired id');
+    assert.notStrictEqual(API.selectedBase(), 'kulturarv_relief',
+        'the retired relief raster cannot be the selected layer');
+
+    /* The build path still works for live rows — and never asks kulturarv.dk
+       for one of the two retired names. */
+    API.toggle('fortidsminder_linie_alle', true);
+    await settle();
+    const requested = leaflet.calls.tileLayerWms.map((call) => String(call.options && call.options.layers));
+    assert.ok(requested.indexOf('fundogfortidsminder_linie_alle') !== -1,
+        'a live Heritage row still builds its own WMS layer');
+    assert.ok(requested.indexOf('relief') === -1,
+        'no GetMap asks the heritage service for its relief raster');
+    assert.ok(requested.indexOf('fundogfortidsminder_punkt_marin') === -1,
+        'and none asks for the marine point view');
+
+    const heritageBody = dom.byId['danishHeritageSubLayers'];
+    assert.ok(heritageBody, 'the Heritage section is still rendered');
+    assert.strictEqual(heritageBody.children.length,
+        CONFIG.panelGroups.filter((group) => group.id === 'heritage')[0].layers.length,
+        'and it holds exactly the rows the config lists (12, not 14)');
+
+    /* The switch-on rewrote the blob: the retired keys must not survive in
+       what the next visit will read. */
+    assert.ok(writes.length >= 1, 'switching a live row saves the preference');
+    const saved = writes[writes.length - 1].value;
+    ['fortidsminder_punkt_marin', 'kulturarv_relief'].forEach((id) => {
+        assert.ok(!(id in (saved.active || {})), id + ' is gone from the saved "active" map');
+        assert.ok(!(id in (saved.opacity || {})), id + ' is gone from the saved opacity map');
+    });
+    assert.notStrictEqual(saved.selected, 'kulturarv_relief', 'and from the saved selection');
+    assert.strictEqual(saved.active.fortidsminder_linie_alle, true, 'the live choice is remembered');
+    ok('a stale stored preference for the retired Heritage rows is ignored, never requested, and cleaned out');
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
  * 5. the page wiring
  * ══════════════════════════════════════════════════════════════════════════ */
 function testWiring() {
@@ -1599,6 +1735,7 @@ function settle() {
 (async function main() {
     await testProxies();
     await testMapModule();
+    await testRetiredStoredPreference();
     testWiring();
     console.log('\n✅ Danish layers: ' + passed + ' checks passed.');
 }().catch((error) => {
