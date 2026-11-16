@@ -73,9 +73,15 @@ check(js.includes('layer-info-btn danish-group-info lidar-style-info'),
     'group headers carry the LiDAR-style info button');
 check(js.includes('window.showDanishInfo()'), 'the group info button opens the Danish info panel');
 check(js.includes('showDanishGroupInfo()'), 'the group info click has a no-inline-JS path');
-check(js.includes('LIDAR_GROUP_MARKER_SVG'), 'group headers use the LiDAR-style leading marker');
-check(js.includes('circle cx="6.5" cy="6.5" r="4.5" stroke="#4fc3f7"'),
-    'the leading marker is the LiDAR blue target');
+/* The three sections adopt the LiDAR chevron, blues and rail — but NOT its
+ * leading target glyph: Heritage / Historical maps / Ortophoto are not LiDAR,
+ * and the icon in front of the title said they were. */
+check(!js.includes('LIDAR_GROUP_MARKER_SVG'), 'the LiDAR leading-marker glyph is gone from the Danish renderer');
+check(!js.includes('circle cx="6.5" cy="6.5" r="4.5" stroke="#4fc3f7"'),
+    'and so is its blue target markup');
+check(!js.includes('danishGroupMarker_'), 'no Denmark section builds a leading marker element');
+check(!css.includes('danish-group-marker') && !css.includes('lidar-style-marker'),
+    'the marker rules left the stylesheet with the element');
 check(js.includes('role: \'group\''), 'the generated section is an accessible group');
 check(js.includes('role: \'region\''), 'the generated body is an accessible region');
 check(js.includes('aria-labelledby'), 'group and body are labelled by the translated title');
@@ -117,9 +123,9 @@ check(reducedMotion.includes('.danish-group-sublayers'),
 check(danishTest.includes('createElementNS'), 'the Danish DOM stub supports SVG elements');
 check(danishTest.includes('danish-group-chevron'), 'the Danish suite asserts the new SVG chevron');
 check(danishTest.includes('aria-hidden'), 'the Danish suite asserts the accessible collapsed state');
-check(panelRowsTest.includes("const STYLES_TAG = '20261114-firing-vector';"),
+check(panelRowsTest.includes("const STYLES_TAG = '20261115-danish-panel-rows';"),
     'the stylesheet-tag test follows the live tag');
-check(mobileTest.includes("'js/danish-layers.js': '20261114-lidar-switch-fix'"),
+check(mobileTest.includes("'js/danish-layers.js': '20261115-danish-panel-rows'"),
     'the mobile cache test follows the live renderer tag');
 
 const cssUrl = (html.match(/href="(css\/styles\.css\?v=[^"]+)"/) || [])[1];

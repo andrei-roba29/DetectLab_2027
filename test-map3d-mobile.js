@@ -290,11 +290,11 @@ assert(shellVersion >= 196,
  * WMS/WMTS audit, and the viewer + its skin by the 2D/3D switch moving into
  * the bottom-left control column, above the base-layer button. */
 const TAGS = {
-    'js/layer-registry.js': '20261103-layer-i18n',
+    'js/layer-registry.js': '20261115-danish-panel-rows',
     'js/map3d-terrain.js': '20261106-hist-shift-3d',
     'css/map3d-terrain.css': '20261102-report-lidar-window',
     'js/danish-layers.config.js': '20261103-layer-i18n',
-    'js/danish-layers.js': '20261114-lidar-switch-fix'
+    'js/danish-layers.js': '20261115-danish-panel-rows'
 };
 ['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css',
     'js/danish-layers.config.js'].forEach(function (asset) {

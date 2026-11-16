@@ -681,8 +681,19 @@ async function testMapModule() {
             group.id + ': LiDAR blue arrow button');
         assert.ok((expandBtn.getAttribute('onmouseover') || '').indexOf('#4fc3f7') !== -1,
             group.id + ': LiDAR hover blue');
-        assert.ok(dom.byId['danishGroupMarker_' + group.id], group.id + ' has a LiDAR-style leading marker');
-        assert.ok(dom.byId['danishGroupTitle_' + group.id], group.id + ' has an accessible title');
+        /* NO leading icon. The LiDAR accordion's blue target glyph belongs to
+         * LiDAR; copied in front of Heritage / Historical maps / Ortophoto it
+         * claimed a LiDAR section that is not there. The header is the title,
+         * its ⓘ button and the controls — nothing else. */
+        assert.ok(!dom.byId['danishGroupMarker_' + group.id],
+            group.id + ' builds no leading marker icon');
+        const titleNode = dom.byId['danishGroupTitle_' + group.id];
+        assert.ok(titleNode, group.id + ' has an accessible title');
+        assert.deepStrictEqual(titleNode.parentNode.children.map((child) => child.id),
+            ['danishGroupTitle_' + group.id, 'danishGroupInfo_' + group.id],
+            group.id + ': the title group holds the title and its ⓘ button, with no icon in front');
+        assert.ok(!Object.keys(dom.byId).some((id) => id.indexOf('Marker') !== -1),
+            group.id + ': no marker element exists anywhere in the panel');
         assert.ok(dom.byId['danishGroupInfo_' + group.id], group.id + ' has a LiDAR-style info button');
         assert.ok((dom.byId['danishGroupInfo_' + group.id].innerHTML || '').indexOf('<svg') !== -1,
             group.id + ': info button uses an SVG icon');
@@ -739,6 +750,28 @@ async function testMapModule() {
             id + ' is a country LiDAR row like its neighbours in the accordion');
     });
     assert.equal(dom.byId['danishOpacity_dtk25'].value, '100', 'DTK25 slider starts at 100%');
+
+    /* The Historical maps sheets ARE map sheets, so their rows opt into the
+       layers window's tile photo exactly like every Romanian historical
+       sublayer row does: js/layer-panel-rows.js reads `data-preview-layer`,
+       asks the layer's own registry entry (`danish.<id>`) for one of its
+       tiles and paints it under the shared violet wash. The LiDAR hillshades,
+       the heritage registers and the orthophoto years are not sheets and keep
+       the plain glass row. */
+    const sheetRows = CONFIG.panelGroups.find((group) => group.id === 'historical').layers;
+    assert.ok(sheetRows.length >= 6, 'the Historical maps section still has all its sheets');
+    RENDERED.forEach((id) => {
+        const preview = dom.byId['danishRow_' + id].getAttribute('data-preview-layer');
+        if (sheetRows.indexOf(id) !== -1) {
+            assert.strictEqual(preview, 'danish.' + id,
+                id + ': the sheet row carries its registry id for the tile photo');
+        } else {
+            assert.strictEqual(preview, null, id + ': not a map sheet, so its row asks for no photo');
+        }
+    });
+    assert.strictEqual(sheetRows.filter((id) => RENDERED.indexOf(id) !== -1).length, sheetRows.length,
+        'every configured Historical maps sheet really is rendered');
+    ok('the Historical maps rows opt into the tile-photo background, and only they do');
 
     /* The removed panel furniture stays removed: no Base map rows, no
        spring-orthophoto dropdown, no Danish OSM row. The catalogue entries

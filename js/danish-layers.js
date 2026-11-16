@@ -114,10 +114,14 @@
     var LIDAR_BLUE_RAIL = 'rgba(79,195,247,0.3)';
     var LIDAR_CHEVRON_SVG = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true" focusable="false" style="transition:transform 0.25s ease;transform:rotate(-90deg)"><polyline points="2,4 6,8 10,4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>';
     var LIDAR_CHEVRON_POLYLINE = '<polyline points="2,4 6,8 10,4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />';
-    var LIDAR_GROUP_MARKER_SVG = '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true" focusable="false"><circle cx="6.5" cy="6.5" r="4.5" stroke="#4fc3f7" stroke-width="1.2" /><circle cx="6.5" cy="6.5" r="1.4" fill="#4fc3f7" /><path d="M6.5 0.5v2.2M6.5 10.3v2.2M0.5 6.5h2.2M10.3 6.5h2.2" stroke="#4fc3f7" stroke-width="1" stroke-linecap="round" /></svg>';
     var LIDAR_INFO_ICON_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" /><path d="M12 10.5v6M12 7.5h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>';
     /* Denmark's three generated sections — Heritage, Historical maps and
-     * Ortophoto — are the only groups that adopt the LiDAR panel chrome. */
+     * Ortophoto — are the only groups that adopt the LiDAR panel chrome: the
+     * chevron, the blues and the rail. They deliberately do NOT adopt the
+     * accordion's leading target glyph: that icon belongs to LiDAR, and in
+     * front of "Patrimoniu" / "Hărți istorice" / "Ortophoto" it claimed a
+     * LiDAR section that is not there. The three headers carry no icon at
+     * all — title, ⓘ and the controls, like every other country section. */
     var LIDAR_STYLE_GROUP_IDS = ['heritage', 'historical', 'orthophoto'];
 
     /* The map variable, the way every other module in this repo finds it. */
@@ -1217,11 +1221,20 @@
     function buildRow(layer) {
         var title = tr(layer.title);
         var isLidar = layer.panelGroup === 'lidar' || layer.id.indexOf('lidar_') === 0;
+        /* The Historical maps sheets are map sheets exactly like the Romanian
+         * ones, so their rows opt into the window's row chrome
+         * (js/layer-panel-rows.js): a photo of one of the layer's OWN tiles —
+         * here a small GetMap through the same-origin proxy — becomes the row
+         * background under the shared violet wash. Only the `historical`
+         * panelGroup opts in, so the LiDAR hillshades, the heritage vectors and
+         * the orthophoto years keep the plain glass row. */
+        var isHistoricalSheet = layer.panelGroup === 'historical';
         var row = el('div', {
             class: 'danish-layer-row dl-sublayer-row is-overlay' + (isLidar ? ' lidar-country-row' : ''),
             id: 'danishRow_' + layer.id,
             'data-category': 'free',
-            'data-danish-row': layer.id
+            'data-danish-row': layer.id,
+            'data-preview-layer': isHistoricalSheet ? 'danish.' + layer.id : null
         });
 
         var input = el('input', {
@@ -1430,14 +1443,11 @@
             setGroupExpanded(group.id, !isGroupExpanded(group));
         });
 
-        var marker = el('span', {
-            id: 'danishGroupMarker_' + group.id,
-            class: 'danish-group-marker lidar-style-marker',
-            'aria-hidden': 'true',
-            'data-lidar-style': 'true',
-            style: 'flex-shrink:0;display:inline-flex;align-items:center;color:#4fc3f7;'
-        });
-        marker.innerHTML = LIDAR_GROUP_MARKER_SVG;
+        /* No leading icon. Heritage, Historical maps and Ortophoto are not
+         * LiDAR, so the LiDAR accordion's blue target glyph used to sit in
+         * front of all three titles and read as "this is a LiDAR section".
+         * The header is the title, its ⓘ button and the controls — the same
+         * furniture a country section has everywhere else in the window. */
         var titleSpan = el('span', {
             id: titleId,
             class: 'danish-group-title lidar-style-title',
@@ -1487,7 +1497,7 @@
             class: 'lidar-style-title-group',
             'data-lidar-style': 'true',
             style: 'display:flex;align-items:center;gap:7px;min-width:0;'
-        }, [marker, titleSpan, infoBtn]);
+        }, [titleSpan, infoBtn]);
         var rightSpan = el('span', {
             class: 'lidar-style-controls',
             'data-lidar-style': 'true',

@@ -8737,13 +8737,14 @@
     border-left-color: rgba(79,195,247,0.3) !important;
 }
 
-.danish-group-marker,
-.lidar-style-marker {
-    flex-shrink: 0;
-    color: #4fc3f7;
-    display: inline-flex;
-    align-items: center;
-}
+/* No leading-icon rule here any more. Denmark's three generated sections
+   (Heritage / Patrimoniu, Historical maps / Hărți istorice, Ortophoto) carry
+   no marker in front of the title: the LiDAR accordion's blue target glyph
+   used to be copied into all three headers, where it told the visitor "this
+   is a LiDAR section" over registers and map sheets that are not LiDAR.
+   js/danish-layers.js stopped building the element, so its two rules (and
+   their reduced-motion entries) went with it; the header is the title, its
+   ⓘ button and the controls. */
 
 .danish-group-title,
 .lidar-style-title,
@@ -8862,9 +8863,7 @@
     .lidar-style-label,
     .lidar-style-title,
     .lidar-style-controls,
-    .lidar-style-marker,
     .lidar-style-info,
-    .danish-group-marker,
     .danish-group-info,
     .danish-group-title,
     .lidar-chevron-line,

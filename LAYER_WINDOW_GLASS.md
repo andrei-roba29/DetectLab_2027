@@ -78,10 +78,22 @@ removing them one by one leaves half a box behind).
 (`index.html`) and precached by `sw.js`.
 
 * A row opts in with `data-preview-layer="<registry layer id>"` (29 rows in
-  `index.html`: the three free historical rows and the 26 premium sheets).
-  CENAGIS catalogue rows are resolved from their own `data-map-id` as
-  `cenagis.<key>`, so the whole country catalogue gets photos without a second
-  copy of anything.
+  `index.html`: the three free historical rows and the 26 premium sheets), and
+  since 2026-11-15 also the six rows `js/danish-layers.js` generates for
+  Denmark's **Historical maps** section (`danish.dtk25`, `danish.hist_hoeje`,
+  `danish.hist_lave`, `danish.hist_preussen`, `danish.topo4cm_1953_1976`,
+  `danish.topo4cm_1980_2001`). CENAGIS catalogue rows are resolved from their
+  own `data-map-id` as `cenagis.<key>`, so the whole country catalogue gets
+  photos without a second copy of anything.
+* Which rows are *historical-map* rows is the registry's answer, not a list
+  kept here: the two Romanian groups (`hist-free`, `hist-premium`), plus any
+  layer whose own country config files it under a Historical maps section —
+  mirrored as `panelGroup: 'historical'` (`isHistoricalSheet()`). A Danish
+  sheet previews through the same-origin `/api/geo/dk-dtk25` proxy that draws
+  it, so its row photo needs no credential either; a deployment without
+  `DATAFORSYNINGEN_TOKEN` answers 503, the image fails once, and the row stays
+  plain glass. The LiDAR, heritage and orthophoto rows of the same country
+  module are not sheets and are left alone.
 * The URL is built from **the layer's own definition** in
   `js/layer-registry.js` — never from a second copy of an endpoint:
   * `kind: 'xyz'` / `'arcgis-image'` → the layer's own tile template, filled
@@ -89,13 +101,19 @@ removing them one by one leaves half a box behind).
     `{z}/{y}/{x}`; the template decides the order). The preview zoom is
     `min(maxNativeZoom, 13)`, clamped into `[minZoom, maxZoom]`.
   * `kind: 'wms'` → a 168×96 `GetMap` over the middle of the sheet, in
-    `EPSG:3857`, `srs=` for 1.1.x and `crs=` for 1.3.0. The `_2180` CENAGIS
-    mosaics are asked exactly the way the 2D map asks them (3857 request, the
-    GeoServer re-projects).
-  * The anchor is the centre of the layer's `bounds`; the 20 layers whose
+    `EPSG:3857`, `srs=` for 1.1.x and `crs=` for 1.3.0 (`wmsPreviewUrl()`).
+    The `_2180` CENAGIS mosaics are asked exactly the way the 2D map asks them
+    (3857 request, the GeoServer re-projects). A mosaic may declare extra
+    points in `SPARSE_PREVIEWS` — the scanned Danish series are sheet-by-sheet,
+    so one town can sit in a gap — and each becomes one more window the loader
+    tries in order; `zooms` in that table stays XYZ-only.
+  * The anchor is the centre of the layer's `bounds`; the 26 layers whose
     definition carries no box have an explicit anchor in the module's
-    `ANCHORS` table (a town inside that sheet's footprint). The test fails if
-    a new historical layer has neither.
+    `ANCHORS` table (a town inside that sheet's footprint) — the 20 Romanian
+    ones plus the six Danish sheets, whose country-wide box would centre in
+    the Kattegat and whose Prussian series only exists for South Jutland
+    (Aabenraa, not Aarhus). The test fails if a new historical layer has
+    neither.
 * `css/styles.css` § `[data-row-preview]` paints it: `::before` is the photo
   (`blur(7px) saturate(.45) brightness(.72)`, `opacity .7`, clipped back to
   the row radius), `::after` is the violet fade over it, and every direct
@@ -122,6 +140,16 @@ are appended to `PRECACHE_URLS` in `sw.js` and `CACHE_NAME` moves to
 `js/historical-eu-maps.js` are **not** retagged: the row chrome reads the
 registry, it does not edit it.
 
+The 2026-11-15 release (Denmark's generated rows) re-tags four assets to
+`20261115-danish-panel-rows` and appends them to `PRECACHE_URLS`, with
+`CACHE_NAME` at `detectlab-v425-danish-panel-rows`:
+`js/layer-panel-rows.js` (the sheet test + the Danish anchors),
+`js/layer-registry.js` (it now mirrors the config's `panelGroup`),
+`js/danish-layers.js` (it tags the rows it builds, and stops building the
+leading marker) and `css/styles.css` (the marker's two dead rules).
+`js/danish-layers.config.js` is untouched: `panelGroup: 'historical'` was
+already there, driving the panel order.
+
 ## 5. Tests
 
 `test-layer-panel-rows.js` (new):
@@ -136,6 +164,10 @@ registry, it does not edit it.
   bounded pyramid's preview tile decodes back to a point inside that layer's
   own `bounds`; unbounded layers are anchored; WMS previews carry the right
   `GetMap` parameters (`srs` vs `crs`, the layer's own endpoint);
+* the six Danish sheet rows (generated at runtime, so loaded into the test's
+  sandbox from `js/danish-layers.config.js` in the page's own order) resolve to
+  a `GetMap` over their anchor town through the same-origin proxy — while the
+  Danish LiDAR, heritage and orthophoto rows resolve to nothing at all;
 * the loader is lazy, capped, fail-soft and remembers failures;
 * cache-busting / precache / shell version wiring.
 

@@ -1016,7 +1016,15 @@
 //   din vecinii pe care îi acoperă fereastra mutată, iar image-overlay-urile
 //   își mută cele patru colțuri cu aceiași metri. O poziție aliniată o dată
 //   e aceeași în ambele vizualizări. Vezi HISTORICAL_MAP_SHIFT.md §5.
-const CACHE_NAME = 'detectlab-v424-firing-vector';
+// v425: Denmark's three panel sections (Patrimoniu / Hărți istorice /
+//   Ortophoto) no longer carry the LiDAR accordion's target glyph — it
+//   claimed a LiDAR section over registers and map sheets that are not
+//   LiDAR — and every Historical maps sheet row now gets a photo of one
+//   of its own tiles behind the controls, asked through the same-origin
+//   /api/geo/dk-dtk25 proxy so the token stays server-side. See
+//   DENMARK_ROW_STYLE.md §"The groups" + §"The Historical maps rows carry a
+//   photo of their own sheet", and LAYER_WINDOW_GLASS.md §3.
+const CACHE_NAME = 'detectlab-v425-danish-panel-rows';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -2248,7 +2256,18 @@ const PRECACHE_URLS = [
   // fetched only when the box is ticked). The panel checkbox itself ships in
   // index.html, so the shell tag is bumped with it.
   'js/firing-plans-vector.js?v=20261114-firing-vector',
-  'js/Leaflet.VectorGrid.js?v=20261014-uat-vectorgrid'
+  'js/Leaflet.VectorGrid.js?v=20261014-uat-vectorgrid',
+  // v425: Denmark's generated sections lose their leading marker (the
+  // stylesheet drops the two rules with it) and the Historical maps sheet
+  // rows join the Romanian ones in the layers window's tile-photo
+  // background: js/layer-registry.js mirrors the config's `panelGroup`,
+  // js/danish-layers.js tags the rows it builds with
+  // `data-preview-layer="danish.<id>"`, and js/layer-panel-rows.js asks
+  // each sheet for a small GetMap over a town its own series covers.
+  'js/danish-layers.js?v=20261115-danish-panel-rows',
+  'js/layer-panel-rows.js?v=20261115-danish-panel-rows',
+  'js/layer-registry.js?v=20261115-danish-panel-rows',
+  'css/styles.css?v=20261115-danish-panel-rows'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

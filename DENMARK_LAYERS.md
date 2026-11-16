@@ -1,3 +1,20 @@
+> UI update (2026-11-15): the three generated Denmark sections — **Patrimoniu**
+> (Heritage), **Hărți istorice** (Historical maps) and **Ortophoto** — no
+> longer carry an icon in front of the title. They used to copy the LiDAR
+> accordion's blue target glyph, which read as “this is a LiDAR section” over
+> registers, scanned sheets and orthophoto years; the element is gone from
+> `js/danish-layers.js` and its two rules from `css/styles.css`. The header is
+> the title, its ⓘ button, the expand chevron and the master switch.
+> At the same time every **Historical maps** sublayer row gained the layers
+> window's tile photo — a picture of one of that sheet's OWN tiles behind the
+> controls, dimmed under the shared violet wash, exactly as the Romanian
+> historical sublayers have had since 2026-10-25. The photo is a 168×96
+> `GetMap` over a town the series covers (Aarhus / Odense / Aabenraa / Aalborg
+> / Copenhagen — see `DENMARK_ROW_STYLE.md`), asked through the same-origin
+> `/api/geo/dk-dtk25` proxy, so the token stays server-side and a deployment
+> without one leaves the plain glass row. Service worker shell v425, tag
+> `20261115-danish-panel-rows`.
+
 > UI update (2026-10-26): thematic sections now appear directly in the layer list, without a country master layer. All Albanian and Danish LiDAR rows live once under the existing shared LiDAR accordion. Country filtering and per-layer controls remain in place.
 
 > UI update (2026-10-28): the Heritage section now exposes **every** layer of

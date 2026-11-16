@@ -25,6 +25,16 @@
  *      that is down leaves a plain glass row instead of an empty frame (and
  *      never retries on every sweep).
  *
+ *      Which rows are historical-map rows is the registry's answer, not a
+ *      list kept here: the two Romanian groups (`hist-free`,
+ *      `hist-premium`), plus any layer whose own country config files it
+ *      under a Historical maps section — mirrored as `panelGroup:
+ *      'historical'` (Denmark: js/danish-layers.config.js →
+ *      js/layer-registry.js → js/danish-layers.js, which tags the rows it
+ *      generates with `data-preview-layer="danish.<id>"`). A Danish sheet
+ *      previews through the same-origin /api/geo/dk-dtk25 proxy that draws
+ *      it, so the token stays server-side for the row photo too.
+ *
  *  Rows opt in with `data-preview-layer="<registry id>"`; the CENAGIS
  *  catalogue rows carry `data-map-id="<catalogue key>"` instead, and are
  *  resolved as `cenagis.<key>`.
@@ -40,7 +50,15 @@
      * backdrop all that matters is that the tile really is one of that
      * sheet's tiles (never a neighbouring mosaic, never a blank ocean
      * corner). Everything with a `bounds` box uses the centre of the box
-     * instead — see centreOf(). */
+     * instead — see centreOf().
+     *
+     * The Danish sheets are mirrored into the registry without a box, and
+     * their country-wide one (54.4–57.8 N, 8.0–15.6 E) would centre in the
+     * Kattegat anyway: water, on every one of the historical series. So each
+     * of the six gets a town that its own series really covers — the
+     * Prussian measuring-table sheets (1877–1920) only exist for the South
+     * Jutland they were drawn in, which is why theirs is Aabenraa and not
+     * Aarhus. */
     var ANCHORS = {
         'hist.austrian':               { lat: 46.777, lng: 23.599 },   /* Cluj-Napoca */
         'hist.firing-plans':           { lat: 45.657, lng: 25.601 },   /* Brașov */
@@ -61,7 +79,14 @@
         'premium.reymann':             { lat: 52.406, lng: 16.925 },   /* Poznań */
         'premium.kdr-100k':            { lat: 52.520, lng: 13.405 },   /* Berlin */
         'premium.kdr-gb':              { lat: 52.232, lng: 21.006 },   /* Warsaw */
-        'premium.wig-100k':            { lat: 52.232, lng: 21.006 }    /* Warsaw */
+        'premium.wig-100k':            { lat: 52.232, lng: 21.006 },   /* Warsaw */
+        /* Denmark — the Historical maps section of js/danish-layers.config.js */
+        'danish.dtk25':                { lat: 56.153, lng: 10.204 },   /* Aarhus (the config's own DK view) */
+        'danish.hist_hoeje':           { lat: 56.153, lng: 10.204 },   /* Aarhus · høje målebordsblade 1842–1899 */
+        'danish.hist_lave':            { lat: 55.404, lng: 10.403 },   /* Odense · lave målebordsblade 1901–1971 */
+        'danish.hist_preussen':        { lat: 55.041, lng: 9.421 },    /* Aabenraa · preussiske blade 1877–1920 */
+        'danish.topo4cm_1953_1976':    { lat: 57.049, lng: 9.922 },    /* Aalborg · 4 cm-kort 1953–1976 */
+        'danish.topo4cm_1980_2001':    { lat: 55.676, lng: 12.568 }    /* Copenhagen · 4 cm-kort 1980–2001 */
     };
 
     /* A full sheet scan used as the row photo when the XYZ pyramid has no
@@ -73,12 +98,21 @@
     /* Preview-only candidates for sheets with sparse or uncertain pyramids.
      * Coordinates for the four R2 sheets are inside their coverage rectangles
      * in map-app.js. Try different locations and native zooms before nearby
-     * tiles; do not infer the availability of a whole pyramid from one tile. */
+     * tiles; do not infer the availability of a whole pyramid from one tile.
+     *
+     * A WMS mosaic may use the same table for its own reason: the scanned
+     * Danish series are sheet-by-sheet, so one town can sit in a gap. There
+     * `zooms` is ignored — the GetMap window is SPAN_METERS wide everywhere —
+     * and each point becomes one more candidate the loader tries in order. */
     var SPARSE_PREVIEWS = {
         'premium.moldova-1868': { points: [[47.158, 27.601], [46.57, 27.91], [45.44, 28.05]], zooms: [12, 11, 10, 13, 9, 8] },
         'premium.polish-tactical-1933': { points: [[48.10, 25.90], [48.10, 24.00], [47.95, 27.00]], zooms: [12, 11, 10, 13, 9, 8] },
         'premium.ww1': { points: [[45.44, 28.05], [44.4268, 26.1025], [47.158, 27.601]], zooms: [10, 9, 11, 8] },
-        'premium.ww2': { points: [[44.4268, 26.1025], [45.44, 28.05], [47.158, 27.601]], zooms: [10, 9, 8] }
+        'premium.ww2': { points: [[44.4268, 26.1025], [45.44, 28.05], [47.158, 27.601]], zooms: [10, 9, 8] },
+        /* Odense, Copenhagen, Aalborg — the 1842–1899 high sheets. */
+        'danish.hist_hoeje': { points: [[55.404, 10.403], [55.676, 12.568], [57.049, 9.922]] },
+        /* Sønderborg, Haderslev, Tønder — all inside Prussian Schleswig. */
+        'danish.hist_preussen': { points: [[54.913, 9.792], [55.250, 9.489], [54.933, 9.083]] }
     };
 
     var TILE_ZOOM = 13;      /* mid detail: recognisable, small, and inside
@@ -87,6 +121,19 @@
     var WMS_WIDTH = 168;
     var WMS_HEIGHT = 96;
     var HISTORICAL_GROUPS = { 'hist-free': true, 'hist-premium': true };
+
+    /* Is this definition a historical map sheet — the kind of row that gets a
+     * photo of one of its own tiles? The two Romanian groups, plus any layer
+     * whose own country config files it under a Historical maps section
+     * (mirrored into the registry as `panelGroup: 'historical'` — Denmark's
+     * målebordsblade, 4 cm-kort and DTK25 today). Asking the registry keeps
+     * this module from carrying a second list of layers: a new sheet added to
+     * js/danish-layers.config.js is photographed the moment it is rendered. */
+    function isHistoricalSheet(def) {
+        if (!def) return false;
+        if (HISTORICAL_GROUPS[def.group] === true) return true;
+        return def.panelGroup === 'historical';
+    }
 
     var READY = {};          /* url → the tile really loaded, paint it at once */
     var BROKEN = {};         /* url → it failed once, never ask again          */
@@ -136,11 +183,37 @@
     }
 
     /* ── the row photo URL ─────────────────────────────────────────────── */
+
+    /* A WMS mosaic's row photo: a small GetMap over one point of the sheet,
+     * asked the way the map itself asks it — EPSG:3857, `srs=` for 1.1.x and
+     * `crs=` for 1.3.0, the layer's own FORMAT and TRANSPARENT — and sent to
+     * the layer's own endpoint. For the token-gated Danish sheets that
+     * endpoint is the same-origin /api/geo/dk-dtk25 proxy, so the row photo
+     * never needs (and never sees) a credential either. */
+    function wmsPreviewUrl(def, centre) {
+        var m = mercator(centre.lat, centre.lng);
+        var half = SPAN_METERS / 2;
+        var version = String(def.version || '1.1.1');
+        var axis = version.indexOf('1.3') === 0 ? 'crs' : 'srs';
+        var bbox = [m.x - half, m.y - half, m.x + half, m.y + half].map(function (n) {
+            return n.toFixed(1);
+        }).join(',');
+        var params = [
+            'service=WMS', 'request=GetMap', 'version=' + version,
+            'layers=' + encodeURIComponent(def.layer || ''), 'styles=',
+            'format=' + encodeURIComponent(def.format || 'image/png'),
+            'transparent=' + (def.transparent === false ? 'false' : 'true'),
+            axis + '=EPSG:3857', 'bbox=' + bbox,
+            'width=' + WMS_WIDTH, 'height=' + WMS_HEIGHT
+        ];
+        return String(def.url) + (String(def.url).indexOf('?') === -1 ? '?' : '&') + params.join('&');
+    }
+
     function urlsFor(id) {
         var reg = registry();
         if (!reg) return [];
         var def = reg.get(id);
-        if (!def || !HISTORICAL_GROUPS[def.group]) return [];
+        if (!isHistoricalSheet(def)) return [];
         /* An explicit sheet scan is the preview. Do not fall through to an
            XYZ tile that may 404 or come back transparent. */
         if (SHEET_PHOTOS[id]) return [SHEET_PHOTOS[id]];
@@ -193,22 +266,19 @@
         }
 
         if (def.kind === 'wms') {
-            var m = mercator(centre.lat, centre.lng);
-            var half = SPAN_METERS / 2;
-            var version = String(def.version || '1.1.1');
-            var axis = version.indexOf('1.3') === 0 ? 'crs' : 'srs';
-            var bbox = [m.x - half, m.y - half, m.x + half, m.y + half].map(function (n) {
-                return n.toFixed(1);
-            }).join(',');
-            var params = [
-                'service=WMS', 'request=GetMap', 'version=' + version,
-                'layers=' + encodeURIComponent(def.layer || ''), 'styles=',
-                'format=' + encodeURIComponent(def.format || 'image/png'),
-                'transparent=' + (def.transparent === false ? 'false' : 'true'),
-                axis + '=EPSG:3857', 'bbox=' + bbox,
-                'width=' + WMS_WIDTH, 'height=' + WMS_HEIGHT
-            ];
-            return [String(def.url) + (String(def.url).indexOf('?') === -1 ? '?' : '&') + params.join('&')];
+            /* One GetMap window per candidate town. The loader asks them in
+               order and paints the first answer, so a scanned series with a
+               gap over the anchor town still photographs its row; a mosaic
+               with no extra points gets the single window it always got. */
+            var points = [centre];
+            var wmsCandidates = SPARSE_PREVIEWS[id];
+            if (wmsCandidates && wmsCandidates.points) {
+                wmsCandidates.points.forEach(function (point) {
+                    points.push({ lat: point[0], lng: point[1] });
+                });
+            }
+            return points.map(function (point) { return wmsPreviewUrl(def, point); })
+                .filter(function (url, index, urls) { return urls.indexOf(url) === index; });
         }
 
         return [];
@@ -389,11 +459,23 @@
         var host = panel();
         if (!host || typeof root.MutationObserver !== 'function') return;
 
-        /* Opening the window, switching tabs, expanding an accordion. */
+        /* Opening the window, switching tabs, expanding an accordion — and
+           anything that makes a row visible from inside the panel. The whole
+           subtree is watched, not just the pane, because the country filter
+           hides and shows rows by class on the ROWS
+           (`country-layer-unavailable`, toggled by js/danish-layers.js,
+           js/finland-layers.js, js/asig-albania-layers.js …) while the
+           visitor's click lands on the country dock outside the pane: a
+           Denmark-only sheet row would otherwise stay unphotographed until
+           the next click inside the window. Every callback is debounced and a
+           sweep skips the rows it already painted, so the extra mutations
+           (a layer switched on, a photo applied) cost one cheap pass. */
         new root.MutationObserver(function () {
             later('glass', markGlass, 40);
             schedule();
-        }).observe(host, { attributes: true, attributeFilter: ['class', 'style', 'open'] });
+        }).observe(host, {
+            attributes: true, attributeFilter: ['class', 'style', 'open'], subtree: true
+        });
 
         /* The CENAGIS catalogue is re-rendered on every country change. */
         var eu = DOC.getElementById('histEuMapsSection');
@@ -422,6 +504,8 @@
     root.DetectLabPanelRows = {
         anchors: ANCHORS,
         sheetPhotos: SHEET_PHOTOS,
+        sparsePreviews: SPARSE_PREVIEWS,
+        isHistoricalSheet: isHistoricalSheet,
         urlFor: urlFor,
         urlsFor: urlsFor,
         markGlass: markGlass,
