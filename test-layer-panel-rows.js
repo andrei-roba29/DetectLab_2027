@@ -16,6 +16,9 @@ const html = read('index.html');
 const sw = read('sw.js');
 const moduleSource = read('js/layer-panel-rows.js');
 const registrySource = read('js/layer-registry.js');
+/* The registry mirrors the Danish config, so the sandbox loads it first — the
+ * very order index.html uses. Without it the Danish rows cannot be checked. */
+const danishConfigSource = read('js/danish-layers.config.js');
 
 const flatHtml = html.replace(/\n\s*/g, ' ');
 function ruleOf(source, selector) {
@@ -93,6 +96,7 @@ const sandbox = {
     Image: function () {}
 };
 vm.createContext(sandbox);
+vm.runInContext(danishConfigSource, sandbox, { filename: 'js/danish-layers.config.js' });
 vm.runInContext(registrySource, sandbox, { filename: 'js/layer-registry.js' });
 assert(sandboxWindow.DetectLabLayers, 'the shared registry loads before the row chrome');
 vm.runInContext(moduleSource, sandbox, { filename: 'js/layer-panel-rows.js' });
@@ -100,6 +104,8 @@ vm.runInContext(moduleSource, sandbox, { filename: 'js/layer-panel-rows.js' });
 const api = sandboxWindow.DetectLabPanelRows;
 assert(api && typeof api.urlFor === 'function' && typeof api.urlsFor === 'function' && api.anchors,
     'js/layer-panel-rows.js exports its URL and fallback-candidate APIs');
+assert(typeof api.isHistoricalSheet === 'function' && api.sparsePreviews,
+    'the row chrome exports the sheet test and its extra-candidate table');
 
 tagged.forEach(id => {
     assert(sandboxWindow.DetectLabLayers.get(id), 'unknown layer id on a row: ' + id);
@@ -237,6 +243,132 @@ assert.strictEqual(api.urlFor('premium.josephine') && api.urlFor('basemap.osm'),
     'only historical layers get a row photo');
 console.log('  ✓ WMS mosaics preview through GetMap; XYZ/ArcGIS through their own tile template');
 
+/* ── 4b. Denmark: the generated Historical maps rows join the others ──
+ * js/danish-layers.js builds its rows at runtime, so nothing Danish is tagged
+ * in index.html: the renderer tags each sheet row with its registry id, and
+ * the registry says which Danish layers are map sheets (`panelGroup:
+ * 'historical'`, mirrored from js/danish-layers.config.js). The photo is a
+ * small GetMap through the same-origin /api/geo/dk-dtk25 proxy — the sheet's
+ * own endpoint — so the Dataforsyningen token stays server-side for the row
+ * background too. */
+const danishConfig = sandboxWindow.DANISH_LAYERS_CONFIG;
+assert(danishConfig && typeof danishConfig.byId === 'function',
+    'the Danish config (loaded before the registry) describes the sheets');
+const danishSheets = danishConfig.panelGroups
+    .find(group => group.id === 'historical').layers
+    .map(id => 'danish.' + id);
+assert(danishSheets.length >= 6, 'Denmark still publishes its six historical sheets');
+danishSheets.forEach(id => {
+    const def = sandboxWindow.DetectLabLayers.get(id);
+    assert(def, 'the registry mirrors the Danish sheet ' + id);
+    assert.strictEqual(def.panelGroup, 'historical', id + ' is filed under Historical maps');
+    assert(api.isHistoricalSheet(def), id + ' is a map sheet, so its row gets a photo');
+    /* The mirror carries no bounding box, and the country-wide one would
+     * centre in the Kattegat: the anchor table names a town of the series. */
+    assert(api.anchors[id], id + ' has an anchor town its own series covers');
+    const urls = api.urlsFor(id);
+    assert(urls.length > 0, id + ' resolves to at least one GetMap window');
+    const url = urls[0];
+    assert(url.startsWith(def.url), id + " previews through the layer's own endpoint: " + url);
+    assert(/^\/api\/geo\/dk-dtk25/.test(url),
+        id + ' stays on the same-origin proxy — no credential in the row photo');
+    ['service=WMS', 'request=GetMap', 'version=1.3.0', 'crs=EPSG:3857',
+        'transparent=false', 'width=168', 'height=96'].forEach(part => {
+        assert(url.includes(part), id + ' carries ' + part);
+    });
+    assert(url.includes('layers=' + encodeURIComponent(def.layer)),
+        id + ' asks for its own WMS layer name');
+});
+
+/* The other three Danish sections are registers, hillshades and orthophoto
+ * years — not sheets — so their rows keep the plain glass box. */
+['lidar', 'heritage', 'orthophoto'].forEach(groupId => {
+    danishConfig.panelGroups.find(group => group.id === groupId).layers.forEach(layerId => {
+        const id = 'danish.' + layerId;
+        const def = sandboxWindow.DetectLabLayers.get(id);
+        assert(def, 'the registry mirrors ' + id);
+        assert(!api.isHistoricalSheet(def), id + ' is not a historical map sheet');
+        assert.strictEqual(api.urlFor(id), null, id + ' gets no row photo');
+    });
+});
+
+/* The scanned series are sheet-by-sheet, so the two narrowest keep alternates
+ * the loader tries in order; a sheet with none asks for one window only. */
+assert(api.urlsFor('danish.hist_preussen').length >= 4,
+    'the Prussian sheets (South Jutland only) try more than one town');
+assert(api.urlsFor('danish.hist_hoeje').length >= 4,
+    'the 1842–1899 high sheets try more than one town');
+assert.strictEqual(api.urlsFor('danish.hist_lave').length, 1,
+    'a sheet with no declared alternates still asks for exactly one window');
+
+/* The renderer is what tags the rows, and only the config's own panelGroup
+ * decides — so a new Danish sheet is photographed the day it is added. */
+const danishRenderer = read('js/danish-layers.js');
+assert(danishRenderer.includes("var isHistoricalSheet = layer.panelGroup === 'historical';"),
+    "js/danish-layers.js decides the row photo from the config's panelGroup");
+assert(danishRenderer.includes("'data-preview-layer': isHistoricalSheet ? 'danish.' + layer.id : null"),
+    'the generated sheet rows carry their registry id, and only they do');
+console.log('  ✓ Denmark: ' + danishSheets.length +
+    ' generated sheet rows preview through the same-origin proxy');
+
+/* End to end, on a stubbed pane: a Danish sheet row that is on screen really
+ * gets its photo painted, and a row of the same module that is not a sheet is
+ * never even asked. (The real rows are built by js/danish-layers.js; only the
+ * tag and the registry id matter here.) */
+{
+    function fakeRow(id, previewId) {
+        const attrs = { 'data-preview-layer': previewId };
+        const props = {};
+        return {
+            id,
+            style: { setProperty: (name, value) => { props[name] = value; }, props },
+            getAttribute: name => (Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null),
+            setAttribute: (name, value) => { attrs[name] = String(value); },
+            hasAttribute: name => Object.prototype.hasOwnProperty.call(attrs, name),
+            removeAttribute: name => { delete attrs[name]; },
+            getClientRects: () => [{}],          /* on screen */
+            parentElement: null,
+            classList: { contains: () => false, add() {} }
+        };
+    }
+    const sheet = fakeRow('danishRow_hist_hoeje', 'danish.hist_hoeje');
+    const hillshade = fakeRow('danishRow_lidar_hillshade_historik', 'danish.lidar_hillshade_historik');
+    const host = {
+        querySelectorAll: selector => selector.indexOf('data-preview-layer') !== -1 ? [sheet, hillshade] : [],
+        classList: { contains: name => name === 'open' },
+        addEventListener() {}
+    };
+    sheet.parentElement = host;
+    hillshade.parentElement = host;
+    const asked = [];
+    /* The module reads everything off its own `root`, which is the page's
+     * `window` — the stub's Image lives there, not on the vm global. */
+    sandboxWindow.Image = function () {
+        const img = {};
+        Object.defineProperty(img, 'src', {
+            set(value) { asked.push(value); if (img.onload) img.onload(); }   /* the proxy answered */
+        });
+        return img;
+    };
+    fakeDocument.getElementById = id => (id === 'transpPanel' ? host : null);
+    api.sweep();
+    assert.deepStrictEqual(asked, [api.urlFor('danish.hist_hoeje')],
+        "exactly one request goes out, for that sheet's own GetMap");
+    assert(sheet.hasAttribute('data-row-preview'), 'the sheet row is marked as carrying a photo');
+    assert.strictEqual(sheet.getAttribute('data-row-preview-state'), 'ok',
+        'the loaded tile is painted, not left pending');
+    const painted = sheet.style.props['--row-preview'] || '';
+    assert(/^url\("\/api\/geo\/dk-dtk25\?layer=hist_hoeje/.test(painted),
+        '--row-preview is the same-origin proxy GetMap: ' + painted);
+    assert.strictEqual(hillshade.getAttribute('data-row-preview-state'), 'unavailable',
+        'a LiDAR hillshade row is not a map sheet');
+    assert(!hillshade.hasAttribute('data-row-preview'), 'so it keeps the plain glass box');
+    fakeDocument.getElementById = () => null;
+    sandboxWindow.Image = function () {};
+}
+console.log('  \u2713 a Danish sheet row paints its own tile; its LiDAR neighbour does not');
+
+
 /* ── 5. Loading is lazy, greedy-free and failure-tolerant ──────────────── */
 assert(/data-row-preview-state/.test(moduleSource),
     'a row remembers it was already tried, so a dead service is asked once');
@@ -249,6 +381,9 @@ assert(/MAX_IN_FLIGHT/.test(moduleSource) && /pump\(\)/.test(moduleSource),
     'requests are capped instead of opening one socket per row');
 assert(/classList\.contains\('open'\)/.test(moduleSource),
     'nothing is fetched while the window is closed');
+assert(/subtree:\s*true/.test(moduleSource),
+    'the pane observer watches the rows too: the country filter shows and hides '
+    + 'them by class while the click lands outside the window');
 assert(/getClientRects/.test(moduleSource),
     'collapsed accordions and hidden tabs are skipped until they are shown');
 assert(/\.cenagis-map-row/.test(moduleSource) && /removeAttribute\('style'\)/.test(moduleSource),
@@ -274,8 +409,8 @@ console.log('  ✓ previews load only for visible rows, once, and fail soft');
 }
 
 /* ── 6. Wiring: cache-busting, precache, shell version ─────────────────── */
-const TAG = '20261101-walachia-sheet';
-const STYLES_TAG = '20261114-firing-vector';
+const TAG = '20261115-danish-panel-rows';
+const STYLES_TAG = '20261115-danish-panel-rows';
 assert(html.includes('js/layer-panel-rows.js?v=' + TAG), 'index.html loads the row chrome, versioned');
 assert(sw.includes("'js/layer-panel-rows.js?v=" + TAG + "'"), 'sw.js precaches the row chrome');
 const stylesUrl = (html.match(/href="(css\/styles\.css\?v=[^"]+)"/) || [])[1];

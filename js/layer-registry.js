@@ -5656,6 +5656,14 @@
                     group: isBase ? 'danish-base' : 'danish-overlay',
                     z: isBase ? 399 : 406,
                     kind: layer.type === 'wms' ? 'wms' : (layer.type === 'wfs' ? 'wfs' : 'tile'),
+                    /* Which thematic section of the Denmark panel the layer is
+                     * rendered in ('lidar' | 'heritage' | 'historical' |
+                     * 'orthophoto'). The layers window's row chrome reads it:
+                     * a sheet the config files under Historical maps is a map
+                     * sheet like the Romanian ones, so its row gets a photo of
+                     * one of its own tiles as the background
+                     * (js/layer-panel-rows.js). Nothing else keys off it. */
+                    panelGroup: layer.panelGroup || null,
                     title: layer.title,
                     url: layer.url,
                     upstream: layer.upstream,

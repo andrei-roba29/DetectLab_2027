@@ -41,6 +41,16 @@ Heritage / Historical maps / Ortophoto are Romania-style sections: a
 (`danishGroupToggle_<id>`, indeterminate for partial states) over a bordered
 `danish<Group>SubLayers` column.
 
+**The three headers carry no icon** (2026-11-15). They used to copy the LiDAR
+accordion's leading blue target glyph (`danishGroupMarker_<id>`, the
+`.danish-group-marker` / `.lidar-style-marker` rules), which told the visitor
+“this is a LiDAR section” over *Patrimoniu*, *Hărți istorice* and *Ortophoto*
+— registers, scanned sheets and orthophoto years, none of them LiDAR. The
+element is gone from `buildGroup()` and its two rules (plus their
+reduced-motion entries) are gone from `css/styles.css`; the header is now the
+title, its ⓘ button and the controls. The LiDAR accordion in `index.html`
+keeps its own glyph — that section *is* LiDAR.
+
 **The sections start OPEN.** They used to start collapsed — like Romania's
 Hărți istorice group — but three closed headers with no visible rows read as
 “Denmark has no historical maps at all”. A collapse is still one click away
@@ -58,6 +68,54 @@ Two related rules keep the catalogue from looking empty:
 - A raster row whose `minZoom` is above the current zoom paints nothing by
   design, so the row now says “This map draws from zoom N — zoom in to see
   it.” (`reportZoomGates()`) until the map is inside range.
+
+## The Historical maps rows carry a photo of their own sheet
+
+Every row of the **Historical maps** section is a map sheet, so it gets the
+same treatment the Romanian historical sublayers get in the layers window: a
+photo of one of the layer's OWN tiles as the row background, dimmed under the
+shared violet wash so the switch, the slider, the ⓘ button and the labels stay
+readable on top of it (`css/styles.css` § `[data-row-preview]`).
+
+Four files, one fact each — nothing is described twice:
+
+| file | what it contributes |
+|---|---|
+| `js/danish-layers.config.js` | `panelGroup: 'historical'` on the six sheets (unchanged; it already drove the panel order) |
+| `js/layer-registry.js` | mirrors that field onto `danish.<id>`, so the row chrome can tell a sheet from a hillshade without a second list |
+| `js/danish-layers.js` | `buildRow()` tags the row `data-preview-layer="danish.<id>"` — only when `layer.panelGroup === 'historical'` |
+| `js/layer-panel-rows.js` | accepts `panelGroup: 'historical'` next to its two Romanian groups, and builds the GetMap |
+
+The photo is a 168×96 `GetMap` (`EPSG:3857`, `version=1.3.0`, `crs=`,
+`transparent=false` — exactly the parameters the map itself sends) over a town
+the series really covers, sent to the layer's own endpoint: the same-origin
+`/api/geo/dk-dtk25` proxy. **The row background therefore needs no credential
+of its own** — the token is added server-side, as for every Danish tile — and
+where the deployment has no `DATAFORSYNINGEN_TOKEN` the proxy answers 503, the
+image fails, and the row stays the plain glass box (the row chrome never
+retries a URL that failed once).
+
+The registry mirror carries no bounding box, and Denmark's country-wide one
+would centre in the Kattegat anyway, so each sheet has an anchor town in
+`js/layer-panel-rows.js`'s `ANCHORS` table:
+
+| sheet | anchor | alternates tried if the first fails |
+|---|---|---|
+| `danish.dtk25` | Aarhus | — |
+| `danish.hist_hoeje` (1842–1899) | Aarhus | Odense, Copenhagen, Aalborg |
+| `danish.hist_lave` (1901–1971) | Odense | — |
+| `danish.hist_preussen` (1877–1920) | Aabenraa | Sønderborg, Haderslev, Tønder |
+| `danish.topo4cm_1953_1976` | Aalborg | — |
+| `danish.topo4cm_1980_2001` | Copenhagen | — |
+
+The Prussian measuring-table sheets exist only for the South Jutland they were
+drawn in, so their anchor is not Aarhus; the scanned series are sheet-by-sheet,
+so the two narrowest keep alternates (`SPARSE_PREVIEWS`, whose `points` a WMS
+mosaic now reads as extra GetMap windows — `zooms` stays XYZ-only).
+
+Adding a sheet to the `historical` panelGroup is all it takes: the registry
+mirror, the row tag and the photo follow. A sheet with neither `bounds` nor an
+anchor fails `test-layer-panel-rows.js`.
 
 ## Credential faults are three different messages
 
@@ -114,6 +172,8 @@ pins both:
 
 ```sh
 node test-danish-layers.js            # row shape, groups, removal, proxy, registry
+node test-danish-lidar-chevron.js     # LiDAR chrome: chevron, blues — and no leading icon
+node test-layer-panel-rows.js         # the six sheet rows resolve to their own GetMap
 node test-danish-wms-layers.js        # proxy allow-lists unchanged (14 token / 11 basic)
 node test-denmark-dataforsyningen-dhm.js
 node tools/sync-danish-config.mjs --check
@@ -123,6 +183,12 @@ node tools/sync-danish-config.mjs --check
 radio) inside an `.apm-toggle-switch` with the track as its next sibling,
 a `.transp-slider`, a `.pct` badge, the glass row classes, a working
 switch/slider round-trip for DTK25, section master/chevron behaviour, and
-that the removed rows/dropdown do not come back. As before, live provider
+that the removed rows/dropdown do not come back. It also asserts the header
+of each section holds exactly the title and its ⓘ button (no marker element
+anywhere in the panel), and that the six Historical maps rows — and only
+they — carry `data-preview-layer="danish.<id>"`.
+`test-layer-panel-rows.js` resolves each of those ids to a GetMap over its
+anchor town through the same-origin proxy, and checks that the LiDAR,
+heritage and orthophoto rows get no photo at all. As before, live provider
 tiles still need the server-side credentials (see `DENMARK_LAYERS.md`);
 nothing about endpoints, proxies or credentials changed.
