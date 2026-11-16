@@ -1,3 +1,15 @@
+> Layer removal (2026-11-15): two Heritage rows are retired — **Finds and
+> ancient monuments (marine points)** (`fortidsminder_punkt_marin`, WMS
+> `fundogfortidsminder_punkt_marin`) and **Relief hillshade (Danish heritage
+> service)** (`kulturarv_relief`, WMS `relief`). Both entries left
+> `js/danish-layers.config.js`, and because the panel, the registry mirror, the
+> backend catalogue copy and the health probes all read that one file, the rows,
+> `danish.fortidsminder_punkt_marin` / `danish.kulturarv_relief`, their
+> `GetMap` requests (and the marine points' `GetFeatureInfo` identify) and
+> their health probes disappeared with them. The Heritage section now has 12
+> rows. Service worker shell v426, config tag `20261115-heritage-trim` — see
+> “Retired rows” below.
+
 > UI update (2026-11-15): the three generated Denmark sections — **Patrimoniu**
 > (Heritage), **Hărți istorice** (Historical maps) and **Ortophoto** — no
 > longer carry an icon in front of the title. They used to copy the LiDAR
@@ -28,6 +40,8 @@
 > vector rows answering GetFeatureInfo clicks (a small map-module fix makes
 > polygon/line records open their popup anchored on the click). Service
 > worker shell v290, config/module tag `20261028-kulturarv-sublayers`.
+> (2026-11-15: two of those ten — the marine points and the `relief` raster —
+> were retired again; see “Retired rows”.)
 
 > UI update (2026-10-27): every free Denmark layer is now styled exactly like
 > the other countries' rows (Romania's free rows are the template) — a glass
@@ -56,12 +70,12 @@ layer inside has its own switch and opacity slider:
   hillshade, exaggerated terrain (quickDHM); LiDAR terrain hillshade (DHM);
   LiDAR surface hillshade (DHM).
 - **Heritage**: Protected nature types (NBL § 3); Scheduled ancient monuments
-  (areas); then the complete official Kulturarv WMS family as sublayers —
-  Finds and ancient monuments: all areas, administrative areas, heritage
-  areas, protection zones, marine areas, all lines, protected lines, marine
-  lines, protected points, unprotected points, marine points — and the
-  service's `relief` hillshade (14 rows in total). The monument layers
-  reuse the official Kulturarv public services (CC0), while
+  (areas); then the official Kulturarv WMS family as sublayers — Finds and
+  ancient monuments: all areas, administrative areas, heritage areas,
+  protection zones, marine areas, all lines, protected lines, marine lines,
+  protected points, unprotected points (12 rows in total). The marine point
+  view and the service's `relief` hillshade were retired on 2026-11-15. The
+  monument layers reuse the official Kulturarv public services (CC0), while
   the nature overlay comes from Danmarks Miljøportal.
 - **Historical maps**: Topographic map 1980–2001; Topographic map 1953–1976;
   Low measuring table leaves 1901–1971; High measuring table leaves 1842–1899;
@@ -156,8 +170,7 @@ a relative `import`/`require` that resolves outside `backend/`, and it runs the
 | `danish.fortidsminder` | overlay | WFS 2.0.0 → GeoJSON | no | — |
 | `danish.fortidsminder_punkt_fredet` | overlay | WMS 1.3.0 (direct) | no | — |
 | `danish.fortidsminder_punkt_ikkefredet` | overlay | WMS 1.3.0 (direct, z8+) | no | — |
-| `danish.fortidsminder_areal_*`, `danish.fortidsminder_linie_*`, `danish.fortidsminder_linje_fredet`, `danish.fortidsminder_punkt_marin` | overlay (Heritage sublayers) | WMS 1.3.0 (direct, z8–z9+) | no | — |
-| `danish.kulturarv_relief` | overlay (Heritage sublayer) | WMS 1.3.0 (direct, z6+) | no | — |
+| `danish.fortidsminder_areal_*`, `danish.fortidsminder_linie_*`, `danish.fortidsminder_linje_fredet` | overlay (Heritage sublayers) | WMS 1.3.0 (direct, z8–z9+) | no | — |
 | `danish.lidar_dhm_surface_hillshade` | overlay | WMS 1.3.0 | no | `DATAFORSYNINGEN_TOKEN` |
 | `danish.historic-witx` | base | XYZ | **disabled** | written permission from witx.dk |
 | `danish.witx_fundogfortidsminder_areal`, `danish.witx_fundogfortidsminder` | overlay | WFS | **disabled placeholders** | written permission from witx.dk |
@@ -165,6 +178,46 @@ a relative `import`/`require` that resolves outside `backend/`, and it runs the
 The full list — historical maps, summer/spring orthophotos, the three other
 LiDAR overlays — is in `DATA_SOURCES.md`, which is the licence and attribution
 register.
+
+## Retired rows
+
+Two Heritage rows were removed on 2026-11-15 at the user's request:
+
+| id (gone) | row title (gone) | WMS layer it asked for |
+|---|---|---|
+| `danish.fortidsminder_punkt_marin` | Finds and ancient monuments (marine points) | `fundogfortidsminder_punkt_marin` |
+| `danish.kulturarv_relief` | Relief hillshade (Danish heritage service) | `relief` |
+
+They are **deleted from the catalogue, not switched off.** `enabled: false` is
+this project's marker for a third-party host we have no written permission for
+(the `witx.dk` placeholders), and it keeps the entry — title, endpoint, licence
+— in the file. A retired official layer should leave nothing to load, so the two
+objects were removed from `js/danish-layers.config.js` together with their ids in
+the Heritage `panelGroups` list.
+
+Everything else follows from that one file, so there was nothing to unpick
+elsewhere:
+
+- `js/danish-layers.js` renders `CONFIG.enabledLayers()` and the `panelGroups`
+  ids — the rows, switches, sliders and ⓘ buttons simply stop being built.
+- `js/layer-registry.js` (`registerDanishLayers()`) mirrors the config, so
+  `danish.fortidsminder_punkt_marin` and `danish.kulturarv_relief` are no longer
+  registered, in 2D or in the 3D catalogue.
+- `backend/src/lib/danish-layers.config.cjs` is generated by
+  `node tools/sync-danish-config.mjs` and was regenerated.
+- `js/wms-health.js` derives its probe URLs from the registry, so no health
+  check asks `kulturarv.dk` for those two names any more; the offline audit
+  (`tools/audit-wms-layers.mjs` → `WMS_WMTS_LAYER_AUDIT.md`) no longer lists
+  them either.
+- A returning visitor's `localStorage['detectlab_danish_layers_v1']` may still
+  name them. `applyStored()` walks the layers the config knows and ignores
+  unknown keys, so a stale preference cannot resurrect a row or issue a request.
+
+The Kulturarv service still publishes both names (GetCapabilities
+updateSequence 526); they are simply not offered here. `test-danish-layers.js`
+asserts the retirement: eleven of the thirteen published names stay wired, and
+the two retired ones appear in no config entry, no `panelGroups` list, no panel
+row and no registry id.
 
 ## Provider access: the Dataforsyningen token
 
@@ -300,13 +353,14 @@ whose licence is unclear or non-commercial ships `enabled: false` with
   numbers, link to the Fund og Fortidsminder page). If the cross-origin JSON
   answer is CORS-blocked, the same request is asked as HTML and rendered in a
   sandboxed iframe, so the record still shows.
-* **The other nine Kulturarv WMS rows (added 2026-10-28) follow the same
+* **The other eight Kulturarv WMS rows (added 2026-10-28) follow the same
   contract** — direct, tokenless, EPSG:3857, CC0 — with their layer names
   taken from the live GetCapabilities (updateSequence 526): the broad views
-  open at z8, the dense area/line views at z9, and the relief raster at z6
-  (its native grid is unpublished, so it upscales beyond z14). Their
-  polygon/line records answer clicks too; `tools/verify-danish-capabilities.mjs`
-  re-checks all the names against the service from a network that may reach it.
+  open at z8 and the dense area/line views at z9. Their polygon/line records
+  answer clicks too; `tools/verify-danish-capabilities.mjs` re-checks all the
+  names against the service from a network that may reach it. (The ninth and
+  tenth rows of that batch — the marine points and the `relief` raster — were
+  retired on 2026-11-15; see “Retired rows”.)
 * **The kultur arv tile service answers failures with HTTP 200** — either a
   `ServiceExceptionReport` XML document or all-alpha tiles, which look like an
   empty layer until the tile is re-requested. `watchTiles` therefore re-issues

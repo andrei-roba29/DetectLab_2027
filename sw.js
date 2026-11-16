@@ -1024,7 +1024,17 @@
 //   /api/geo/dk-dtk25 proxy so the token stays server-side. See
 //   DENMARK_ROW_STYLE.md §"The groups" + §"The Historical maps rows carry a
 //   photo of their own sheet", and LAYER_WINDOW_GLASS.md §3.
-const CACHE_NAME = 'detectlab-v425-danish-panel-rows';
+// v426: two Danish Heritage rows are retired at the user's request —
+//   "Finds and ancient monuments (marine points)" (fortidsminder_punkt_marin,
+//   WMS fundogfortidsminder_punkt_marin) and "Relief hillshade (Danish
+//   heritage service)" (kulturarv_relief, WMS relief). Both entries left
+//   js/danish-layers.config.js, so the panel row, the js/layer-registry.js
+//   mirror, the backend catalogue copy and the wms-health probe all disappear
+//   with them; a visitor's stored preference for a retired id is ignored
+//   because applyStored() only restores layers the config still knows.
+//   Re-tags js/danish-layers.config.js and CACHE_NAME. See DENMARK_LAYERS.md
+//   §"Retired rows" and DATA_SOURCES.md.
+const CACHE_NAME = 'detectlab-v426-heritage-trim';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -2166,7 +2176,11 @@ const PRECACHE_URLS = [
   //   marine), the three line views, the marine points and the service's
   //   relief raster (ten new rows from the live GetCapabilities), and a
   //   GetFeatureInfo fix so polygon/line answers open their record too.
-  //   The two URLs below are the live ones index.html requests.
+  //   (2026-11-15, v426: two of those ten rows were retired again — the
+  //   marine points and the relief raster are no longer configured, so the
+  //   Heritage section ships twelve rows.) The two URLs below are kept for
+  //   the append-only shell history; the live ones index.html requests are
+  //   the newer tags further down this list.
   'js/danish-layers.config.js?v=20261028-kulturarv-sublayers',
   'js/danish-layers.js?v=20261028-kulturarv-sublayers',
   // v295: map gestures (zoom / pan / pinch) defrost every backdrop-filter
@@ -2267,7 +2281,8 @@ const PRECACHE_URLS = [
   'js/danish-layers.js?v=20261115-danish-panel-rows',
   'js/layer-panel-rows.js?v=20261115-danish-panel-rows',
   'js/layer-registry.js?v=20261115-danish-panel-rows',
-  'css/styles.css?v=20261115-danish-panel-rows'
+  'css/styles.css?v=20261115-danish-panel-rows',
+  'js/danish-layers.config.js?v=20261115-heritage-trim'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

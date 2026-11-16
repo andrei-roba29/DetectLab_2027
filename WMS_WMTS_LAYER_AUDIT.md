@@ -117,8 +117,6 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `danish.fortidsminder_linie_alle` | wms | www.kulturarv.dk | fundogfortidsminder_linie_alle | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
 | `danish.fortidsminder_linje_fredet` | wms | www.kulturarv.dk | fundogfortidsminder_linje_fredet | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
 | `danish.fortidsminder_linie_marin` | wms | www.kulturarv.dk | fundogfortidsminder_linie_marin | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
-| `danish.fortidsminder_punkt_marin` | wms | www.kulturarv.dk | fundogfortidsminder_punkt_marin | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
-| `danish.kulturarv_relief` | wms | www.kulturarv.dk | relief | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
 | `danish.lidar_hillshade_historik` | wms | same-origin | hillshade_1_6m | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.lidar_quickdhm_exaggerated` | wms | same-origin | quickDHM_skyggekort_terraen_overdrevet | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.lidar_dhm_terrain_hillshade` | wms | same-origin | dhm_terraen_skyggekort | 1.3.0 | image/png | unknown | auto | — same-origin |
@@ -148,11 +146,11 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `finland.syke-ps-ortodoksikirkko` | wms | paikkatiedot.ymparisto.fi | PS.ProtectedSitesLaillaOrtodoksisestaKirk… | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
 | `finland.syke-ps-rakennusperintolaki` | wms | paikkatiedot.ymparisto.fi | PS.ProtectedSitesLaillaRakennusperinnonSu… | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
 | `finland.syke-ps-rakennusperintolaki-alue` | wms | paikkatiedot.ymparisto.fi | PS.ProtectedSitesLaillaRakennusperinnonSu… | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
-| `finland.local-rky-alue` | dynamic | dacboefvooxgsngxkavx.supabase.co |  |  |  | unknown | auto | watch · DetectLab hosted Finnish layer data (Supabase) |
-| `finland.local-rky-piste` | dynamic | dacboefvooxgsngxkavx.supabase.co |  |  |  | unknown | auto | watch · DetectLab hosted Finnish layer data (Supabase) |
-| `finland.local-rky-viiva` | dynamic | dacboefvooxgsngxkavx.supabase.co |  |  |  | unknown | auto | watch · DetectLab hosted Finnish layer data (Supabase) |
-| `finland.local-vark-alue` | dynamic | dacboefvooxgsngxkavx.supabase.co |  |  |  | unknown | auto | watch · DetectLab hosted Finnish layer data (Supabase) |
-| `finland.local-vark-piste` | dynamic | dacboefvooxgsngxkavx.supabase.co |  |  |  | unknown | auto | watch · DetectLab hosted Finnish layer data (Supabase) |
+| `finland.local-rky-alue` | dynamic | dacboefvooxgsngxkavx.supabase.co |  |  |  | unknown | auto | watch · DetectLab hosted map data (Supabase) |
+| `finland.local-rky-piste` | dynamic | dacboefvooxgsngxkavx.supabase.co |  |  |  | unknown | auto | watch · DetectLab hosted map data (Supabase) |
+| `finland.local-rky-viiva` | dynamic | dacboefvooxgsngxkavx.supabase.co |  |  |  | unknown | auto | watch · DetectLab hosted map data (Supabase) |
+| `finland.local-vark-alue` | dynamic | dacboefvooxgsngxkavx.supabase.co |  |  |  | unknown | auto | watch · DetectLab hosted map data (Supabase) |
+| `finland.local-vark-piste` | dynamic | dacboefvooxgsngxkavx.supabase.co |  |  |  | unknown | auto | watch · DetectLab hosted map data (Supabase) |
 | `lidar.nl-ahn` | dynamic | ahn.arcgisonline.nl | exportImage |  | image/png | yes | auto | watch · AHN / Esri Nederland |
 | `lidar.no-hoydedata` | dynamic | hoydedata.no | exportImage |  | image/png | yes | auto | watch · Kartverket (høydedata.no) |
 | `lidar.pl-nmt` | dynamic | mapy.geoportal.gov.pl | Raster | 1.3.0 | image/png | unknown | auto | watch · GUGiK / geoportal.gov.pl |
@@ -224,7 +222,7 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `premium.kdr-gb` | wms | pastmaps.cenagis.edu.pl | ihpan:kdr_gb_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `premium.wig-100k` | wms | pastmaps.cenagis.edu.pl | ihpan:wig100k_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 
-**106/106 third-party layers guarded** (88 probed, 18 watched); 0 self-handled + 27 same-origin, 1 runtime. 0 error(s), 0 warning(s).
+**104/104 third-party layers guarded** (86 probed, 18 watched); 0 self-handled + 27 same-origin, 1 runtime. 0 error(s), 0 warning(s).
 
 ### Small print
 
@@ -267,7 +265,7 @@ None — every checked invariant holds.
 | **Maanmittauslaitos** (`karttamoottori.maanmittauslaitos.fi`) | ETRS-TM35FIN WMTS REST tile | HTTP 403/5xx or an XML/HTML access/error page instead of a tile | external (MML) | self-guarded Finland row reports failed tiles and uses the configured same-origin fallback |
 | **Museovirasto / Museoverkko** (`kartta.museoverkko.fi`) | WMTS GetLayerTile or WFS endpoint | HTTP 200 JSON error (including a problematic-response message) or XML/HTML in place of an image | external (Museovirasto) | self-guarded Finland row displays its error status and retries |
 | **Maanmittauslaitos / kiinteistötietojen karttapalvelu** (`hkp.maanmittauslaitos.fi`) | Finnish cadastral MVT/WMTS tile endpoint | HTTP 403/5xx, malformed vector tile, or an HTML/JSON body instead of a tile | external (MML) | self-guarded Finland row reports tile failures |
-| **DetectLab hosted Finnish layer data (Supabase)** (`dacboefvooxgsngxkavx.supabase.co`) | Static GeoJSON object from the project storage bucket | HTTP 404/5xx or a JSON error body in place of the configured data object | DetectLab deployment and storage configuration | self-guarded Finland data rows surface load errors |
+| **DetectLab hosted map data (Supabase)** (`dacboefvooxgsngxkavx.supabase.co`) | Static GeoJSON object from the project storage bucket | HTTP 404/5xx or a JSON error body in place of the configured data object | DetectLab deployment and storage configuration | self-guarded Finland data rows surface load errors |
 | **IGN France / Géoplateforme** (`data.geopf.fr`) | WMS 1.3.0 GetMap (CRS=EPSG:3857), IGNF_LIDAR-HD_* | 200 + ServiceExceptionReport XML, or 400 for an unknown LAYERS/CRS pair | external | probe before the layer is added |
 | **swisstopo** (`wmts.geo.admin.ch`) | WMTS KVP GetTile (ch.swisstopo.swisssurface3d-relief) | 200 + WMTS ServiceException XML, or swisstopo's standard no-data tile beyond the modelled area | external | adopted by the guard when it goes on the map, then watched: three failed tiles in a row remove the layer and explain the provider (no probe — the host publishes dozens of products) |
 | **Environment Agency (England)** (`environment.data.gov.uk`) | WMTS KVP GetTile, TILEMATRIXSET=WebMercatorQuad | 200 + XML ServiceException for a tile outside the published limits | external | adopted and watched for tile errors; the module itself clips its bounds and asks for transparent tiles past maxNativeZoom |
@@ -463,18 +461,6 @@ sample tile undefined
 sample tile undefined
 2D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_linie_marin&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_linie_marin&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
-# danish.fortidsminder_punkt_marin — Finds and ancient monuments (marine points)
-sample tile undefined
-2D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_punkt_marin&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_punkt_marin&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
-# danish.kulturarv_relief — Relief hillshade (Danish heritage service)
-sample tile undefined
-2D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=relief&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=relief&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # danish.lidar_hillshade_historik — LiDAR hillshade 1.6 m (DHM historik)

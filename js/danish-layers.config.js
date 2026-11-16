@@ -97,7 +97,7 @@
     /* Read at *runtime* by the proxy functions and in the audit; a layer is
      * only credential-gated when the deployment really needs a variable. */
     var CONFIG = {
-        version: '20261028-kulturarv-sublayers',
+        version: '20261115-heritage-trim',
 
         /* Country this group belongs to. Drives the country filter (rows are
          * shown when Denmark is the selected country) and the coverage check. */
@@ -248,18 +248,17 @@
                 "sq": "Heritage"
             },
                 /* Every layer of the official Kulturarv WMS family the panel
-                 * exposes (2026-10-28): the three rows that always were
-                 * there, then the remaining ten names of the service's
-                 * GetCapabilities (updateSequence 526) — areas, lines,
-                 * points, and the service's own relief raster — grouped
-                 * areas → lines → points → relief so the section reads like
-                 * the register itself. */
+                 * exposes: the three rows that always were there, then the
+                 * area and line views of the service's GetCapabilities
+                 * (updateSequence 526), grouped areas → lines → points so the
+                 * section reads like the register itself. The marine point
+                 * view and the relief raster were retired on 2026-11-15 and
+                 * are no longer configured, so they have no row here. */
                 layers: ['naturtyper', 'fortidsminder',
                     'fortidsminder_areal_alle', 'fortidsminder_areal_adm', 'fortidsminder_areal_ka',
                     'fortidsminder_areal_beskyttelse', 'fortidsminder_areal_marin',
                     'fortidsminder_linie_alle', 'fortidsminder_linje_fredet', 'fortidsminder_linie_marin',
-                    'fortidsminder_punkt_fredet', 'fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_marin',
-                    'kulturarv_relief'] },
+                    'fortidsminder_punkt_fredet', 'fortidsminder_punkt_ikkefredet'] },
             { id: 'historical', title: {
                 "en": "Historical maps",
                 "ro": "Hărți istorice",
@@ -741,10 +740,11 @@
                 sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
                 bounds: [[54.42, 7.99], [57.78, 15.6]],
                 notes: 'Official upstream replaces the unauthorised geoserver.witx.dk mirror the brief ' +
-                    'mentioned (witx:FundOgFortidsminderAreal). The whole service family now has its own ' +
+                    'mentioned (witx:FundOgFortidsminderAreal). The rest of the service family has its own ' +
                     'rows in this section: areal_alle, areal_adm, areal_ka, areal_beskyttelse, areal_marin, ' +
-                    'linie_alle, linje_fredet, linie_marin, punkt_fredet, punkt_ikkefredet, punkt_marin ' +
-                    'and the kulturarv_relief raster — see the rows below.',
+                    'linie_alle, linje_fredet, linie_marin, punkt_fredet and punkt_ikkefredet — see the rows ' +
+                    'below. The marine point view (punkt_marin) and the relief raster were retired from the ' +
+                    'panel on 2026-11-15 and are no longer configured.',
                 /* The same service can answer a browser directly: WFS 2.0.0
                  * takes the bbox in degrees with the CRS spelled out and
                  * returns EPSG:4326 GeoJSON, so a workstation without the
@@ -945,27 +945,30 @@
                 permission: { required: false, note: '' }
             },
             /* ── 6c. Fund og Fortidsminder — the REST of the official WMS
-             * family, as Heritage sublayers (2026-10-28) ──────────────────
+             * family, as Heritage sublayers (2026-10-28, trimmed 2026-11-15) ──
              * The public GeoServer's GetCapabilities (updateSequence 526)
-             * publishes thirteen named layers; until now the panel carried
-             * three of them (the protected-areas WFS row above and the two
-             * point rows). The rows below add the remaining TEN — five more
-             * area views, the three line views, the marine points and the
-             * service's own relief raster — so the whole register is
-             * switchable from the Heritage section. Same contract as the
-             * point rows: read straight from the agency GeoServer (public,
-             * tokenless — Leaflet draws the tiles as plain <img>, which
-             * needs no CORS), requested in EPSG:3857 like every other row
-             * (the root capabilities advertise it, and the same GeoServer
-             * answered 3857 GetMap for the point layers, verified
-             * 2026-10-19), CC0 1.0 with the Slots- og Kulturstyrelsen
-             * attribution. Every layer name below comes from the live
-             * capabilities document (checked 2026-10-28). The nine vector
-             * layers are queryable="1": a click answers WMS GetFeatureInfo
-             * exactly like the point rows (a polygon/line record anchors on
-             * the click and still shows type, dating, register numbers and
-             * the link to the register). The relief raster is not
-             * queryable and carries no identify block. */
+             * publishes thirteen named layers; the panel wires eleven of them:
+             * the protected-areas WFS row above, the two domestic point rows
+             * of section 6b, and the EIGHT rows below — five more area views
+             * and the three line views. Two capability names were retired on
+             * 2026-11-15 at the user's request and are not configured any
+             * more: the marine point view (fundogfortidsminder_punkt_marin)
+             * and the service's own relief raster (relief). Removing them from
+             * this catalogue removes them everywhere — no panel row, no
+             * js/layer-registry.js entry (registerDanishLayers() mirrors the
+             * config), no wms-health probe and no backend mirror, since every
+             * one of those reads the list below. Same contract as the point
+             * rows: read straight from the agency GeoServer (public, tokenless
+             * — Leaflet draws the tiles as plain <img>, which needs no CORS),
+             * requested in EPSG:3857 like every other row (the root
+             * capabilities advertise it, and the same GeoServer answered 3857
+             * GetMap for the point layers, verified 2026-10-19), CC0 1.0 with
+             * the Slots- og Kulturstyrelsen attribution. Every layer name below
+             * comes from the live capabilities document (checked 2026-10-28).
+             * All eight are queryable="1": a click answers WMS GetFeatureInfo
+             * exactly like the point rows (a polygon/line record anchors on the
+             * click and still shows type, dating, register numbers and the
+             * link to the register). */
 
             /* Areas — the polygon family (WMS twin of the WFS row, plus the
              * views the WFS row does not expose). ScaleHints in the
@@ -1551,163 +1554,6 @@
                     linkField: 'url',
                     linkLabel: { da: 'Åbn i Fund og Fortidsminder', en: 'Open in Fund og Fortidsminder' }
                 },
-                wfs: null,
-                permission: { required: false, note: '' }
-            },
-
-            /* Points — only the marine view was still missing (the two
-             * domestic point rows are above, section 6b). */
-            {
-                id: 'fortidsminder_punkt_marin',
-                panelGroup: 'heritage',
-                title: {
-                    "en": "Finds and ancient monuments (marine points)",
-                    "ro": "Finds and ancient monuments (marine points)",
-                    "de": "Finds and ancient monuments (marine points)",
-                    "fr": "Finds and ancient monuments (marine points)",
-                    "it": "Finds and ancient monuments (marine points)",
-                    "es": "Finds and ancient monuments (marine points)",
-                    "pl": "Finds and ancient monuments (marine points)",
-                    "uk": "Finds and ancient monuments (marine points)",
-                    "hu": "Finds and ancient monuments (marine points)",
-                    "cs": "Finds and ancient monuments (marine points)",
-                    "sk": "Finds and ancient monuments (marine points)",
-                    "nl": "Finds and ancient monuments (marine points)",
-                    "bg": "Finds and ancient monuments (marine points)",
-                    "el": "Finds and ancient monuments (marine points)",
-                    "pt": "Finds and ancient monuments (marine points)",
-                    "da": "Danmark · Fund og fortidsminder (marine punkter)",
-                    "sv": "Finds and ancient monuments (marine points)",
-                    "no": "Finds and ancient monuments (marine points)",
-                    "fi": "Finds and ancient monuments (marine points)",
-                    "et": "Finds and ancient monuments (marine points)",
-                    "lv": "Finds and ancient monuments (marine points)",
-                    "lt": "Finds and ancient monuments (marine points)",
-                    "hr": "Finds and ancient monuments (marine points)",
-                    "sr": "Finds and ancient monuments (marine points)",
-                    "sl": "Finds and ancient monuments (marine points)",
-                    "ru": "Finds and ancient monuments (marine points)",
-                    "sq": "Finds and ancient monuments (marine points)"
-                },
-                group: 'overlay',
-                type: 'wms',
-                url: 'https://www.kulturarv.dk/ffgeoserver/public/wms',
-                upstream: null,
-                layers: 'fundogfortidsminder_punkt_marin',
-                crs: 'EPSG:3857',
-                format: 'image/png',
-                transparent: true,
-                tiled: true,
-                tileSize: 256,
-                version: '1.3.0',
-                minZoom: 8,
-                maxZoom: 22,
-                maxNativeZoom: 19,
-                attribution: 'Fund og Fortidsminder © <a href="https://slks.dk/" target="_blank" ' +
-                    'rel="noopener">Slots- og Kulturstyrelsen</a> (CC0 1.0)',
-                opacity: 1,
-                defaultOn: false,
-                enabled: true,
-                requiresCredentials: [],
-                auth: 'none',
-                credentialsNote: { da: '', en: '' },
-                provider: 'Slots- og Kulturstyrelsen (Danish Agency for Culture and Palaces)',
-                licence: 'CC0 1.0',
-                licenceUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
-                sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
-                bounds: [[54.42, 7.99], [57.78, 15.6]],
-                notes: 'The marine (offshore) locality points (GetCapabilities style ' +
-                    '“Lokaliteter marine, punkter”, source view v_mapservice_punkt_lokalitet_marin) — ' +
-                    'the third point view of the register. Layer name from the live ' +
-                    'GetCapabilities (updateSequence 526, checked 2026-10-28); its dots answer ' +
-                    'GetFeatureInfo clicks like the two domestic point rows.',
-                identify: {
-                    fields: ['anlaegstype', 'datering', 'frednr', 'stednr'],
-                    linkField: 'url',
-                    linkLabel: { da: 'Åbn i Fund og Fortidsminder', en: 'Open in Fund og Fortidsminder' }
-                },
-                wfs: null,
-                permission: { required: false, note: '' }
-            },
-
-            /* The service's own terrain relief — the one raster of the
-             * capabilities. Native grid EPSG:3044 (an ImageMosaic, like the
-             * Denmark-wide elevation mosaics), served through the root's
-             * inherited EPSG:3857 exactly like the vector layers. Not
-             * queryable, therefore no identify block. */
-            {
-                id: 'kulturarv_relief',
-                panelGroup: 'heritage',
-                title: {
-                    "en": "Relief hillshade (Danish heritage service)",
-                    "ro": "Relief hillshade (Danish heritage service)",
-                    "de": "Relief hillshade (Danish heritage service)",
-                    "fr": "Relief hillshade (Danish heritage service)",
-                    "it": "Relief hillshade (Danish heritage service)",
-                    "es": "Relief hillshade (Danish heritage service)",
-                    "pl": "Relief hillshade (Danish heritage service)",
-                    "uk": "Relief hillshade (Danish heritage service)",
-                    "hu": "Relief hillshade (Danish heritage service)",
-                    "cs": "Relief hillshade (Danish heritage service)",
-                    "sk": "Relief hillshade (Danish heritage service)",
-                    "nl": "Relief hillshade (Danish heritage service)",
-                    "bg": "Relief hillshade (Danish heritage service)",
-                    "el": "Relief hillshade (Danish heritage service)",
-                    "pt": "Relief hillshade (Danish heritage service)",
-                    "da": "Danmark · Reliefskyggekort (kulturarv)",
-                    "sv": "Relief hillshade (Danish heritage service)",
-                    "no": "Relief hillshade (Danish heritage service)",
-                    "fi": "Relief hillshade (Danish heritage service)",
-                    "et": "Relief hillshade (Danish heritage service)",
-                    "lv": "Relief hillshade (Danish heritage service)",
-                    "lt": "Relief hillshade (Danish heritage service)",
-                    "hr": "Relief hillshade (Danish heritage service)",
-                    "sr": "Relief hillshade (Danish heritage service)",
-                    "sl": "Relief hillshade (Danish heritage service)",
-                    "ru": "Relief hillshade (Danish heritage service)",
-                    "sq": "Relief hillshade (Danish heritage service)"
-                },
-                group: 'overlay',
-                type: 'wms',
-                url: 'https://www.kulturarv.dk/ffgeoserver/public/wms',
-                upstream: null,
-                layers: 'relief',
-                crs: 'EPSG:3857',
-                format: 'image/png',
-                /* Transparent PNG so anything the mosaic does not cover
-                 * (open sea, edges) lets the basemap through; the slider
-                 * blends the relief over the map like every other overlay. */
-                transparent: true,
-                tiled: true,
-                tileSize: 256,
-                version: '1.3.0',
-                minZoom: 6,
-                maxZoom: 22,
-                /* The mosaic's native pixel size is not published (no
-                 * ScaleHint in the capabilities): z14 ≈ 5 m/pixel at Danish
-                 * latitudes, beyond which Leaflet upscales the last real
-                 * tile instead of hammering the GeoServer for deeper ones. */
-                maxNativeZoom: 14,
-                attribution: 'Relief © <a href="https://slks.dk/" target="_blank" ' +
-                    'rel="noopener">Slots- og Kulturstyrelsen</a> (CC0 1.0)',
-                opacity: 1,
-                defaultOn: false,
-                enabled: true,
-                requiresCredentials: [],
-                auth: 'none',
-                credentialsNote: { da: '', en: '' },
-                provider: 'Slots- og Kulturstyrelsen (Danish Agency for Culture and Palaces)',
-                licence: 'CC0 1.0',
-                licenceUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
-                sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
-                bounds: [[54.42, 7.99], [57.78, 15.6]],
-                notes: 'The heritage service’s own Denmark-wide relief raster (GetCapabilities ' +
-                    'layer `relief`, ImageMosaic with native SRS EPSG:3044, style “Default ' +
-                    'Raster”) — a shaded terrain backdrop from the same agency as the register ' +
-                    'rows. Layer name from the live GetCapabilities (updateSequence 526, checked ' +
-                    '2026-10-28); drawn in EPSG:3857 like every other row. Not queryable, so ' +
-                    'there is no click identify.',
-                identify: null,
                 wfs: null,
                 permission: { required: false, note: '' }
             },
