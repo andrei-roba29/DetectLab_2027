@@ -100,12 +100,25 @@ function fakeEl(tag) {
         removeEventListener(type, fn) {
             el.listeners[type] = (el.listeners[type] || []).filter((f) => f !== fn);
         },
-        dispatch(type) { (el.listeners[type] || []).slice().forEach((fn) => fn({ type })); },
+        dispatch(type, extra) {
+            const event = Object.assign({ type, target: el, stopPropagation() {} }, extra || {});
+            (el.listeners[type] || []).slice().forEach((fn) => fn(event));
+            return event;
+        },
         getAttribute(name) { return el.attributes[name] == null ? null : el.attributes[name]; },
         setAttribute(name, value) { el.attributes[name] = String(value); },
-        /* The panel markup is a string, so a real selector is not needed:
-         * hand back a fresh element for `ensurePanel`'s listener wiring. */
-        querySelector: () => fakeEl('div'),
+        /* The panel markup is not parsed by this mini DOM, but retain one
+         * synthetic descendant per selector so listener wiring and later
+         * state reads hit the same element as they do in a browser. */
+        querySelector(selector) {
+            el._querySelectorCache = el._querySelectorCache || Object.create(null);
+            if (!el._querySelectorCache[selector]) {
+                const child = fakeEl('div');
+                child.parentNode = el;
+                el._querySelectorCache[selector] = child;
+            }
+            return el._querySelectorCache[selector];
+        },
         querySelectorAll: () => [],
         matches: () => false,
         setPointerCapture: () => {},
@@ -1376,6 +1389,29 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     fm.fire('click', { latlng: { lat: rec7.lat, lng: rec7.lng }, containerPoint: sheetPt });
     ok(OtherMaps.state.panel && OtherMaps.state.panel.classList.contains('show'),
         'clicking the added map reopens the panel');
+
+    // The alignment switch is a real, full-row label, and changing it must
+    // drive the overlay manager in both directions. Panel clicks/gestures
+    // must stop before reaching the underlying Leaflet map and its dot picker.
+    const alignPanel = OtherMaps.state.panel;
+    ok(alignPanel.innerHTML.includes('<label class="om-panel-row om-align-row">') &&
+        alignPanel.innerHTML.includes('class="om-panel-align" role="switch"'),
+        'the alignment pill is an accessible switch with a full-row hit area');
+    const alignToggle = alignPanel.querySelector('.om-panel-align');
+    const alignBeforeToggle = fmgr.isAlignMode();
+    alignToggle.checked = !alignBeforeToggle;
+    alignToggle.dispatch('change');
+    eq(fmgr.isAlignMode(), !alignBeforeToggle, 'the panel switch turns alignment on or off');
+    eq(alignToggle.checked, !alignBeforeToggle, 'the visible switch stays synchronized when alignment changes');
+    alignToggle.checked = alignBeforeToggle;
+    alignToggle.dispatch('change');
+    eq(fmgr.isAlignMode(), alignBeforeToggle, 'the panel switch can return to its previous alignment state');
+    let panelClickStopped = false;
+    alignPanel.dispatch('click', { stopPropagation() { panelClickStopped = true; } });
+    ok(panelClickStopped, 'a panel click cannot leak into the map dot hit-test');
+    ok(['click', 'dblclick', 'contextmenu', 'mousedown', 'touchstart', 'pointerdown', 'wheel']
+        .every((type) => (alignPanel.listeners[type] || []).length > 0),
+        'panel input and gestures are isolated from Leaflet map handlers');
 
     /* Josephine scans are folded into the same result/overlay record model.
      * Each image's marker radius must enclose every indexed locality. */

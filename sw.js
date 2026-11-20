@@ -1034,7 +1034,11 @@
 //   because applyStored() only restores layers the config still knows.
 //   Re-tags js/danish-layers.config.js and CACHE_NAME. See DENMARK_LAYERS.md
 //   §"Retired rows" and DATA_SOURCES.md.
-const CACHE_NAME = 'detectlab-v426-heritage-trim';
+// v427: the Other maps alignment switch has a full-row accessible hit area;
+//   the panel stops clicks, wheel and touch input from reaching Leaflet, where
+//   a switch tap could otherwise trigger the underlying dot picker or gestures.
+//   Re-tags js/other-maps.js + css/other-maps.css and CACHE_NAME.
+const CACHE_NAME = 'detectlab-v427-other-maps-align-switch';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1329,8 +1333,8 @@ const PRECACHE_URLS = [
   'js/other-maps-tiles.js?v=20261031-other-maps-tile-span',
   'js/other-maps-nls.js?v=20261031-other-maps-tile-span',
   'js/other-maps-overlay.js?v=20261105-other-maps-master-opacity',
-  'js/other-maps.js?v=20261105-other-maps-master-opacity',
-  'css/other-maps.css?v=20261028-other-maps-fix',
+  'js/other-maps.js?v=20261118-other-maps-align-switch',
+  'css/other-maps.css?v=20261118-other-maps-align-switch',
   'data/other-maps-catalog.json?v=20261026-cluj-alba',
   'data/other-maps-nls-catalog.json?v=20261028-other-maps-fix',
   'iosfree_db.json?v=20261029-other-maps',

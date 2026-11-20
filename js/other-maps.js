@@ -1145,11 +1145,11 @@
             '</div>' +
             '<select class="om-panel-select" aria-label="Map"></select>' +
             '<div class="om-panel-empty"></div>' +
-            '<div class="om-panel-row">' +
+            '<label class="om-panel-row om-align-row">' +
             '<span class="om-panel-label"></span>' +
-            '<label class="apm-toggle-switch om-panel-switch">' +
-            '<input type="checkbox" class="om-panel-align"><span class="apm-toggle-track"></span>' +
-            '</label></div>' +
+            '<span class="apm-toggle-switch om-panel-switch">' +
+            '<input type="checkbox" class="om-panel-align" role="switch"><span class="apm-toggle-track"></span>' +
+            '</span></label>' +
             '<div class="om-panel-hint"></div>' +
             '<div class="om-panel-row om-georef-row">' +
             '<span class="om-panel-label om-t-georef"></span>' +
@@ -1211,7 +1211,16 @@
             writeStore();
             paintPanel();
         });
-        panel.addEventListener('pointerdown', function (event) { event.stopPropagation(); });
+        /* The panel lives inside Leaflet's map container. Without stopping
+         * bubble-phase events here, a tap on the alignment switch can also
+         * reach the map's dot hit-test (opening a catalogue modal over the
+         * switch), and wheel/touch gestures can transform or move the map
+         * while the user is operating a panel control. The overlay manager's
+         * capture-phase pointer handler already ignores .om-panel targets. */
+        ['click', 'dblclick', 'contextmenu', 'mousedown', 'touchstart', 'pointerdown', 'wheel']
+            .forEach(function (type) {
+                panel.addEventListener(type, function (event) { event.stopPropagation(); });
+            });
         state.panel = panel;
         return panel;
     }
