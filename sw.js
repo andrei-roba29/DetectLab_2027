@@ -1038,7 +1038,10 @@
 //   the panel stops clicks, wheel and touch input from reaching Leaflet, where
 //   a switch tap could otherwise trigger the underlying dot picker or gestures.
 //   Re-tags js/other-maps.js + css/other-maps.css and CACHE_NAME.
-const CACHE_NAME = 'detectlab-v427-other-maps-align-switch';
+// v428: two-finger rotation is easier to engage without weakening pinch
+//   arbitration; tracked touch IDs and continuous angle deltas prevent a
+//   TouchList reorder from spinning the map. Re-tags js/map-rotate.js.
+const CACHE_NAME = 'detectlab-v428-map-rotation-stable';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1294,6 +1297,9 @@ const PRECACHE_URLS = [
   // v283: Google-Earth-style two-finger twist deadband + pinch arbitration
   // (a two-finger zoom can no longer turn the map).
   'js/map-rotate.js?v=20261026-touch-rotate-deadband',
+  // v428: lower deliberate-twist threshold; stabilize touch identity and
+  // unwrap per-frame angle deltas to prevent accidental 180° bearing jumps.
+  'js/map-rotate.js?v=20261121-touch-rotation-stable',
   'js/tutorial.js?v=20261102-video-speed',
   'js/layer-panel-rows.js?v=20261025-layer-glass',
   'js/layer-panel-rows.js?v=20261101-walachia-sheet',

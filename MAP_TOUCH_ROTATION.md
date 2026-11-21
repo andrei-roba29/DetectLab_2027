@@ -1,8 +1,9 @@
 # Map Touch Rotation — Google-Earth-style twist deadband
 
-**Files:** `js/map-rotate.js` · `test-map-rotate-lock.js` · `sw.js` (v283) · `index.html`
-**Symptom fixed:** in the PWA, the map turned with very light touches —
-especially while zooming in with two fingers.
+**Files:** `js/map-rotate.js` · `test-map-rotate-lock.js` · `sw.js` (v428) · `index.html`
+**Symptoms addressed:** two-finger rotation was too difficult after the original
+deadband was raised to 34 px; swapping touch-list order could also create a
+spurious 180° bearing jump that looked like the map teleported.
 
 ## What was wrong
 
@@ -33,10 +34,10 @@ the same:
 
 | Constant | Value | Meaning |
 | --- | --- | --- |
-| `TOUCH_ROTATE_ARC` | 34 px | tangential finger travel required before a twist counts |
-| `TOUCH_ROTATE_ANGLE_MIN` | 8° | …never below this angle, however wide the fingers |
-| `TOUCH_ROTATE_ANGLE_MAX` | 45° | …never above this, however close together |
-| `MIN_TOUCH_DISTANCE` | 64 px | closer than this the angle cannot be read at all |
+| `TOUCH_ROTATE_ARC` | 20 px | tangential finger travel required before a twist counts |
+| `TOUCH_ROTATE_ANGLE_MIN` | 5° | …never below this angle, however wide the fingers |
+| `TOUCH_ROTATE_ANGLE_MAX` | 35° | …never above this, however close together |
+| `MIN_TOUCH_DISTANCE` | 48 px | closer than this the angle cannot be read at all |
 | `TOUCH_PINCH_SLOP` | 6 % | spread change before any twist engages → it is a pinch |
 | `TOUCH_PINCH_ABORT` | 18 % | spread change that cancels an already-engaged twist |
 | `TOUCH_GESTURE_MIN_ANGLE` | 12° | deadband for iOS Safari `gesturechange` rotation |
@@ -44,21 +45,27 @@ the same:
 The effective angle threshold is `TOUCH_ROTATE_ARC / fingerDistance` (clamped
 to the min/max), so:
 
-* 150 px apart → the twist must reach ~13° *and* 34 px of real travel;
-* 400 px apart → ~8° (the floor);
-* 64 px apart → ~30° (and below 64 px nothing turns at all).
+* 150 px apart → the twist must reach ~8° *and* 20 px of real travel;
+* 400 px apart → ~5° (the floor);
+* 48 px apart → ~24° (and below 48 px nothing turns at all).
+
+This keeps rotation deliberate, but no longer requires the large 34 px sweep
+that made normal hand turns frustrating. The pinch spread gates are unchanged,
+so zooming still has priority over rotation.
 
 ### Gesture lifecycle (one two-finger touch)
 
-1. **Baseline.** `touchstart` records the angle, spread and bearing. If the
-   fingers are closer than 64 px, the baseline waits until they spread far
-   enough to be readable (`_rebase`).
+1. **Baseline.** `touchstart` records the two touch identifiers, angle, spread
+   and bearing. Rotation follows those same fingers even if the browser
+   reorders `TouchList`; if the fingers are closer than 48 px, the baseline
+   waits until they spread far enough to be readable (`_rebase`).
 2. **Classification.** On every `touchmove`:
    * spread changed by more than 6 % from the baseline → **pinch**. The
      gesture is locked as a zoom for its whole life; the map never turns.
    * |twist| < arc threshold → nothing (the deadband).
    * |twist| ≥ arc threshold → **twist engages**, and the turn starts from
      exactly 0° at that frame (no jump), tracking the fingers 1:1 afterwards.
+     Per-frame angle deltas are unwrapped, so crossing ±180° stays continuous.
 3. **Cancellation.** An engaged twist stops dead — and stays stopped for the
    rest of the gesture — if the spread then changes by more than 18 %
    (the twist turned into a real pinch) or if the fingers converge below the
@@ -85,7 +92,8 @@ simulated two-finger frames and pins the model:
 * a pinch-zoom with angle jitter (fast and slow) never rotates;
 * twists under the arc deadband never rotate;
 * a deliberate twist turns 1:1 past the deadband, starting from 0° at engage;
-* fingers closer than 64 px never rotate, and a later spread re-baselines;
+* fingers closer than 48 px never rotate, and a later spread re-baselines;
+* a browser reordering `TouchList` entries does not cause a 180° spin;
 * a pinch growing out of a twist freezes the turn and locks it out;
 * iOS gesture rotation obeys the same deadband and pinch rules.
 

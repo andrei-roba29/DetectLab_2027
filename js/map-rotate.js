@@ -5,10 +5,12 @@
  *  - keeps click / pan / pinch coordinates correct
  *  - lets the user twist the map with two fingers (touch)
  *    or Alt/Option-drag / Ctrl-wheel (desktop). The two-finger twist has a
- *    Google-Earth-style deadband: the fingers must travel ~34 px along the
- *    arc of the rotation before anything turns (never under 8°, however wide
+ *    Google-Earth-style deadband: the fingers must travel ~20 px along the
+ *    arc of the rotation before anything turns (never under 5°, however wide
  *    the fingers), and a pinch-zoom never turns the map at all — as soon as
- *    the finger spread changes, the gesture is a zoom and stays one.
+ *    the finger spread changes, the gesture is a zoom and stays one. Touch
+ *    identity is tracked to prevent a browser TouchList reorder from making
+ *    the map jump by 180°.
  *  - shows a bottom-left column of 38x38 map buttons:
  *      * compass — the rose follows the camera continuously, a tap eases
  *        the view back to true north, a horizontal drag on the rose turns
@@ -35,10 +37,10 @@
      * expressed in pixels of arc at the CURRENT finger spacing, with a
      * degree floor so a very wide two-finger hand cannot rotate on a couple
      * of degrees. */
-    var TOUCH_ROTATE_ARC = 34;      // px of tangential finger travel before a twist counts
-    var TOUCH_ROTATE_ANGLE_MIN = 8; // …but never below this many degrees, however wide the fingers
-    var TOUCH_ROTATE_ANGLE_MAX = 45; // …and never above this, however close together
-    var MIN_TOUCH_DISTANCE = 64;   // px between fingers; closer than this the angle is pure noise
+    var TOUCH_ROTATE_ARC = 20;      // px of tangential finger travel before a twist counts
+    var TOUCH_ROTATE_ANGLE_MIN = 5; // …but never below this many degrees, however wide the fingers
+    var TOUCH_ROTATE_ANGLE_MAX = 35; // …and never above this, however close together
+    var MIN_TOUCH_DISTANCE = 48;   // px between fingers; closer than this the angle is pure noise
     /* Pinch arbitration: a two-finger zoom must never turn the map. If the
      * spread between the fingers changes by more than a few percent, the
      * gesture is a pinch, not a twist — Google Earth likewise keeps a pinch
@@ -320,8 +322,23 @@
          * cannot be trusted (not two fingers, or fingers too close together). */
         _pair: function (e) {
             if (!e.touches || e.touches.length !== 2) return null;
-            var a = this._map.mouseEventToContainerPoint(e.touches[0]);
-            var b = this._map.mouseEventToContainerPoint(e.touches[1]);
+            var touches = e.touches;
+            var gesture = this._gesture;
+            var first = touches[0], second = touches[1];
+            // TouchList order is not a gesture identity. Some browsers can
+            // report the same two fingers in the opposite order; using that
+            // order would turn one frame into a spurious 180° map spin.
+            if (gesture && gesture.touchIds && gesture.touchIds[0] !== null &&
+                gesture.touchIds[1] !== null) {
+                first = second = null;
+                for (var i = 0; i < touches.length; i++) {
+                    if (touches[i].identifier === gesture.touchIds[0]) first = touches[i];
+                    if (touches[i].identifier === gesture.touchIds[1]) second = touches[i];
+                }
+                if (!first || !second) return null;
+            }
+            var a = this._map.mouseEventToContainerPoint(first);
+            var b = this._map.mouseEventToContainerPoint(second);
             var distance = a.distanceTo(b);
             if (distance < MIN_TOUCH_DISTANCE) return null;
             return { angle: angleBetween(a, b), distance: distance };
@@ -334,7 +351,8 @@
             var g = this._gesture;
             var pair = this._pair(e);
             if (!g || !pair || g.engaged || g.pinching) return;
-            g.startAngle = pair.angle;
+            g.lastAngle = pair.angle;
+            g.twist = 0;
             g.startBearing = this._map.getBearing();
             g.startDistance = pair.distance;
             g.engagedDistance = pair.distance;
@@ -344,11 +362,16 @@
         _onStart: function (e) {
             if (this._usingGesture) return;
             if (!e.touches || e.touches.length !== 2 || !this._map._rotate) return;
+            var idsAvailable = typeof e.touches[0].identifier === 'number' &&
+                typeof e.touches[1].identifier === 'number';
             this._gesture = {
                 pending: true,   // no trustworthy angle yet — baselined below
                 engaged: false,
                 pinching: false,
-                offset: 0
+                offset: 0,
+                touchIds: idsAvailable
+                    ? [e.touches[0].identifier, e.touches[1].identifier]
+                    : [null, null]
             };
             L.DomEvent.on(document, 'touchmove', this._onMove, this);
             L.DomEvent.on(document, 'touchend touchcancel', this._onEnd, this);
@@ -375,7 +398,13 @@
                 this._rebase(e);
                 if (g.pending) return;
             }
-            var twist = wrapDeg(pair.angle - g.startAngle);
+            // Accumulate the shortest per-frame delta instead of measuring
+            // against one fixed start angle. This remains continuous through
+            // ±180° and prevents a long intentional turn from suddenly
+            // reversing at the angle wrap boundary.
+            var twist = g.twist + wrapDeg(pair.angle - g.lastAngle);
+            g.lastAngle = pair.angle;
+            g.twist = twist;
             if (!g.engaged) {
                 var spread = (pair.distance - g.startDistance) / g.startDistance;
                 if (Math.abs(spread) > TOUCH_PINCH_SLOP) {

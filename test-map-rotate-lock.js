@@ -562,24 +562,48 @@ assert.strictEqual(map.getBearing(), 0,
 console.log('  ✔ pinch-zoom never turns the map, jitter or not');
 
 // 6.2 — light touches: twists under the arc deadband do nothing.
-// At 120 px spacing the fingers must travel 34 px along the arc, i.e. ~16°.
+// At 120 px spacing the fingers must travel 20 px along the arc, i.e. ~9.5°.
 map.setBearing(0);
-runTwoFinger(twistFrames(400, 300, [0, 5, -7, 8, -10, 12], 120));
+runTwoFinger(twistFrames(400, 300, [0, 2, -3, 4, -5, 8], 120));
 assert.strictEqual(map.getBearing(), 0,
-    'a 12° twitch at 120 px is below the 16° arc deadband and must not rotate, got ' + map.getBearing());
+    'an 8° twitch at 120 px is below the ~9.5° arc deadband and must not rotate, got ' + map.getBearing());
 console.log('  ✔ light touches stay under the arc deadband');
 
 // 6.3 — a deliberate twist turns the map 1:1 past the deadband.
-// 150 px spacing → threshold = 34/150·57.3 ≈ 12.9°, engaged on the 20° frame.
+// 150 px spacing → threshold = 20/150·57.3 ≈ 7.6°, engaged on the 10° frame.
 map.setBearing(0);
 runTwoFinger(twistFrames(400, 300, [0, 10, 20, 30, 40], 150));
-assert(Math.abs(map.getBearing() - 20) < 0.5,
-    'a 40° twist past a ~13° deadband must turn the map by ~27° from its engage point (20° applied from 0), got ' + map.getBearing());
+assert(Math.abs(map.getBearing() - 30) < 0.5,
+    'a deliberate turn follows the twist after it clears the ~7.6° deadband, got ' + map.getBearing());
 map.setBearing(0);
 runTwoFinger(twistFrames(400, 300, [0, 10, 20], 150));
-assert(Math.abs(map.getBearing() - 0) < 0.5,
+assert(Math.abs(map.getBearing() - 10) < 0.5,
     'the turn starts from 0° at the engage frame (no jump), got ' + map.getBearing());
 console.log('  ✔ a deliberate twist turns 1:1 past the deadband, starting from 0°');
+
+// TouchList order may change between events. The handler must retain finger
+// identity so a reorder cannot produce a spurious half-turn / teleport.
+map.setBearing(0);
+const identifiedPair = (angle, dist, reverse) => {
+    const p = pairAt(400, 300, angle, dist);
+    p[0].identifier = 11;
+    p[1].identifier = 22;
+    return reverse ? [p[1], p[0]] : p;
+};
+const reorderedFrames = [
+    identifiedPair(0, 150, false),
+    identifiedPair(10, 150, false),
+    identifiedPair(20, 150, true),
+    identifiedPair(30, 150, true)
+];
+fireMapEvent('touchstart', { touches: reorderedFrames[0] });
+for (let i = 1; i < reorderedFrames.length; i++) {
+    fireDocument('touchmove', { type: 'touchmove', touches: reorderedFrames[i], preventDefault() {} });
+}
+fireDocument('touchend', { type: 'touchend', touches: [], preventDefault() {} });
+assert(Math.abs(map.getBearing() - 20) < 0.5,
+    'reordering TouchList entries must preserve the intended 20° turn, got ' + map.getBearing());
+console.log('  ✔ changing TouchList order cannot teleport the bearing');
 
 // 6.4 — fingers too close together can never rotate (angle is noise there).
 map.setBearing(0);
@@ -592,12 +616,12 @@ map.setBearing(0);
 runTwoFinger([
     pairAt(400, 300, 0, 40),
     pairAt(400, 300, 5, 80),
-    pairAt(400, 300, 25, 80),
-    pairAt(400, 300, 35, 80),   // twist 30° ≥ 24.3° → engages, turn starts at 0°
-    pairAt(400, 300, 45, 80)    // twist 40° → 10° of turn past the engage point
+    pairAt(400, 300, 25, 80),   // twist 20° ≥ 14.3° → engages, turn starts at 0°
+    pairAt(400, 300, 35, 80),
+    pairAt(400, 300, 45, 80)    // twist 40° → 20° of turn past the engage point
 ]);
-assert(Math.abs(map.getBearing() - 10) < 0.5,
-    'a gesture re-baselines when the fingers spread past 64 px and turns 1:1 from there, got ' + map.getBearing());
+assert(Math.abs(map.getBearing() - 20) < 0.5,
+    'a gesture re-baselines when the fingers spread past 48 px and turns 1:1 from there, got ' + map.getBearing());
 console.log('  ✔ close fingers never rotate; a spread re-baselines cleanly');
 
 // 6.5 — a pinch that grows out of a twist cancels the turn and locks it out.
@@ -611,8 +635,8 @@ runTwoFinger([
     pairAt(400, 300, 55, 190),   // further twisting must stay ignored
     pairAt(400, 300, 75, 190)
 ]);
-assert(Math.abs(map.getBearing() - 10) < 0.5,
-    'the turn must freeze at the moment the gesture turns into a pinch (10°), got ' + map.getBearing());
+assert(Math.abs(map.getBearing() - 20) < 0.5,
+    'the turn must freeze at the moment the gesture turns into a pinch (20°), got ' + map.getBearing());
 console.log('  ✔ a pinch cancels an engaged twist and never resumes');
 
 // 6.6 — iOS Safari gesture events: same deadband + pinch arbitration.
