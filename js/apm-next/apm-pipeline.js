@@ -206,7 +206,22 @@
                 var bb = core.circleBBox(centre.lat, centre.lon, 300);
                 var g = raster.gridForBBox(bb, item.provider.nominalResM);
                 var t0 = Date.now();
-                return item.provider.fetchBlock(g).then(function (elev) {
+                // Bound the whole probe, including cache access and image/TIFF decoding,
+                // not just fetch(). Cancellation must work even while a provider hangs.
+                return new Promise(function (resolve, reject) {
+                    var timer = setTimeout(function () {
+                        cleanup();
+                        reject(prov.failure('reason.timeout', { seconds: 15 }, 'elevation probe timed out after 15 seconds'));
+                    }, 15000);
+                    var cancelTimer = setInterval(function () {
+                        try { checkToken(token); } catch (e) { cleanup(); reject(e); }
+                    }, 100);
+                    function cleanup() { clearTimeout(timer); clearInterval(cancelTimer); }
+                    Promise.resolve().then(function () { return item.provider.fetchBlock(g); }).then(function (value) {
+                        cleanup(); resolve(value);
+                    }, function (err) { cleanup(); reject(err); });
+                }).then(function (elev) {
+                    checkToken(token);
                     var f = validFraction(elev);
                     if (f < 0.5) throw prov.failure('reason.noData', {}, 'mostly no-data at this location');
                     attempts.push(stepRecord('dem', item, 'used', null, Date.now() - t0));

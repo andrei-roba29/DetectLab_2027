@@ -1056,7 +1056,8 @@
 // v434: merge the accessible full-row Other Maps alignment switch and input
 //   isolation from main with the latest LiDAR, layer-lock and map-catalogue work.
 //   The new shell version ensures installed PWAs fetch the merged shell assets.
-const CACHE_NAME = 'detectlab-v434-merge-main-align-switch';
+// v435: bound DEM requests/probes so unavailable sources cannot stall APM.
+const CACHE_NAME = 'detectlab-v435-apm-dem-timeout';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1131,6 +1132,9 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 //   archeo-report-pdf.js and translations.js.
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
+  'js/apm-next/apm-providers.js?v=20261123-dem-timeout',
+  'js/apm-next/apm-pipeline.js?v=20261123-dem-timeout',
+  'js/apm-next/apm-i18n.js?v=20261123-dem-timeout',
   'css/next-gen-apm.css?v=20261109-apm-run-overlay',
   'js/apm-next/apm-raster.js?v=20261109-apm-run-overlay',
   'js/apm-next/apm-i18n.js?v=20261109-apm-ariadne-grid',

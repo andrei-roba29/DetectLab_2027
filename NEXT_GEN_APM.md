@@ -542,3 +542,26 @@ WFS URL and "Feature points; 50 m working value".
 * Verified against the live service on 2026-11-11 from a machine that could reach
   `kulturarv.dk`; the sandbox that built this cannot, so the test suite uses
   fixtures and the counts above are the recorded probe answers.
+
+### 2026-11-23 — elevation selection must not wait forever
+
+The reported stop at `prog.chooseDem` exposed an unbounded wait: sequential
+EU-DEM probes used fetch/body reads without deadlines, so an endpoint that
+never settled prevented reaching Terrarium. This is a confirmed code defect,
+not a live verification that EEA is currently down (external DEM hosts are not
+reachable from this development environment).
+
+DEM HTTP requests and body reads now have 10-second deadlines and abort their
+network controller. The complete centre probe (including cache access and
+image/TIFF decoding) has a 15-second deadline per candidate and checks run
+cancellation while waiting. Failed probes retain keyed timeout diagnostics and
+continue through the existing source preference order; if all fail, the normal
+`err.noDem` error is returned instead of indefinite progress. There is no
+synthetic/flat elevation fallback. Other provider HTTP requests/body reads have
+a 75-second deadline (Overpass advertises 60 seconds). The shell cache and the
+three affected script URLs are bumped for installed PWAs.
+
+Offline verification: `node test-apm-dem-timeout.js` covers stalled fetch,
+stalled body, abort, probe fallback, all providers failing, and cancellation;
+`node test-apm-next.js` passes 62 tests. Actual EEA/AWS availability and browser
+CORS behaviour still require a deployed-browser check.
