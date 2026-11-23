@@ -388,6 +388,15 @@
     font-size: 0.66rem;
 }
 
+/* The whole alignment row is the switch's label/hit area, not only the
+   small pill. Keep keyboard focus visible on the visually hidden checkbox. */
+.om-align-row { cursor: pointer; }
+.om-align-row .om-panel-label { flex: 1; }
+.om-panel .om-panel-align:focus-visible + .apm-toggle-track {
+    outline: 2px solid rgba(200, 169, 110, 0.95);
+    outline-offset: 3px;
+}
+
 .om-panel-switch { flex-shrink: 0; }
 
 /* Comutatorul din panoul compact e redus proporțional cu restul ferestrei. */

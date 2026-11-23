@@ -1053,7 +1053,10 @@
 // v430: parent layer groups with visible sublayers are no longer user-toggleable;
 //   their existing child switches remain the UI controls. Standalone layers keep
 //   their switch. Re-tags styles.css and preserves backing state inputs for APIs.
-const CACHE_NAME = 'detectlab-v433-all-lidar-sublayers';
+// v434: merge the accessible full-row Other Maps alignment switch and input
+//   isolation from main with the latest LiDAR, layer-lock and map-catalogue work.
+//   The new shell version ensures installed PWAs fetch the merged shell assets.
+const CACHE_NAME = 'detectlab-v434-merge-main-align-switch';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.

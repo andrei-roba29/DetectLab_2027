@@ -50,8 +50,8 @@ for (const id of ['battlesToggle', 'apmToggle', 'apm20Toggle']) {
 const cssTag = 'css/styles.css?v=20261118-leaf-switch-only';
 check(html.includes(cssTag) && sw.includes("'" + cssTag + "'"),
     'the new parent/child switch styling is versioned and precached');
-check(/const CACHE_NAME = 'detectlab-v430-leaf-switches-only'/.test(sw),
-    'the app shell cache is bumped for the switch hierarchy change');
+check(/const CACHE_NAME = 'detectlab-v434-merge-main-align-switch'/.test(sw),
+    'the app shell cache is bumped for the merged switch hierarchy and alignment changes');
 
 console.log('✓ parent groups have no visible switch; child layers and standalone layers do');
 console.log(checks + ' checks passed');
