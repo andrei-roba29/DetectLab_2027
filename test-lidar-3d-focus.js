@@ -50,8 +50,8 @@ const viewerSource = read('js/map3d-terrain.js');
 const focusSource = read('js/lidar-3d-focus.js');
 
 /* Every build that changes the LiDAR 3D focus path bumps its own tag. */
-const TAG = '20261102-lidar-disc-zoom-anchor';
-const TAG_MIRROR = '20261106-hist-shift-3d';
+const TAG = '20261118-all-lidar-sublayers';
+const TAG_MIRROR = '20261118-asig-3d-wmts';
 const TAG_VIEWER = '20261106-hist-shift-3d';
 const TAG_CSS = '20261102-report-lidar-window';
 
@@ -917,6 +917,24 @@ function runViewerSuite() {
         'and the zoom ceiling of the layer itself (13 here)');
     assert(layers[0].lidarKey === 'lidar.ro1m' && layers[0].key === '2d.R1',
         'each entry carries both key spaces: the LiDAR family key and the deck key');
+
+    /* A catalogue LiDAR layer may be added directly to the map instead of the
+     * shared master group (ASIG Albania's WMTS hillshade/DSM rows do this).
+     * It must still appear in the exact same whole-layer / disc picker, with
+     * its own opacity and zoom settings intact. */
+    const standaloneLidar = new StubTileLayer('https://tiles.example.org/asig/{z}/{x}/{y}.png', {
+        name: 'Albania · 2015 hillshade', opacity: 0.63, mode: 'hillshade',
+        minZoom: 7, maxNativeZoom: 20, pane: 'pane_lidar'
+    });
+    standaloneLidar._dlDefId = 'albania.hillshade_2015';
+    standaloneLidar._dlLidar = { key: 'albania.hillshade_2015', label: 'Albania · 2015 hillshade' };
+    map.addLayer(standaloneLidar);
+    const withStandalone = focus.activeLayers().filter(function (entry) { return entry.layer === standaloneLidar; })[0];
+    assert(withStandalone && withStandalone.lidarKey === 'albania.hillshade_2015' &&
+        withStandalone.opacity === 0.63 && withStandalone.minzoom === 7 && withStandalone.maxzoom === 20 &&
+        withStandalone.layer.options.mode === 'hillshade',
+        'an ungrouped LiDAR sublayer is offered with its own opacity, mode and zoom settings');
+    map.removeLayer(standaloneLidar);
 
     /* No prepared disc (a LiDAR layer switched on while 3D is already open, or
      * 3D opened from the console): nothing LiDAR is draped. Opening one of these

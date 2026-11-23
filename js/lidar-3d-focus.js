@@ -298,11 +298,12 @@
      * -----------------------------------------------------------------------
      *  The master “LIDAR” switch in js/map-app.js owns one Leaflet layer group
      *  (window._lidarGroup) and tags every layer it builds with
-     *  `_dlLidar = { key, label }`. The group is the source of truth here: it
-     *  contains the Romanian sheets (HD/AR/AB/BH/CS/1m/2–5m, LAKI III), and the
-     *  nine country modules (AHN, Kartverket, GUGiK, IGN, swisstopo, EA,
-     *  Dataforsyningen, Lantmäteriet, Géoplateforme) — all of them LiDAR, all of
-     *  them subjects of the one-layer/one-disc rule.
+     *  `_dlLidar = { key, label }`. The focus also scans the live map for
+     *  explicitly tagged standalone LiDAR layers and registry definitions in
+     *  group `lidar` — for example Albania's ASIG hillshade/DSM WMTS rows — so
+     *  those stay in the same whole-layer / 1 km picker. Each entry retains its
+     *  live Leaflet object, including that sublayer's opacity and product mode,
+     *  which the mirror uses when it builds the 3D tiles.
      * ═══════════════════════════════════════════════════════════════════════ */
     function tagOf(layer) { return (layer && layer._dlLidar) || null; }
 
@@ -345,13 +346,43 @@
         var groupOnMap = false;
         try { groupOnMap = !!group && (typeof map.hasLayer !== 'function' || map.hasLayer(group)); } catch (e) { groupOnMap = !!group; }
         var candidates = groupOnMap && typeof group.getLayers === 'function' ? group.getLayers().slice() : [];
-        // Danish/Albanian image layers can live outside the shared group.
+        // Some country/catalogue LiDAR layers (including Albania's ASIG WMTS
+        // products) are standalone Leaflet layers, not members of the shared
+        // master group. Include every live, explicitly tagged layer too.
         var photoSource = root.DLPhotoFilter && root.DLPhotoFilter.source3d && root.DLPhotoFilter.source3d();
         if (photoSource && candidates.indexOf(photoSource) === -1) candidates.push(photoSource);
+        if (typeof map.eachLayer === 'function') {
+            try {
+                map.eachLayer(function (layer) {
+                    if (!layer || layer === group) return;
+                    var belongsToGroup = false;
+                    try { belongsToGroup = !!(group && group.hasLayer && group.hasLayer(layer)); }
+                    catch (e) { belongsToGroup = false; }
+                    /* The master switch still governs its members. Standalone
+                     * tagged catalogue layers bypass that group intentionally. */
+                    if (belongsToGroup && !groupOnMap) return;
+                    var def = null;
+                    try { if (layer._dlDefId && registry() && registry().get) def = registry().get(layer._dlDefId); }
+                    catch (e) { def = null; }
+                    if ((tagOf(layer) || (def && def.group === 'lidar')) && candidates.indexOf(layer) === -1) {
+                        candidates.push(layer);
+                    }
+                });
+            } catch (e) { /* the shared group candidates remain usable */ }
+        }
+        function isLidarCandidate(layer) {
+            if (tagOf(layer) || layer === photoSource) return true;
+            try { if (group && typeof group.hasLayer === 'function' && group.hasLayer(layer)) return true; }
+            catch (e) { /* ignore */ }
+            try {
+                var def = layer && layer._dlDefId && registry() && registry().get(layer._dlDefId);
+                return !!(def && def.group === 'lidar');
+            } catch (e2) { return false; }
+        }
         return candidates.filter(function (layer) {
             if (!layer) return false;
             try { if (typeof map.hasLayer === 'function' && !map.hasLayer(layer)) return false; } catch (e) { /* keep it */ }
-            return !!tagOf(layer) || layer === photoSource;
+            return isLidarCandidate(layer);
         }).map(function (layer) {
             var tag = tagOf(layer) || { key: layer._dlDefId ? 'def:' + layer._dlDefId : (mirror() && mirror().keyFor ? mirror().keyFor(layer) : ''), label: 'LiDAR' };
             var zoom = zoomWindowOf(layer);

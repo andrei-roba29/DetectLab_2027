@@ -52,7 +52,7 @@ Tests: `node test-asig-heritage.mjs`, `node test-albania-asig-layers.js`.
 
 ---
 
-> WMTS performance (2026-10-26): reprojection shares in-flight source images, caches up to 128 completed images, briefly caches failed URLs (15 seconds), and paints each source as it arrives. Source zoom/detail and CRS are unchanged. This reduces repeat work but cannot accelerate an uncached response from ASIG itself.
+> WMTS performance: reprojection shares in-flight source images, caches up to 128 completed images, briefly caches failed URLs (15 seconds), and paints each source as it arrives. Destination canvases attach as soon as the first useful source image arrives; remaining mosaic pieces paint progressively, and stalled source requests time out after 12 seconds. The source zoom/detail and CRS are unchanged. In 3D, source images are relayed same-origin so their reprojected canvas can be exported to MapLibre; 2D still fetches directly from ASIG.
 
 > UI update (2026-10-26): thematic sections now appear directly in the layer list, without a country master layer. All Albanian and Danish LiDAR rows live once under the existing shared LiDAR accordion. Country filtering and per-layer controls remain in place.
 
@@ -173,7 +173,9 @@ archaeological list is meant to be regenerated, not hand-edited (see
   (`pane_asig`, z-index 404), so list order is draw order. (The sections no
   longer own individual panes — that would have made cross-section reordering
   meaningless.)
-- **Group master switch / expander / Tirana / ⓘ** behave as before.
+- **No section-level switch:** each catalogue row is toggled independently.
+  The Heritage row retains its switch because its internal sources are not
+  exposed as independent sublayer rows; expander / Tirana / ⓘ controls remain.
 
 ## Requests
 
@@ -218,25 +220,20 @@ from this environment.
 
 ## Feature info on map click
 
-A click queries **every active WMS part** (Heritage included), grouped by
-endpoint, with `GetFeatureInfo` (WMS 1.1.1, `SRS=EPSG:3857`, the clicked pixel
-and the map's view size). The answer is rendered in a map popup, one
-**sandboxed** `<iframe>` (`sandbox=""`) per endpoint. If the cross-origin read is
-blocked the iframe loads the request URL directly, so the service's own HTML is
-still shown. Tile-only layers have no feature info and are skipped.
+Ordinary WMS layers are raster renderings (orthophotos, scanned maps,
+hillshades and rendered overlays). A click on these layers is silent: it does
+not issue `GetFeatureInfo` or open an HTML popup containing server/tile
+metadata such as band names. A future WMS layer may opt into the generic
+identify popup only by declaring `identify: true` on its catalogue leaf.
+Vector renderers (such as Heritage feature markers) retain their own feature
+hit-tests and click behavior; they do not rely on the raster handler. Tile-only
+layers are never identify candidates.
 
-**A tap only queries inside Albania, and only while a layer is drawing.** The
-handler is registered once on the map, but `canQueryAt(latlng)` gates it on four
-conditions; without them the popup opened for a tap anywhere in Europe (the
-installed PWA included, because the on/off state is restored from
-`localStorage`):
-
-| gate | why |
-| --- | --- |
-| `!runtime.suppressed` | the group is parked (country switched away) |
-| `runtime.inCountry` | Albania is the selected country |
-| `insideFootprint(latlng)` | the tap is inside the catalogue's `countryBounds` (+0.02° margin for tile edges) |
-| `activeWmsLeaves().length > 0` | a WMS part is **on the map right now** — `map.hasLayer(part.layer)`, not merely remembered in storage |
+For an explicitly identifiable WMS feature layer, the handler also checks
+that Albania is selected, the group is not parked, the click is inside the
+catalogue footprint, and the layer is actually on the map (not merely restored
+as active in local storage). This prevents both accidental raster popups and
+queries outside the supported area.
 
 `API.canQueryAt` / `API.insideFootprint` are exposed for tests. Regression test:
 `node test-asig-click-guard.js`.
@@ -331,9 +328,11 @@ After regenerating: bump the `?v=` tags for the data + config + module in
   beside it.
 - State is stored under `detectlab_albania_layers_v2`; there is no migration
   from the pre-catalogue keys, because none of those rows exist any more.
-- The three WMTS rows are **not** in the registry: they are canvas-reprojected
-  layers with no WMS layer to audit, and the 2D ⇄ 3D mirror does not carry ASIG
-  layers. WMS rows are mirrored as `albania.<id>`, `countries: ['AL']`,
+- The three WMTS rows are **not** registered as WMS: they have no WMS layer to
+  audit. They are still mirrored to 3D through their live canvas renderer; only
+  those 3D-rendered source images use the same-origin `/api/map3d/tile?u=` relay
+  (the ASIG host is already allow-listed by the Albania WMS registry entries).
+  WMS rows are mirrored as `albania.<id>`, `countries: ['AL']`,
   `guard: false`, `selfGuarded: true`; rows without a baked name are skipped
   until the catalogue is regenerated (`AsigAlbaniaLayers` shows the list via
   `registry.asigCatalogueSkips()`).
@@ -375,8 +374,8 @@ the proxy) returned a tile.
 - Switch on two orthophotos and reorder them with ↑/↓: the upper list entry
   draws above the other (compare with and without the basemap).
 - Switch Heritage on: one active-list entry, 4+ layers on the map, one slider
-  moving all of them. Click the map inside Albania: the popup queries the
-  Heritage parts (one iframe per workspace endpoint).
+  moving all of them. Click a rendered Heritage vector marker to inspect its
+  feature; clicking raster tiles or empty map background opens no generic popup.
 - Switch `italiane 100k` on and zoom in deeply: instead of going blank it shows
   enlarged tiles and the row says the level is not cached (only if the WMTS
   really has no deep tiles there).

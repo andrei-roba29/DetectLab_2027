@@ -84,7 +84,9 @@ removing them one by one leaves half a box behind).
   `danish.hist_lave`, `danish.hist_preussen`, `danish.topo4cm_1953_1976`,
   `danish.topo4cm_1980_2001`). CENAGIS catalogue rows are resolved from their
   own `data-map-id` as `cenagis.<key>`, so the whole country catalogue gets
-  photos without a second copy of anything.
+  photos without a second copy of anything. Albania's tile-only historical
+  rows opt in with `data-preview-wmts`; the preview uses a real EPSG:4326 WMTS
+  tile for that exact layer, including `hartat_historike:italiane_100k`.
 * Which rows are *historical-map* rows is the registry's answer, not a list
   kept here: the two Romanian groups (`hist-free`, `hist-premium`), plus any
   layer whose own country config files it under a Historical maps section —
@@ -94,8 +96,9 @@ removing them one by one leaves half a box behind).
   `DATAFORSYNINGEN_TOKEN` answers 503, the image fails once, and the row stays
   plain glass. The LiDAR, heritage and orthophoto rows of the same country
   module are not sheets and are left alone.
-* The URL is built from **the layer's own definition** in
-  `js/layer-registry.js` — never from a second copy of an endpoint:
+* For registry-backed historical layers, the URL is built from **the layer's
+  own definition** in `js/layer-registry.js` — never from a second endpoint
+  copy:
   * `kind: 'xyz'` / `'arcgis-image'` → the layer's own tile template, filled
     with the `{z}/{x}/{y}` of the tile under the sheet (ArcGIS templates are
     `{z}/{y}/{x}`; the template decides the order). The preview zoom is

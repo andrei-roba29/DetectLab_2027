@@ -418,8 +418,11 @@
         var entry = { waiters: [callback], image: null, failedAt: 0 };
         wmtsImages.set(url, entry);
         var img = document.createElement('img');
+        var timeout = typeof window.setTimeout === 'function'
+            ? window.setTimeout(function () { finish(null); }, 12000) : null;
         function finish(image) {
             if (!entry.waiters) return;
+            if (timeout != null && typeof window.clearTimeout === 'function') window.clearTimeout(timeout);
             img.onload = img.onerror = null;
             entry.image = image;
             entry.failedAt = image ? 0 : Date.now();
@@ -455,10 +458,18 @@
             this.options.bounds = L.latLngBounds(CONFIG.countryBounds);
             L.GridLayer.prototype.initialize.call(this, this.options);
         },
-        /** The WMTS GetTile URL for one plate-carrée tile. */
+        /** The WMTS GetTile URL for one plate-carrée tile. In 2D the image is
+         * drawn directly by Leaflet (ASIG does not send CORS headers). The 3D
+         * mirror must export the reprojected canvas as PNG bytes, so its source
+         * images go through the same-origin tile relay; otherwise the browser
+         * taints the canvas and MapLibre can only show the basemap. */
         tileUrl: function (level, col, row) {
-            return CONFIG.wmtsTileUrl(this._part.name, level, col, row);
+            var url = CONFIG.wmtsTileUrl(this._part.name, level, col, row);
+            return this._dl3dRendering
+                ? '/api/map3d/tile?u=' + encodeURIComponent(url)
+                : url;
         },
+
         createTile: function (coords, done) {
             var size = this.getTileSize().x;
             var canvas = document.createElement('canvas');
@@ -466,6 +477,12 @@
             if (canvas.setAttribute) canvas.setAttribute('role', 'presentation');
             var self = this;
             var st = this._stats;
+            var tileCompleted = false;
+            function complete(error) {
+                if (tileCompleted) return;
+                tileCompleted = true;
+                done(error || null, canvas);
+            }
             function lost(level) { return (st.deep[level] || 0) >= 3 && !st.okLevel[level]; }
             var lowest = Math.max(0, coords.z - 10);
             var start = Math.min(this._maxSourceZoom, coords.z);
@@ -486,7 +503,7 @@
                         } else {
                             st.err += 1;
                             reportFailure(self);
-                            done(new Error('ASIG WMTS: no source tiles at any level'), canvas);
+                            complete(new Error('ASIG WMTS: no source tiles at any level'));
                         }
                         return;
                     }
@@ -496,7 +513,7 @@
                     }
                     st.ok += 1;
                     st.okLevel[level] = (st.okLevel[level] || 0) + 1;
-                    done(null, canvas);
+                    complete(null);
                 }
                 if (!pending) { finish(); return; }
                 images.forEach(function (_, key) {
@@ -515,6 +532,11 @@
                                     if (col.c === Number(split[0])) context.drawImage(img, col.sx, row.sy, col.sw, row.sh, col.dx, j, col.dw, 1);
                                 });
                             });
+                            /* Attach the destination canvas on its first useful
+                             * source image. Remaining mosaic pieces continue to
+                             * paint it as they arrive, instead of making a slow
+                             * final WMTS request hold the whole map tile hostage. */
+                            complete(null);
                         }
                         if (!--pending) finish();
                     });
@@ -627,7 +649,8 @@
                 (def.kind === 'group' ? ' albania-layer-group' : ''),
             id: 'albaniaRow_' + def.id,
             'data-category': 'free',
-            'data-albania-row': def.id
+            'data-albania-row': def.id,
+            'data-preview-wmts': def.section === 'maps' && def.kind === 'wmts' ? def.layers : null
         });
         var input = el('input', {
             type: 'checkbox',
@@ -1121,6 +1144,13 @@
             });
         part.layer = layer;
         layer._dlDefId = 'albania.' + entry.def.id;
+        /* ASIG's two standalone LiDAR WMTS products are outside the global
+         * `_lidarGroup`; identify them to the shared 3D LiDAR focus just like
+         * every LiDAR sublayer built by map-app.js. Their live Leaflet object
+         * remains the source of truth for opacity and tile settings. */
+        if (entry.def.section === 'lidar') {
+            layer._dlLidar = { key: 'albania.' + entry.def.id, label: text(entry.def.title) };
+        }
         layer._detectlabProvider = CONFIG.provider;
         layer._detectlabUiTitle = text(entry.def.title) + (entry.def.kind === 'group' ? ' · ' + text(leaf.title) : '');
         layer._detectlabUiKeys = ['albaniaToggle_' + entry.def.id];
@@ -1226,6 +1256,7 @@
                     fallbackUrl: part.fallbackUrl,
                     format: part.format,
                     transparent: part.transparent,
+                    identify: part.identify === true,
                     minZoom: def.minZoom,
                     maxNativeZoom: def.maxNativeZoom
                 };
@@ -1239,6 +1270,7 @@
                 fallbackUrl: def.fallbackUrl,
                 format: def.format,
                 transparent: def.transparent,
+                identify: def.identify === true,
                 minZoom: def.minZoom,
                 maxNativeZoom: def.maxNativeZoom
             }];
@@ -1573,11 +1605,11 @@
     /* ═══════════════════════════════════════════════════════════════════════
      * 7. FEATURE INFO — one query per endpoint, sandboxed iframe for the HTML
      * ═══════════════════════════════════════════════════════════════════════ */
-    /* The leaves that can answer a GetFeatureInfo *right now*: on, WMS, and
-     * actually drawing on this map. The last condition matters because the
-     * on/off state is restored from localStorage — a layer switched on in an
-     * earlier session (or parked by the country gate) is "active" without
-     * being on the map, and it must not answer taps or issue queries then. */
+    /* The leaves that can answer a GetFeatureInfo *right now*: explicitly
+     * opted-in identify layers that are WMS and actually drawing on this map.
+     * Raster maps are intentionally silent on click; vector renderers own
+     * their own hit-tests. The map-membership check matters because on/off
+     * state is restored from localStorage and may not be drawn right now. */
     function activeWmsLeaves() {
         var map = mapInstance();
         var leaves = [];
@@ -1587,6 +1619,12 @@
             entry.parts.forEach(function (part) {
                 if (!part.layer || part.missingName) return;
                 if (part.leaf.kind === 'wmts' || part.leaf.kind === 'heritage-vector') return;
+                /* Raster WMS maps (orthophotos, scanned sheets, hillshades,
+                 * and rendered overlays) must not open the generic HTML
+                 * GetFeatureInfo popup on every click. Only a layer explicitly
+                 * declared as feature-identifiable may answer; vector feature
+                 * renderers such as Heritage keep their own feature hit tests. */
+                if (part.leaf.identify !== true) return;
                 if (map && typeof map.hasLayer === 'function' && !map.hasLayer(part.layer)) return;
                 leaves.push({
                     name: part.leaf.name,
@@ -1679,7 +1717,7 @@
         if (runtime.suppressed) return false;      /* country gate: parked */
         if (!runtime.inCountry) return false;      /* only when Albania is selected */
         if (!insideFootprint(latlng)) return false; /* and only on Albanian ground */
-        return activeWmsLeaves().length > 0;        /* with something actually drawing */
+        return activeWmsLeaves().length > 0;        /* with identify-enabled data actually drawing */
     }
 
     function openFeatureInfo(latlng) {

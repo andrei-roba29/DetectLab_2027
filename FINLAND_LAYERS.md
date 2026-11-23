@@ -1,7 +1,7 @@
 # Finland · Finnish maps — layers, endpoints and verification
 
-**Group row:** “Finland · Finnish maps” (id `finlandRow`, master switch
-`finlandToggle`, country `FI`). **Everything a layer is** — id, FI/EN titles,
+**Group row:** “Finland · Finnish maps” (id `finlandRow`, country `FI`; no
+visible parent switch). **Everything a layer is** — id, FI/EN titles,
 kind, endpoint, zoom limits, attribution, default visibility — lives in one
 file, **`js/finland-layers.config.js`**; `js/finland-layers.js` only renders
 rows and Leaflet layers from it, and `js/layer-registry.js` mirrors the
@@ -12,9 +12,9 @@ no new map library, Leaflet 1.x only.
 
 ## 1 · The panel
 
-* master switch + five collapsible sections, each with its own “all on/off”
-  checkbox: **Terrain** · **Cadastral** · **Protected sites** · **Åland** ·
-  **Local files (Supabase)**;
+* five collapsible sections — **Terrain** · **Cadastral** · **Protected sites**
+  · **Åland** · **Local files (Supabase)** — with no section-level switches;
+  only the individual layer rows have switches;
 * inside “Protected sites”, collapsible sub-sections with a colour swatch
   each: SYKE built heritage (special legislation), SYKE INSPIRE nature /
   Natura 2000 / specially-protected built heritage, the eight

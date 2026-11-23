@@ -51,7 +51,8 @@
 
     var TILE_SIZE = 512;
     var MAX_LEVEL = 12;
-    var PYRAMID_CACHE_KEY = 'dlOtherMaps.nls.pyramid.v1';
+    var PYRAMID_CACHE_KEY = 'dlOtherMaps.nls.pyramid.v2';
+    var LEGACY_CACHE_KEYS = ['dlOtherMaps.nls.pyramid.v1'];
     var FETCH_TIMEOUT_MS = 15000;
     var MAX_FEATURES = 300;
 
@@ -112,6 +113,16 @@
             .trim();
     }
 
+    function purgeLegacyStorage() {
+        try {
+            if (!root.localStorage) return;
+            for (var i = 0; i < LEGACY_CACHE_KEYS.length; i++) {
+                root.localStorage.removeItem(LEGACY_CACHE_KEYS[i]);
+            }
+        } catch (e) { /* private mode / quota */ }
+    }
+    purgeLegacyStorage();
+
     function readStore() {
         try {
             var raw = root.localStorage && root.localStorage.getItem(PYRAMID_CACHE_KEY);
@@ -126,21 +137,29 @@
     }
 
     function cachedMeta(path) {
+        if (!path) return null;
         if (_metaCache[path]) return _metaCache[path];
         var store = readStore();
         var entry = store[path];
         if (entry && entry.w && entry.h && isFinite(entry.maxZoom)) {
-            _metaCache[path] = { w: entry.w, h: entry.h, maxZoom: entry.maxZoom, cached: true };
-            return _metaCache[path];
+            var restored = { w: entry.w, h: entry.h, maxZoom: entry.maxZoom, cached: true };
+            if (entry.base) restored.base = String(entry.base);
+            if (entry.quality) restored.quality = String(entry.quality);
+            _metaCache[path] = restored;
+            return restored;
         }
         return null;
     }
 
     function rememberMeta(path, meta) {
+        if (!path || !meta) return;
         _metaCache[path] = meta;
         try {
             var store = readStore();
-            store[path] = { w: meta.w, h: meta.h, maxZoom: meta.maxZoom };
+            var saved = { w: meta.w, h: meta.h, maxZoom: meta.maxZoom };
+            if (meta.base) saved.base = String(meta.base);
+            if (meta.quality && meta.quality !== 'default') saved.quality = String(meta.quality);
+            store[path] = saved;
             writeStore(store);
         } catch (e) { /* ignore */ }
     }
@@ -219,18 +238,56 @@
 
     /* The deepest level the service actually publishes.  IIIF scale factors
      * are powers of two counted from the native image (1 = native), and the
-     * overlay's level 0 is the smallest derivative — so the number of factors
-     * minus one is exactly the overlay's maxZoom. */
+     * overlay's level 0 is the smallest derivative — so the exponent of the
+     * largest power-of-two factor is the overlay's maxZoom (clamped so the
+     * root level stays at least 1 px along the shorter axis, keeping
+     * planGeometry's wL/hL and tileSpanFor identical at every level). */
     function maxZoomFromFactors(scaleFactors, width, height) {
         if (Array.isArray(scaleFactors) && scaleFactors.length) {
-            var sorted = scaleFactors.slice().sort(function (a, b) { return a - b; });
-            var powerOfTwo = sorted.every(function (f, i) { return f === Math.pow(2, i); });
-            if (powerOfTwo) return sorted.length - 1;
+            var unique = [];
+            var sorted = scaleFactors
+                .map(function (f) { return Number(f); })
+                .filter(function (f) { return isFinite(f) && f >= 1; })
+                .sort(function (a, b) { return a - b; });
+            for (var i = 0; i < sorted.length; i++) {
+                if (!unique.length || unique[unique.length - 1] !== sorted[i]) {
+                    unique.push(sorted[i]);
+                }
+            }
+            var powerOfTwo = unique.length > 0 &&
+                unique.every(function (f, idx) { return f === Math.pow(2, idx); });
+            if (powerOfTwo) {
+                var zoom = Math.min(MAX_LEVEL, unique.length - 1);
+                var shortest = Math.min(Number(width) || 0, Number(height) || 0);
+                while (zoom > 0 && shortest > 0 && shortest / Math.pow(2, zoom) < 1) {
+                    zoom--;
+                }
+                return zoom;
+            }
         }
         return maxZoomFor(width, height);
     }
 
-    function parseInfo(json) {
+    /* Detect IIIF Image API 1.x `native` quality vs 2.x/3.x `default`. */
+    function detectQuality(json) {
+        if (!json) return 'default';
+        if (Array.isArray(json.profile)) {
+            for (var i = 0; i < json.profile.length; i++) {
+                var entry = json.profile[i];
+                if (entry && Array.isArray(entry.qualities)) {
+                    if (entry.qualities.indexOf('default') !== -1) return 'default';
+                    if (entry.qualities.indexOf('native') !== -1) return 'native';
+                }
+            }
+        }
+        var ctx = String(json['@context'] || '');
+        if (/\/image\/1(\.\d+)?\/context\.json/.test(ctx)) return 'native';
+        if (!Array.isArray(json.tiles) && Array.isArray(json.scale_factors)) return 'native';
+        return 'default';
+    }
+
+    function parseInfo(json, serviceBase) {
+        if (!json || typeof json !== 'object') return null;
         var w = Number(json.width) || 0;
         var h = Number(json.height) || 0;
         if (!w || !h) return null;
@@ -241,29 +298,40 @@
             /* IIIF Image API 1.1 info responses (tile_width / scale_factors). */
             factors = json.scale_factors;
         }
-        return { w: w, h: h, maxZoom: maxZoomFromFactors(factors, w, h), probed: false };
+        var meta = {
+            w: w,
+            h: h,
+            maxZoom: maxZoomFromFactors(factors, w, h),
+            probed: false
+        };
+        var quality = detectQuality(json);
+        if (quality !== 'default') meta.quality = quality;
+        if (serviceBase) meta.base = String(serviceBase).replace(/\/+$/, '');
+        return meta;
     }
 
     function fetchInfo(record) {
         if (typeof root.fetch !== 'function') return Promise.resolve(null);
+        var defaultBase = iiifBase(record);
         var candidates = iiifBaseCandidates(record);
         function attempt(index) {
-            if (index >= candidates.length) return null;
+            if (index >= candidates.length) return Promise.resolve(null);
+            var candidate = candidates[index];
             var controller = ('AbortController' in root) ? new root.AbortController() : null;
             var timer = controller
                 ? root.setTimeout(function () { try { controller.abort(); } catch (e) { /* ignore */ } }, FETCH_TIMEOUT_MS)
                 : null;
-            return root.fetch(candidates[index] + '/info.json', {
+            return root.fetch(candidate + '/info.json', {
                 mode: 'cors',
                 cache: 'force-cache',
                 signal: controller ? controller.signal : undefined
             }).then(function (response) {
                 if (timer) root.clearTimeout(timer);
                 if (!response || !response.ok) return attempt(index + 1);
-                return response.json();
-            }).then(function (json) {
-                if (json) return parseInfo(json);
-                return attempt(index + 1);
+                return response.json().then(function (json) {
+                    var parsed = parseInfo(json, candidate !== defaultBase ? candidate : null);
+                    return parsed || attempt(index + 1);
+                });
             }).catch(function () {
                 if (timer) root.clearTimeout(timer);
                 return attempt(index + 1);
@@ -313,6 +381,24 @@
         return task;
     }
 
+    function tileParams(record, meta, x, y, level) {
+        var s = Math.pow(2, meta.maxZoom - level);
+        var rx = x * TILE_SIZE * s;
+        var ry = y * TILE_SIZE * s;
+        var rw = Math.min(TILE_SIZE * s, meta.w - rx);
+        var rh = Math.min(TILE_SIZE * s, meta.h - ry);
+        if (rw <= 0 || rh <= 0) return null;
+        /* Size directly from the clamped source region (`rw / s`, `rh / s`),
+         * floored to >= 1 px so a sub-0.5-px trailing sliver (e.g. 26625 px
+         * at scale 4 → rw = 1, rw/s = 0.25) requests a 1 px tile instead of
+         * rounding down to 0 and dropping the edge column. */
+        var tw = Math.max(1, Math.min(TILE_SIZE, Math.round(rw / s)));
+        var th = Math.max(1, Math.min(TILE_SIZE, Math.round(rh / s)));
+        var base = meta.base || iiifBase(record);
+        var quality = meta.quality || 'default';
+        return { rx: rx, ry: ry, rw: rw, rh: rh, tw: tw, th: th, base: base, quality: quality, meta: meta };
+    }
+
     /**
      * IIIF region URL for one tile of the overlay's pyramid.
      *
@@ -323,20 +409,40 @@
      */
     function tileUrl(record, x, y, level) {
         return resolve(record).then(function (meta) {
-            var s = Math.pow(2, meta.maxZoom - level);
-            var wL = Math.max(1, Math.round(meta.w / s));
-            var hL = Math.max(1, Math.round(meta.h / s));
-            var rx = x * TILE_SIZE * s;
-            var ry = y * TILE_SIZE * s;
-            var rw = Math.min(TILE_SIZE * s, meta.w - rx);
-            var rh = Math.min(TILE_SIZE * s, meta.h - ry);
-            var tw = Math.min(TILE_SIZE, wL - x * TILE_SIZE);
-            var th = Math.min(TILE_SIZE, hL - y * TILE_SIZE);
-            if (rw <= 0 || rh <= 0 || tw <= 0 || th <= 0) return '';
-            return iiifBase(record) + '/' +
-                rx + ',' + ry + ',' + rw + ',' + rh + '/' +
-                tw + ',' + th + '/0/default.jpg';
+            var p = tileParams(record, meta, x, y, level);
+            if (!p) return '';
+            return p.base + '/' +
+                p.rx + ',' + p.ry + ',' + p.rw + ',' + p.rh + '/' +
+                p.tw + ',' + p.th + '/0/' + p.quality + '.jpg';
         });
+    }
+
+    /* Canonical IIIF Image API 2.x width-only fallback (`{tw},` and `full`
+     * when covering the whole sheet).  Covers the exact same source region
+     * (rx, ry, rw, rh) and level span `tileSpanFor(meta, x, y, level)`, while
+     * succeeding even on endpoints/CDNs that reject explicit `w,h` sizes. */
+    function tileUrlAlt(record, x, y, level) {
+        return resolve(record).then(function (meta) {
+            var p = tileParams(record, meta, x, y, level);
+            if (!p) return '';
+            var full = p.rx === 0 && p.ry === 0 && p.rw === meta.w && p.rh === meta.h;
+            var region = full ? 'full' : (p.rx + ',' + p.ry + ',' + p.rw + ',' + p.rh);
+            return p.base + '/' + region + '/' + p.tw + ',/0/' + p.quality + '.jpg';
+        });
+    }
+
+    function peekMeta(record) {
+        var path = record && record.path ? record.path : String(record || '');
+        return cachedMeta(path);
+    }
+
+    function clearCache() {
+        _metaCache = Object.create(null);
+        _inflight = Object.create(null);
+        purgeLegacyStorage();
+        try {
+            if (root.localStorage) root.localStorage.removeItem(PYRAMID_CACHE_KEY);
+        } catch (e) { /* ignore */ }
     }
 
     /**
@@ -524,10 +630,12 @@
         FIND_BASE: FIND_BASE,
         TILE_SIZE: TILE_SIZE,
         MAX_LEVEL: MAX_LEVEL,
+        PYRAMID_CACHE_KEY: PYRAMID_CACHE_KEY,
         MAX_FEATURES: MAX_FEATURES,
         COVERAGE: COVERAGE,
         FIND_LAYERS: FIND_LAYERS,
         LAYER_LABELS: LAYER_LABELS,
+        regionScaled: true,
         imageIdOf: imageIdOf,
         iiifPath: iiifPath,
         iiifBase: iiifBase,
@@ -535,10 +643,13 @@
         recordUrl: recordUrl,
         thumbUrl: thumbUrl,
         tileUrl: tileUrl,
+        tileUrlAlt: tileUrlAlt,
         tileSpan: tileSpan,
+        peekMeta: peekMeta,
         resolve: resolve,
         parseInfo: parseInfo,
         maxZoomFor: maxZoomFor,
+        clearCache: clearCache,
         wfsBBoxUrl: wfsBBoxUrl,
         featureToRecord: featureToRecord,
         bboxOfGeometry: bboxOfGeometry,

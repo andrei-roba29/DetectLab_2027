@@ -79,11 +79,11 @@ const mirrorSource = read('js/map3d-mirror.js');
 const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261019-tile-order';              /* MapLibre itself (coveringTiles patch) */
-const TAG_3D = '20261106-hist-shift-3d';       /* mirror (canvas tiles)          */
+const TAG_3D = '20261118-asig-3d-wmts';       /* mirror (canvas tiles)          */
 const TAG_VIEWER = '20261106-hist-shift-3d'; /* viewer (js)                     */
-const TAG_CSS = '20261031-lidar-dock-minimized';      /* viewer skin (css)              */
-const TAG_FOCUS = '20261031-lidar-dock-minimized'; /* LiDAR focus (3D, one disc)   */
-const TAG_REGISTRY = '20261030-walachia';       /* shared registry (historical maps) */
+const TAG_CSS = '20261102-report-lidar-window';  /* viewer skin (css)              */
+const TAG_FOCUS = '20261118-all-lidar-sublayers'; /* LiDAR focus (3D, one disc)   */
+const TAG_REGISTRY = '20261118-asig-3d-wmts';   /* shared registry (historical maps) */
 
 // ══════════════════════════════════════════════════════════════
 // 1. Static wiring — the viewer must be reachable in the app
@@ -302,6 +302,8 @@ const TAG_REGISTRY = '20261030-walachia';       /* shared registry (historical m
     assert(mirror.layerByKey('2d.L77') === layer, 'layerByKey() hands the dl2d:// protocol its Leaflet layer');
     assert(collected.signature.indexOf('raster:2d.L77:640:72') === 0,
         'the signature carries kind, order and opacity (so a change triggers a re-sync)');
+    assert(mirrorSource.includes('shim._dl3dRendering = true'),
+        'the 3D canvas renderer marks only its prototype shim so WMTS source pixels can be relayed safely');
 
     /* ── the layers the 2D stylesheet blends, and the Roman-roads group ──── */
 
@@ -677,8 +679,12 @@ const TAG_REGISTRY = '20261030-walachia';       /* shared registry (historical m
     assert(!lib.validateRelayUrl('https://user:pass@server.arcgisonline.com/x').ok,
         'a URL carrying credentials is refused');
     assert(lib.relayAllowedHosts().has('pastmaps.cenagis.edu.pl') &&
-           lib.relayAllowedHosts().has('wmts.geo.admin.ch'),
-        'the country LiDAR / historical hosts are relayable without further configuration');
+           lib.relayAllowedHosts().has('wmts.geo.admin.ch') &&
+           lib.relayAllowedHosts().has('geoportal.asig.gov.al'),
+        'the country LiDAR / historical hosts, including Albania WMTS, are relayable without further configuration');
+    const asigWmtsRelay = lib.validateRelayUrl('https://geoportal.asig.gov.al/service/wmts?SERVICE=WMTS&REQUEST=GetTile');
+    assert(asigWmtsRelay.ok && asigWmtsRelay.host === 'geoportal.asig.gov.al',
+        'Albania WMTS source tiles can be relayed for canvas-safe 3D reprojection');
 
     const relayRefused = await lib.handleTileRequest(new Request(
         'https://x/api/map3d/tile?u=' + encodeURIComponent('https://evil.example.com/a.png')));
@@ -891,8 +897,8 @@ const TAG_REGISTRY = '20261030-walachia';       /* shared registry (historical m
         'a host healed to the proxy still forces the reload — the template is unchanged but must be re-resolved');
     assert(viewApi._setSourceTiles('m3d-2d-2d.R1-src', ['dl2d://2d.R1/{z}/{x}/{y}']) === false,
         'setSourceTiles() is inert while no 3D map is open');
-    assert((viewer.match(/state\.sourceData\[sourceId\] = /g) || []).length === 5,
-        'the upload cache is written by setSourceData() and by each of the four GeoJSON renderers');
+    assert((viewer.match(/state\.sourceData\[sourceId\] = /g) || []).length === 6,
+        'the upload cache is written by setSourceData() and by each GeoJSON renderer');
     console.log('  ✓ the blended LiDAR hillshades are repainted (and cached), not painted as a white sheet');
 
     // ══════════════════════════════════════════════════════════

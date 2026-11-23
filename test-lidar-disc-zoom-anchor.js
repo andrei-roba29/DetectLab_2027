@@ -17,8 +17,8 @@ const renderer = source.slice(source.indexOf('    var discRenderer = null;'), so
 assert(renderer.includes('function drawDisc('));
 assert.strictEqual((source.match(/renderer: discRendererOption\(map, pane\)/g) || []).length, 3,
     'disc, centre dot and point-picking preview must all use the anchored renderer');
-assert(read('index.html').includes('js/lidar-3d-focus.js?v=20261102-lidar-disc-zoom-anchor'));
-assert(read('sw.js').includes('js/lidar-3d-focus.js?v=20261102-lidar-disc-zoom-anchor'));
+assert(read('index.html').includes('js/lidar-3d-focus.js?v=20261118-all-lidar-sublayers'));
+assert(read('sw.js').includes('js/lidar-3d-focus.js?v=20261118-all-lidar-sublayers'));
 
 function loadBrowser() {
     for (const dir of [process.env.PUPPETEER_MODULE_DIR, path.join(__dirname, 'node_modules'), '/home/user/browser-tools/node_modules'].filter(Boolean)) {

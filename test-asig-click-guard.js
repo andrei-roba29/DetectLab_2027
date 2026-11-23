@@ -1,29 +1,9 @@
-// Regression test — an ASIG tap may only query where the ASIG data is.
+// Regression test — Albanian raster map clicks never trigger generic identify popups.
 //
-// The bug
-// -------
-// `ready()` registers ONE map-wide click handler:
-//
-//     map.on('click', function (event) {
-//         if (!hasActive()) return;
-//         if (!activeWmsLeaves().length) return;
-//         openFeatureInfo(event.latlng);       // “Querying the ASIG service…”
-//     });
-//
-// `hasActive()` is just `runtime.order.length > 0`, and on/off state is
-// restored from localStorage (detectlab_albania_layers_v2). So once any
-// Albanian layer had been switched on — in any earlier session, the installed
-// PWA included — EVERY tap anywhere on the map opened the popup, printed
-// “Querying the ASIG service…” and loaded the Albanian archaeological /
-// heritage HTML, far outside Albania.
-//
-// The fix
-// -------
-// A tap may only query when ALL of these hold:
-//   · the country gate is parked open   (not suppressed, Albania selected),
-//   · the tap is inside the ASIG footprint,
-//   · at least one ASIG WMS layer is actually ON THE MAP (not merely
-//     remembered in localStorage).
+// Raster WMS GetFeatureInfo often returns rendered tile metadata (e.g. band
+// names) rather than useful features. Only layers explicitly marked
+// `identify: true` may answer through this generic handler; actual vector
+// features keep their own hit-test/click behavior.
 //
 // Run: node test-asig-click-guard.js
 
@@ -61,7 +41,7 @@ check(!!gate, 'canQueryAt() must exist');
     [/runtime\.suppressed/, 'a suppressed group (leaving the country) must not answer'],
     [/runtime\.inCountry/, 'the selected-country gate must be enforced'],
     [/insideFootprint\(latlng\)/, 'the tap must be inside the ASIG footprint'],
-    [/activeWmsLeaves\(\)\.length > 0/, 'something must actually be drawing']
+    [/activeWmsLeaves\(\)\.length > 0/, 'an explicitly identifiable feature layer must actually be drawing']
 ].forEach(([re, message]) => check(re.test(gate[1]), message));
 
 /* ── 3. “Active” now means on this map, not remembered in storage ───────── */
@@ -72,6 +52,8 @@ check(/map\.hasLayer && !map\.hasLayer\(part\.layer\)/.test(leaves[1]) ||
     'a remembered-but-not-drawn layer must be skipped (hasLayer check)');
 check(/var map = mapInstance\(\)/.test(leaves[1]),
     'the map instance is needed for that check');
+check(/part\.leaf\.identify !== true/.test(leaves[1]),
+    'raster WMS layers are skipped unless the catalogue explicitly opts them into identify');
 
 /* ── 4. The footprint maths, run for real ───────────────────────────────── */
 const fnSource = /function insideFootprint\(latlng\) \{[\s\S]*?\n    \}/.exec(src)[0];
@@ -106,13 +88,20 @@ check(insideFootprint({ lat: bounds[1][0] + 0.05, lng: bounds[1][1] + 0.05 }) ==
     check(new RegExp('\\b' + name + ':\\s*' + name + ',').test(src),
         'API must expose ' + name));
 
-/* ── 6. The intended behaviour inside Albania is documented ─────────────── */
+/* ── 6. The intended behaviour is documented ────────────────────────────── */
 const doc = read('ALBANIA_ASIG_LAYERS.md');
-check(/inside Albania/i.test(doc), 'the docs still describe the in-country query');
+check(/raster.*silent|click on these layers is silent/i.test(doc),
+    'the docs state that raster map clicks do not open generic popups');
+check(/identify: true/.test(doc) && /vector renderers/i.test(doc),
+    'the docs describe explicit WMS identify opt-in and separate vector hit-tests');
 check(/footprint|selected country|country gate/i.test(doc),
-    'the docs must state that a tap outside the footprint / country does not query');
+    'the docs must state that identify candidates remain country/footprint gated');
+const index = read('index.html');
+const sw = read('sw.js');
+const asigTag = 'js/asig-albania-layers.js?v=20261118-raster-click-silent';
+check(index.includes(asigTag) && sw.includes("'" + asigTag + "'"),
+    'the updated Albania click behavior is cache-busted and precached');
 
-console.log('✓ one gated handler: suppressed / country / footprint / on-map layer');
-console.log('✓ “active” means drawing now, not remembered in localStorage');
-console.log('✓ Tirana answers; Cluj-Napoca, Bucharest, London, Athens do not');
-console.log('\n' + checks + ' checks passed — a tap outside Albania no longer queries ASIG.');
+console.log('✓ raster layers are silent; only explicit identify layers can open a popup');
+console.log('✓ candidates must be on the map, selected for Albania, and inside its footprint');
+console.log('\n' + checks + ' checks passed — Albanian raster clicks do not trigger ASIG identify.');

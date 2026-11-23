@@ -717,9 +717,12 @@ top of the same window:
   the plans are downloaded together (interleaved level by level) under one progress bar.
 
 The layer list is the same in both scopes — `js/lidar-3d-focus.js → activeLayers()`, read
-fresh from `window._lidarGroup` and the mirror — so a layer switched on while the window is
-open is neither silently skipped nor assumed; the list is rebuilt whenever the dialog is
-opened or the 2D visibility changes.
+fresh from `window._lidarGroup` plus explicitly tagged standalone LiDAR layers on the live
+map (such as Albania's ASIG WMTS hillshade/DSM). It is rebuilt whenever the dialog opens or
+2D visibility changes, so a LiDAR layer is not silently skipped. Each entry retains its
+live Leaflet layer object: its own opacity, product/mode selection and zoom window continue
+to drive the 3D mirror; the picker adds only the per-sublayer include checkbox and the
+existing whole-layer / 1 km scope options.
 
 **The focus grew a list.** `setLidarFocus()` normalises a legacy single-layer focus into
 `layers[0]`, so every caller from before this change keeps working:

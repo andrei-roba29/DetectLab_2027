@@ -71,7 +71,7 @@ check(!/country-section-list/.test(groupTag),
 check(/class="[^"]*\bactive\b[^"]*"/.test(groupTag),
     'the UK group starts with the Free tab marker (.active), like the other free rows');
 
-/* The group's own chrome: title, ⓘ, chevron, master switch, opacity slider. */
+/* The group's own chrome: title, ⓘ, chevron, hidden legacy master state, opacity slider. */
 const groupEnd = html.indexOf('<!-- Suomi / Finland', groupStart);
 check(groupEnd > groupStart, 'the UK group block is delimited by the next country block');
 const groupHtml = html.slice(groupTagStart, groupEnd);
@@ -82,15 +82,16 @@ check(/showUkHeritageGroupInfo\(\)/.test(groupHtml),
     'the group carries its own ⓘ (every source, licence and zoom limit)');
 check(/id="ukHeritageExpandBtn"/.test(groupHtml) && /id="ukHeritageExpandIcon"/.test(groupHtml),
     'the group carries the expand/collapse chevron of the other groups');
-check(/id="ukHeritageToggle"/.test(groupHtml) && /toggleUkHeritageLayers\(this\.checked\)/.test(groupHtml),
-    'the group carries a master on/off switch');
+check(/class="apm-toggle-switch dl-parent-layer-switch"[^>]*>[\s\S]*?id="ukHeritageToggle"/.test(groupHtml) && /toggleUkHeritageLayers\(this\.checked\)/.test(groupHtml),
+    'the parent control is hidden; its backing state remains for compatibility');
 check(/id="ukHeritageOpacitySlider"/.test(groupHtml) && /setUkHeritageOpacity\(this\.value\)/.test(groupHtml),
     'the group carries the group opacity slider');
 check(/id="ukHeritagePct"/.test(groupHtml), 'the group slider has its .pct badge');
 check(/id="ukHeritageSubLayers"/.test(groupHtml),
     'the group exposes the #ukHeritageSubLayers column the module fills');
-check(/class="apm-toggle-switch"/.test(groupHtml) && /class="apm-toggle-track"/.test(groupHtml),
-    'the master switch is the shared pill switch, not a custom control');
+check(/class="apm-toggle-switch dl-parent-layer-switch"/.test(groupHtml) &&
+      css.includes('.dl-parent-layer-switch') && /display:\s*none\s*!important/.test(css),
+    'the group master pill is hidden so only its sublayer switches are visible');
 check(/class="transp-slider"/.test(groupHtml), 'the group slider is the shared .transp-slider');
 
 /* The old leaked structure is gone. */

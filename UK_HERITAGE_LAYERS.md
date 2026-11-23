@@ -36,10 +36,9 @@ group:
   coverage, zoom limit, live record count). Leaving RCAHMW off does not stop
   the NHLE from drawing.
 * **A group header like every other group**: title (translated through
-  `js/translations.js`, key `layer_uk_heritage`), group ⓘ, expand chevron,
-  master on/off switch (turns all seven on/off, indeterminate when mixed) and
-  a group opacity slider that applies to every register (each row can then be
-  fine-tuned).
+  `js/translations.js`, key `layer_uk_heritage`), group ⓘ, expand chevron and
+  group opacity slider. The parent has no visible switch; each register is
+  switched independently from its own sublayer row.
 * **United Kingdom only.** `detectlab:country-selected` shows the group for
   `GB` / `GBR` / `UK` and hides it (and its rows) for every other country; the
   switches keep their state and the layers come back when the UK view returns.
@@ -103,8 +102,8 @@ reshuffle cannot silently drop records.
   `filterForCountry`) plus the inline handlers index.html uses
   (`toggleUkHeritageLayers`, `setUkHeritageOpacity`,
   `toggleUkHeritageSubLayers`, `showUkHeritageGroupInfo`).
-* `index.html` — the group row markup (title, ⓘ, chevron, master switch, group
-  opacity slider, `#ukHeritageSubLayers`) and the
+* `index.html` — the group row markup (title, ⓘ, chevron, group opacity
+  slider, `#ukHeritageSubLayers`; no parent switch) and the
   `'United Kingdom · Heritage': 'layer_uk_heritage'` entry in
   `LAYER_NAME_TO_KEY`, so the info overlay's title is translated too.
 * `css/styles.css` — `.uk-heritage-*` (head, dot, provider, title truncation,
