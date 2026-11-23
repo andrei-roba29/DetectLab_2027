@@ -192,6 +192,20 @@
     /** Record the response body size on the request record of a fetched response. */
     function noteBytes(res, n) { if (res && res.__apmRec) res.__apmRec.bytes = n; }
 
+    // Race as well as abort: a stalled body or a non-cooperative fetch must not
+    // hold a scheduler slot forever. Also bounds response-body reads after headers.
+    function boundedRequest(work, ms, controller) {
+        return new Promise(function (resolve, reject) {
+            var timer = setTimeout(function () {
+                reject(failure('reason.timeout', { seconds: ms / 1000 }, 'request timed out after ' + ms / 1000 + ' seconds'));
+                if (controller) controller.abort();
+            }, ms);
+            Promise.resolve().then(work).then(function (value) {
+                clearTimeout(timer); resolve(value);
+            }, function (err) { clearTimeout(timer); reject(err); });
+        });
+    }
+
     /** Cached, rate-limited GET/POST. Resolves the Response; rejects with a keyed `reason` on failure. */
     function httpFetch(url, init, opts) {
         opts = opts || {};
@@ -204,7 +218,16 @@
             var t0 = nowMs();
             var rec = { kind: 'request', step: opts.step || null, method: method, url: target, endpoint: opts.endpoint || null,
                 proxied: !!viaProxy, status: null, ok: null, ms: null, contentType: null, bytes: null };
-            return fetchImpl(target, init).then(function (res) {
+            var controller = typeof AbortController === 'function' ? new AbortController() : null;
+            var requestInit = Object.assign({}, init);
+            if (controller) requestInit.signal = controller.signal;
+            var timeoutMs = opts.step === 'dem' ? 10000 : 75000;
+            return boundedRequest(function () { return fetchImpl(target, requestInit); }, timeoutMs, controller).then(function (res) {
+                ['text', 'json', 'blob', 'arrayBuffer'].forEach(function (method) {
+                    if (typeof res[method] !== 'function') return;
+                    var read = res[method].bind(res);
+                    res[method] = function () { return boundedRequest(read, timeoutMs, controller); };
+                });
                 rec.ms = Math.round(nowMs() - t0);
                 rec.status = res.status;
                 rec.ok = res.ok;
@@ -221,10 +244,10 @@
                 // Browsers report CORS failures and network errors as a bare TypeError with no detail.
                 rec.ms = Math.round(nowMs() - t0);
                 rec.error = (err && err.name) + ': ' + (err && err.message);
-                rec.reason = core.msg('reason.network', {}, 'no HTTP response (network failure or CORS block)');
+                rec.reason = err && err.reason || core.msg('reason.network', {}, 'no HTTP response (network failure or CORS block)');
                 rec.hint = 'no HTTP response: network failure or CORS block (see the browser Network tab)';
                 logRecord(rec);
-                var e = failure('reason.network', {}, 'no HTTP response (network failure or CORS block)');
+                var e = err && err.reason ? err : failure('reason.network', {}, 'no HTTP response (network failure or CORS block)');
                 e.cause = err;
                 throw e;
             });
