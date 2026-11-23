@@ -193,8 +193,8 @@
      * level's own pixels, bounds the window on each axis (+2 for the edge
      * tiles).  Depends on the viewport SIZE only. */
     function viewportTileBudget(geom, view) {
-        var vw = Math.max(0, view.bottomRight.x - view.topLeft.x);
-        var vh = Math.max(0, view.bottomRight.y - view.topLeft.y);
+        var vw = Math.max(0, view && view.size ? view.size.x : view.bottomRight.x - view.topLeft.x);
+        var vh = Math.max(0, view && view.size ? view.size.y : view.bottomRight.y - view.topLeft.y);
         var diag = Math.sqrt(vw * vw + vh * vh) / geom.k;
         var nx = Math.min(geom.cols, Math.floor(diag / TILE) + 2);
         var ny = Math.min(geom.rows, Math.floor(diag / TILE) + 2);
@@ -419,9 +419,24 @@
         /* The viewport in layer pixels, so the planner can bound the tile
          * window it asks for (the sharp-level preference). */
         function viewportRect() {
+            var size = map.getSize();
+            var c0 = map.containerPointToLayerPoint(L.point(0, 0));
+            var c1 = map.containerPointToLayerPoint(L.point(size.x, 0));
+            var c2 = map.containerPointToLayerPoint(size);
+            var c3 = map.containerPointToLayerPoint(L.point(0, size.y));
             return {
-                topLeft: map.containerPointToLayerPoint(L.point(0, 0)),
-                bottomRight: map.containerPointToLayerPoint(map.getSize())
+                topLeft: L.point(
+                    Math.min(c0.x, c1.x, c2.x, c3.x),
+                    Math.min(c0.y, c1.y, c2.y, c3.y)
+                ),
+                bottomRight: L.point(
+                    Math.max(c0.x, c1.x, c2.x, c3.x),
+                    Math.max(c0.y, c1.y, c2.y, c3.y)
+                ),
+                /* Unrotated screen span so basemap bearing never flips the
+                 * chosen pyramid level while `topLeft/bottomRight` still covers
+                 * all four rotated viewport corners for tile fetching. */
+                size: size
             };
         }
 
@@ -437,7 +452,8 @@
                 anchor: anchor,
                 rotation: ov.state.rotation,
                 topLeft: view.topLeft,
-                bottomRight: view.bottomRight
+                bottomRight: view.bottomRight,
+                size: view.size
             });
         }
 
@@ -472,21 +488,84 @@
 
         /* Paint one tile at the level-pixel box it really covers.
          *
-         * The Hungaricana pyramid always answers with a full 512 × 512 cell
-         * (the sheet is padded inside the square and the grid clip in
-         * css/other-maps.css trims the padding).  A cropped source — an NLS
-         * IIIF tile is a region clamped to the sheet edge — replies with a
-         * NARROWER bitmap, so it must be painted narrower too.  Stretching
-         * such a bitmap over a whole cell squashed the sheet by a different
-         * factor at every pyramid level, which is what made the added maps
-         * look distorted while zooming in and out. */
+         * Region-scaled sources (NLS IIIF, Josephine Commons canvases) extract
+         * an explicit natural-pixel region per tile and report its exact
+         * fractional span via `Tiles.tileSpan`.  Pre-cut pyramids (Hungaricana
+         * ECW) reconcile every decoded bitmap's `naturalWidth × naturalHeight`
+         * against `Tiles.tileSpanFor` via `Tiles.measuredTileSpan`: cropped
+         * edge bitmaps are painted at their exact clamped span (never blown up
+         * to a 512 px square cell), while padded 512 px cells stay at 512 px
+         * so `.om-grid { overflow: hidden }` trims only the margin.  Stand-in
+         * tiles carry `staleScale = 2^(currentLevel − tileLevel)` so even a
+         * late span/load update keeps them locked to the sheet border. */
         function sizeTile(img, w, h) {
+            if (!img || !img._om) return;
             var spanW = w > 0 ? w : TILE;
             var spanH = h > 0 ? h : TILE;
+            var scale = img._om.staleScale || 1;
             img._om.w = spanW;
             img._om.h = spanH;
-            img.style.width = (spanW + TILE_BLEED) + 'px';
-            img.style.height = (spanH + TILE_BLEED) + 'px';
+            img.style.left = (img._om.x * TILE * scale) + 'px';
+            img.style.top = (img._om.y * TILE * scale) + 'px';
+            img.style.width = (spanW * scale + TILE_BLEED) + 'px';
+            img.style.height = (spanH * scale + TILE_BLEED) + 'px';
+        }
+
+        function isPreTiledSource(ov) {
+            if (!Tiles || typeof Tiles.isRegionScaled !== 'function') return false;
+            return !Tiles.isRegionScaled(ov.record);
+        }
+
+        function isEdgeCell(meta, x, y, level) {
+            if (!meta || !Tiles || typeof Tiles.tileSpanFor !== 'function') return false;
+            var exp = Tiles.tileSpanFor(meta, x, y, level);
+            return exp.w < TILE || exp.h < TILE;
+        }
+
+        /* Measure a decoded pre-cut tile bitmap and lock its painted CSS size
+         * to the exact level-pixel box it covers before it is shown. */
+        function reconcileTileBitmap(ov, img) {
+            if (!ov || !ov.meta || !img || !img._om) return;
+            if (!isPreTiledSource(ov) || typeof Tiles.measuredTileSpan !== 'function') return;
+            var nw = Number(img.naturalWidth) || 0;
+            var nh = Number(img.naturalHeight) || 0;
+            if (!(nw > 0 && nh > 0)) return;
+            var measured = Tiles.measuredTileSpan(
+                ov.meta, img._om.x, img._om.y, img._om.level, nw, nh
+            );
+            if (measured.edgeMode) {
+                ov.meta.edgeMode = measured.edgeMode;
+                if (typeof Tiles.noteEdgeMode === 'function') {
+                    Tiles.noteEdgeMode(ov.record, measured.edgeMode);
+                }
+            }
+            sizeTile(img, measured.w, measured.h);
+        }
+
+        /* If `add()` had to frame the sheet with a guessed fallback size
+         * (transient info.json / imagesize outage) and a subsequent tile call
+         * succeeded in resolving the true pyramid metadata, upgrade `ov.meta`
+         * immediately so the grid box and tile spans agree 1:1. */
+        function adoptResolvedMeta(ov) {
+            if (!ov || !ov.metaFallback || !Tiles || typeof Tiles.peekMeta !== 'function') {
+                return false;
+            }
+            var real = Tiles.peekMeta(ov.record);
+            if (!real || !(real.w > 0 && real.h > 0)) return false;
+            var prevW = ov.meta && ov.meta.w > 0 ? ov.meta.w : real.w;
+            ov.meta = real;
+            ov.metaFallback = false;
+            if (ov.userTransformed && ov.state.mpp > 0) {
+                ov.state.mpp = clamp(ov.state.mpp * (prevW / real.w), MPP_MIN, MPP_MAX);
+            } else {
+                var fit = fitMppFor(ov);
+                if (fit != null) ov.state.mpp = fit;
+            }
+            ov.geom = null;
+            clearTiles(ov);
+            render(ov);
+            emitChange(ov);
+            return true;
         }
 
         function addTile(ov, key, x, y, level, token) {
@@ -499,35 +578,76 @@
             img.style.height = (TILE + TILE_BLEED) + 'px';
             img.draggable = false;
             img.alt = '';
+            /* Hold an edge tile of a pre-cut pyramid invisible while its first
+             * bitmap downloads so it never flashes stretched for a frame before
+             * `reconcileTileBitmap` reads `naturalWidth × naturalHeight`. */
+            var knownMode = ov.meta && ov.meta.edgeMode
+                ? ov.meta.edgeMode
+                : (Tiles && typeof Tiles.edgeModeOf === 'function' ? Tiles.edgeModeOf(ov.record) : null);
+            if (knownMode && ov.meta && !ov.meta.edgeMode) ov.meta.edgeMode = knownMode;
+            if (isPreTiledSource(ov) && !knownMode && isEdgeCell(ov.meta, x, y, level)) {
+                img.style.visibility = 'hidden';
+            }
             /* Where this tile lives in the pyramid, and how much of the level
-             * it covers — the stand-in promotion repositions the old level's
-             * tiles by these coordinates and keeps their own spans. */
-            img._om = { x: x, y: y, level: level, w: TILE, h: TILE };
+             * it covers — stand-in promotion scales position and span by
+             * `staleScale = 2^(currentLevel − level)`. */
+            img._om = { x: x, y: y, level: level, w: TILE, h: TILE, loaded: false, staleScale: 1 };
             ov.tiles[key] = img;
             ov.gridEl.appendChild(img);
-            /* Settling (loaded, or failed for good) is what retires the
-             * previous level's stand-in — see markStaleSettled. */
-            img.addEventListener('load', function () { markStaleSettled(ov, key); });
-            img.addEventListener('error', function () { markStaleSettled(ov, key); });
-            if (!Tiles || typeof Tiles.tileUrl !== 'function') return;
-            function stale() { return ov.token !== token || !img.parentNode; }
-            function fallback() {
-                // The two readings of the Hungaricana hash scheme (see
-                // js/other-maps-tiles.js) — one retry with the other order.
-                // Other sources (NLS IIIF) have no order ambiguity, so the
-                // dispatcher simply re-requests the same canonical URL.
-                if (stale() || typeof Tiles.tileUrlAlt !== 'function') return;
-                Tiles.tileUrlAlt(ov.record, x, y, level).then(function (altUrl) {
-                    if (stale()) return;
-                    if (!ov.record.source) {
-                        img.addEventListener('load', function () { Tiles.noteOrder(Tiles.alternateOrder()); });
-                    }
-                    img.src = altUrl;
-                }).catch(function () { /* a missing tile stays transparent */ });
+            /* Reconcile decoded bitmap size first, then reveal and retire any
+             * outgoing stand-in once every wanted tile has settled. */
+            img.addEventListener('load', function () {
+                img._om.loaded = true;
+                reconcileTileBitmap(ov, img);
+                img.style.visibility = '';
+                markStaleSettled(ov, key);
+            });
+            if (!Tiles || typeof Tiles.tileUrl !== 'function') {
+                img.addEventListener('error', function () {
+                    img.style.visibility = '';
+                    markStaleSettled(ov, key);
+                });
+                return;
             }
-            /* The source tells how many level pixels this tile spans (512 for
-             * a padded Hungaricana cell, less at an NLS image edge).  A span
-             * we cannot read leaves the square cell, i.e. the old behaviour. */
+            function stale() { return ov.token !== token || !img.parentNode; }
+            var primaryUrl = '';
+            var retried = false;
+            function settleFailed() {
+                img.style.visibility = '';
+                markStaleSettled(ov, key);
+            }
+            function fallback() {
+                /* Retry once only when it is geometrically safe:
+                 *  - Hungaricana hash-order disambiguation ONLY at (0, 0, 1),
+                 *    where `zxy` and `xyz` cannot collide with another level;
+                 *  - Region-scaled sources with a canonical alternate URL
+                 *    (NLS IIIF width-only `{tw},` fallback). */
+                if (retried || stale() || typeof Tiles.tileUrlAlt !== 'function') {
+                    settleFailed();
+                    return;
+                }
+                var flipOrder = typeof Tiles.canFlipOrder === 'function' &&
+                    Tiles.canFlipOrder(ov.record, x, y, level);
+                var altCapable = flipOrder || !isPreTiledSource(ov);
+                if (!altCapable) {
+                    settleFailed();
+                    return;
+                }
+                retried = true;
+                Tiles.tileUrlAlt(ov.record, x, y, level).then(function (altUrl) {
+                    if (stale() || !altUrl || altUrl === primaryUrl) {
+                        settleFailed();
+                        return;
+                    }
+                    if (flipOrder) {
+                        img.addEventListener('load', function () {
+                            Tiles.noteOrder(Tiles.alternateOrder());
+                        }, { once: true });
+                    }
+                    img.addEventListener('error', settleFailed, { once: true });
+                    img.src = altUrl;
+                }).catch(settleFailed);
+            }
             function spanPromise() {
                 if (typeof Tiles.tileSpan !== 'function') return Promise.resolve(null);
                 try {
@@ -538,40 +658,104 @@
                 }
             }
             Promise.all([Tiles.tileUrl(ov.record, x, y, level), spanPromise()]).then(function (res) {
-                // The view may already have switched level while the hash was
-                // being computed — never paint a stale tile.
+                if (ov.metaFallback && adoptResolvedMeta(ov)) return;
                 if (stale()) return;
                 var span = res[1];
                 if (span && span.w > 0 && span.h > 0) sizeTile(img, span.w, span.h);
+                primaryUrl = res[0] || '';
+                if (!primaryUrl) {
+                    settleFailed();
+                    return;
+                }
                 img.addEventListener('error', fallback, { once: true });
-                img.src = res[0];
+                img.src = primaryUrl;
             }).catch(fallback);
         }
 
-        /* ── the previous level, as a blurred stand-in ───────────────────
-         * Switching pyramid levels used to delete every tile and refetch, so
-         * the sheet vanished (or half-redrew) mid-zoom — the “unstable” part
-         * of the first impression.  When the level goes FINER, the old tiles
-         * are kept: repositioned by 2^Δ they cover exactly the same ground,
-         * just softer, until the new level's tiles have all settled.  When it
-         * goes coarser there is nothing finer to stand in, so the old tiles
-         * are dropped (the coarser level is one or two fast requests). */
+        /* ── the previous level, as a stand-in across level transitions ──
+         * Rescales retained tiles by `2^(targetLevel − tileLevel)` — using
+         * each tile's own level and exact span — so the image stays pinned
+         * inside `.om-box` while the new level's remote tiles download, across
+         * single-step zooms, rapid wheel/handle scales and zoom-outs alike. */
+        function applyStaleScale(img, targetLevel) {
+            if (!img || !img._om) return;
+            var d = Math.pow(2, targetLevel - img._om.level);
+            img._om.staleScale = d;
+            img.className = 'om-tile om-tile-stale';
+            img.style.left = (img._om.x * TILE * d) + 'px';
+            img.style.top = (img._om.y * TILE * d) + 'px';
+            img.style.width = (((img._om.w || TILE) * d) + TILE_BLEED) + 'px';
+            img.style.height = (((img._om.h || TILE) * d) + TILE_BLEED) + 'px';
+        }
+
         function promoteStale(ov, oldLevel) {
-            dropStale(ov);
-            var stale = { level: oldLevel, imgs: ov.tiles, settled: {} };
+            var targetLevel = ov.geom.level;
+            var goingFiner = targetLevel > oldLevel;
+            var current = ov.tiles;
             ov.tiles = Object.create(null);
-            var d = Math.pow(2, ov.geom.level - oldLevel);
-            Object.keys(stale.imgs).forEach(function (key) {
-                var img = stale.imgs[key];
-                if (!img || !img._om) return;
-                img.className = 'om-tile om-tile-stale';
-                img.style.left = (img._om.x * TILE * d) + 'px';
-                img.style.top = (img._om.y * TILE * d) + 'px';
-                /* Each stand-in keeps its own span (a cropped edge tile is
-                 * narrower than a cell) scaled by 2^Δ like its position. */
-                img.style.width = (((img._om.w || TILE) * d) + TILE_BLEED) + 'px';
-                img.style.height = (((img._om.h || TILE) * d) + TILE_BLEED) + 'px';
+
+            var currentKeys = Object.keys(current);
+            var loadedCurrent = currentKeys.filter(function (k) {
+                return current[k] && current[k]._om && current[k]._om.loaded;
             });
+            var prevStale = ov.stale;
+            var loadedPrev = prevStale ? Object.keys(prevStale.imgs).filter(function (k) {
+                return prevStale.imgs[k] && prevStale.imgs[k]._om && prevStale.imgs[k]._om.loaded;
+            }) : [];
+
+            var kept = Object.create(null);
+            if (!goingFiner) {
+                /* Going coarser: keep only already-decoded bitmaps scaled down
+                 * by 2^Δ while the coarser tile loads; drop unloaded tags so
+                 * a cold grid starts clean with no lingering stand-in. */
+                loadedCurrent.forEach(function (k) {
+                    kept[k] = current[k];
+                    delete current[k];
+                });
+                if (!loadedCurrent.length && loadedPrev.length) {
+                    loadedPrev.forEach(function (k) {
+                        kept[k] = prevStale.imgs[k];
+                        delete prevStale.imgs[k];
+                    });
+                }
+                Object.keys(current).forEach(function (k) {
+                    var el = current[k];
+                    if (el && el.parentNode) el.parentNode.removeChild(el);
+                });
+                dropStale(ov);
+                if (!Object.keys(kept).length) {
+                    ov.token++;
+                    return;
+                }
+            } else if (!loadedCurrent.length && loadedPrev.length) {
+                /* Rapid multi-level zoom/scale in: keep the decoded stand-in
+                 * from the earlier level and discard empty intermediate tags. */
+                loadedPrev.forEach(function (k) {
+                    kept[k] = prevStale.imgs[k];
+                    delete prevStale.imgs[k];
+                });
+                currentKeys.forEach(function (k) {
+                    var el = current[k];
+                    if (el && el.parentNode) el.parentNode.removeChild(el);
+                });
+                dropStale(ov);
+            } else {
+                dropStale(ov);
+                currentKeys.forEach(function (k) {
+                    var el = current[k];
+                    if (!el || !el._om) return;
+                    if (loadedCurrent.length && !el._om.loaded) {
+                        if (el.parentNode) el.parentNode.removeChild(el);
+                        return;
+                    }
+                    kept[k] = el;
+                });
+            }
+
+            var keptKeys = Object.keys(kept);
+            if (!keptKeys.length) return;
+            keptKeys.forEach(function (k) { applyStaleScale(kept[k], targetLevel); });
+            var stale = { level: oldLevel, imgs: kept, settled: {} };
             stale.timer = root.setTimeout(function () { dropStale(ov); }, STALE_FALLBACK_MS);
             ov.stale = stale;
         }
@@ -655,11 +839,12 @@
                 (-g.wL / 2) + 'px,' + (-g.hL / 2) + 'px)';
 
             if (levelChanged) {
-                if (oldLevel != null && g.level > oldLevel) {
-                    // Finer: the old tiles stay as a soft stand-in.
+                if (oldLevel != null) {
+                    /* Finer: promote the outgoing level scaled up by 2^Δ.
+                     * Coarser: retain only already-decoded tiles scaled down
+                     * by 2^Δ (cold grids drop cleanly with no stand-in). */
                     promoteStale(ov, oldLevel);
                 } else {
-                    // First paint or coarser: start from a clean grid.
                     clearTiles(ov);
                 }
             }
@@ -740,6 +925,7 @@
             var hint = { w: record.w, h: record.h };
             return Tiles.resolve(record, hint).then(function (meta) {
                 ov.meta = meta;
+                ov.metaFallback = false;
                 if (ov.state.mpp == null || !isFinite(ov.state.mpp)) {
                     // Fresh sheet: frame it into the viewport (longest side ≈
                     // FIT_FRACTION of the smaller edge) so it loads in its
@@ -758,6 +944,7 @@
             }).catch(function (err) {
                 console.warn('[OtherMaps] cannot read pyramid for', record.id, err);
                 ov.meta = { w: 4000, h: 3000, maxZoom: 4 };
+                ov.metaFallback = true;
                 if (ov.state.mpp == null || !isFinite(ov.state.mpp)) {
                     // Even an unresolvable sheet is framed with its guessed
                     // size rather than dropped at an arbitrary ground scale.
@@ -765,6 +952,8 @@
                     ov.state.mpp = fit != null ? fit : 1;
                 }
                 render(ov);
+                emitChange(ov);
+                setActive(record.id);
                 return ov;
             });
         }
@@ -805,7 +994,10 @@
                 ov.state.lat = c.lat;
                 ov.state.lng = c.lng;
             }
-            if (isFinite(patch.mpp)) ov.state.mpp = clamp(Number(patch.mpp), MPP_MIN, MPP_MAX);
+            if (isFinite(patch.mpp)) {
+                ov.state.mpp = clamp(Number(patch.mpp), MPP_MIN, MPP_MAX);
+                ov.userTransformed = true;
+            }
             if (isFinite(patch.rotation)) ov.state.rotation = normalizeDegrees(Number(patch.rotation));
             if (isFinite(patch.opacity)) ov.state.opacity = clamp(Number(patch.opacity), 0, 1);
         }
@@ -958,7 +1150,9 @@
         function fitToView(id) {
             var ov = overlays[id];
             if (!ov || !ov.meta) return null;
-            return setState(id, { mpp: fitMppFor(ov) });
+            var res = setState(id, { mpp: fitMppFor(ov) });
+            ov.userTransformed = false;
+            return res;
         }
 
         function groundWidth(id) {
@@ -975,6 +1169,7 @@
             ov.state.lat = Number(ov.record.lat);
             ov.state.lng = Number(ov.record.lng);
             ov.state.rotation = 0;
+            ov.userTransformed = false;
             var fit = fitMppFor(ov);
             if (fit == null) {
                 var base = ov.meta ? Math.max(ov.meta.w, ov.meta.h) : 4000;
@@ -1128,6 +1323,7 @@
                 var angle = pointAngle(a, b);
                 var mid = L.point((a.x + b.x) / 2, (a.y + b.y) / 2);
                 ov.state.mpp = clamp(gesture.start.mpp * (distance / gesture.distance), MPP_MIN, MPP_MAX);
+                ov.userTransformed = true;
                 ov.state.rotation = snapDegrees(normalizeDegrees(
                     gesture.start.rotation + (angle - gesture.angle)));
                 applyMove(ov, L.point(mid.x - gesture.origin.x, mid.y - gesture.origin.y));
@@ -1138,6 +1334,7 @@
                 var p = containerPoint(event);
                 var radius = Math.max(8, pointDistance(gesture.center, p));
                 ov.state.mpp = clamp(gesture.start.mpp * (radius / Math.max(8, gesture.distance)), MPP_MIN, MPP_MAX);
+                ov.userTransformed = true;
             } else if (gesture.kind === 'rotate') {
                 var rp = containerPoint(event);
                 var angleNow = pointAngle(gesture.center, rp);
@@ -1184,6 +1381,7 @@
             } else {
                 var factor = Math.exp(-event.deltaY * 0.0015);
                 ov.state.mpp = clamp(ov.state.mpp * factor, MPP_MIN, MPP_MAX);
+                ov.userTransformed = true;
             }
             render(ov);
             emitChange(ov);
@@ -1218,9 +1416,13 @@
         map.on('zoom', onZoom);
 
         container.addEventListener('pointerdown', onPointerDown, true);
-        root.addEventListener('pointermove', onPointerMove, { passive: true });
-        root.addEventListener('pointerup', onPointerUp);
-        root.addEventListener('pointercancel', onPointerUp);
+        /* A sheet drag captures the pointer on the map container, so the
+         * resulting pointermove/up events target that container, not this
+         * overlay root (which is a sibling inside a Leaflet pane). Listen on
+         * the capture target and let handle events bubble up to it as well. */
+        container.addEventListener('pointermove', onPointerMove, { passive: true });
+        container.addEventListener('pointerup', onPointerUp);
+        container.addEventListener('pointercancel', onPointerUp);
         container.addEventListener('wheel', onWheel, { passive: false });
 
         function destroy() {
@@ -1233,9 +1435,9 @@
             map.off('zoomanim', onZoomAnim);
             map.off('zoom', onZoom);
             container.removeEventListener('pointerdown', onPointerDown, true);
-            root.removeEventListener('pointermove', onPointerMove);
-            root.removeEventListener('pointerup', onPointerUp);
-            root.removeEventListener('pointercancel', onPointerUp);
+            container.removeEventListener('pointermove', onPointerMove);
+            container.removeEventListener('pointerup', onPointerUp);
+            container.removeEventListener('pointercancel', onPointerUp);
             container.removeEventListener('wheel', onWheel);
             clear();
         }

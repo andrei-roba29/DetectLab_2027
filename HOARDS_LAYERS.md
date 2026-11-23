@@ -54,7 +54,7 @@ intenționată, nu o scăpare.
 ## Interfață
 
 ```
-┌ ◉ Hoards                                          ⓘ   ⌄   [●] ┐
+┌ ◉ Hoards                                          ⓘ   ⌄       ┐
 │ Opacitate  PREMIUM                                    85%     │
 │ ────────────────────●────────────────────────────────────────  │
 │  ┌ ● Carolingian coin hoards — 769–814 CE      DARMC   [●] ┐   │
@@ -67,9 +67,8 @@ intenționată, nu o scăpare.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-- **Master switch** — pornește/oprește toate cele șapte cataloguri (starea
-  comutatorului este `checked` când toate sunt pornite, `indeterminate` când
-  doar o parte).
+- **Fără comutator de grup** — fiecare catalog este pornit/oprit numai din
+  propriul rând de sub-strat; starea totală rămîne sincronizată intern.
 - **Slider de grup** — copiază opacitatea în toate rândurile și **recolorează**
   geometria existentă; nu reinteroghează serverul.
 - **Fiecare rând** are propriul comutator, propriul slider, propriul badge `%`,

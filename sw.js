@@ -1034,7 +1034,26 @@
 //   because applyStored() only restores layers the config still knows.
 //   Re-tags js/danish-layers.config.js and CACHE_NAME. See DENMARK_LAYERS.md
 //   §"Retired rows" and DATA_SOURCES.md.
-const CACHE_NAME = 'detectlab-v426-heritage-trim';
+// v427: restrict Wikimedia Commons Josephine map sheets in "Other maps" to the
+//   Transylvania Josephine survey (1769–1773). Fixes mis-geocoded homonyms in
+//   iosfree_db.json (e.g. Bocșa, CS → Bocșa, SJ on pg017) and enforces the
+//   Transylvania survey perimeter + dominant-cluster homonym filtering in
+//   js/other-maps.js. Re-tags js/other-maps.js, iosfree_db.json and CACHE_NAME.
+// v428: keep non-Josephine sheets in "Other maps" (Hungaricana ECW and NLS
+//   IIIF) locked inside their sheet outline (.om-box) at every zoom and scale.
+//   Measures pre-cut Hungaricana bitmaps on load so cropped edge/root tiles
+//   paint at their exact fractional tileSpanFor (and padded cells stay 512 px),
+//   recovers pixel-exact probed pyramid sizes via binary search without flipping
+//   the hash order on out-of-bounds edges, fixes NLS info.json fallback/quality
+//   and sub-pixel edge tiles, preserves stand-in scaling across rapid zoom/scale
+//   steps, and purges stale v1 pyramid caches. Re-tags all other-maps assets.
+// v429: route Other Maps pointermove/up to Leaflet's pointer-capture target so
+//   align-mode dragging works; keep Albanian raster WMS clicks silent unless
+//   a layer explicitly opts into feature identify. Re-tags both modules.
+// v430: parent layer groups with visible sublayers are no longer user-toggleable;
+//   their existing child switches remain the UI controls. Standalone layers keep
+//   their switch. Re-tags styles.css and preserves backing state inputs for APIs.
+const CACHE_NAME = 'detectlab-v433-all-lidar-sublayers';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1246,6 +1265,7 @@ const PRECACHE_URLS = [
   'js/asig-albania-layers.config.js?v=20261017-albania-asig',
   'js/asig-heritage.js?v=20261026-viewport-heritage',
   'js/asig-albania-layers.js?v=20261026-viewport-heritage',
+  'js/asig-albania-layers.js?v=20261118-raster-click-silent',
   'js/asig-albania-layers.js',
   'js/asig-albania-layers.js?v=20261017-albania-asig',
   'js/asig-albania-layers.config.js?v=20261021-albania-country-group',
@@ -1264,6 +1284,7 @@ const PRECACHE_URLS = [
   'js/map-app.js?v=20261024-uk-historical-maps',
   'js/map-app.js?v=20261025-lidar-3d-tile-heal',
   // v275: one Hillshade LiDAR derivate row + maxNativeZoom 12.
+  'css/styles.css?v=20261118-leaf-switch-only',
   'css/styles.css?v=20261026-viewport-heritage',
   'js/map-app.js?v=20261026-lidar-hillshade-zoom',
   'js/translations.js?v=20261024-uk-historical-maps',
@@ -1326,13 +1347,21 @@ const PRECACHE_URLS = [
   'js/hist-shift.js?v=20261031-hist-shift-range',
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
+  'js/other-maps-tiles.js?v=20261118-other-maps-lock',
   'js/other-maps-tiles.js?v=20261031-other-maps-tile-span',
+  'js/other-maps-nls.js?v=20261118-other-maps-lock',
   'js/other-maps-nls.js?v=20261031-other-maps-tile-span',
+  'js/other-maps-overlay.js?v=20261118-align-pointer-capture',
+  'js/other-maps-overlay.js?v=20261118-other-maps-lock',
   'js/other-maps-overlay.js?v=20261105-other-maps-master-opacity',
+  'js/other-maps.js?v=20261118-other-maps-lock',
+  'js/other-maps.js?v=20261118-josephine-transylvania',
   'js/other-maps.js?v=20261105-other-maps-master-opacity',
+  'css/other-maps.css?v=20261118-other-maps-lock',
   'css/other-maps.css?v=20261028-other-maps-fix',
   'data/other-maps-catalog.json?v=20261026-cluj-alba',
   'data/other-maps-nls-catalog.json?v=20261028-other-maps-fix',
+  'iosfree_db.json?v=20261118-josephine-transylvania',
   'iosfree_db.json?v=20261029-other-maps',
   'js/translations.js?v=20261023-other-maps',
   'js/map3d-mirror.js?v=20261017-archeo-3d-projection',
@@ -2282,7 +2311,18 @@ const PRECACHE_URLS = [
   'js/layer-panel-rows.js?v=20261115-danish-panel-rows',
   'js/layer-registry.js?v=20261115-danish-panel-rows',
   'css/styles.css?v=20261115-danish-panel-rows',
-  'js/danish-layers.config.js?v=20261115-heritage-trim'
+  'js/danish-layers.config.js?v=20261115-heritage-trim',
+  // v432: historical sublayers, including Albania's tile-only Italian 100k
+  // map, get a photo of one of their own tiles behind each row. The Albania
+  // WMTS preview is built from the shared catalogue request rule; the 3D
+  // relay change from v431 keeps those reprojected canvases exportable.
+  'js/layer-registry.js?v=20261118-asig-3d-wmts',
+  'js/asig-albania-layers.js?v=20261118-historical-row-tiles',
+  'js/layer-panel-rows.js?v=20261118-historical-row-tiles',
+  'js/map3d-mirror.js?v=20261118-asig-3d-wmts',
+  // v433: standalone catalogue LiDAR layers join the existing whole-layer /
+  // 1 km focus picker, retaining their live per-sublayer settings.
+  'js/lidar-3d-focus.js?v=20261118-all-lidar-sublayers'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──
@@ -2319,6 +2359,8 @@ const PASSTHROUGH_HOSTS = [
   'cast.uark.edu', // CORONA Atlas of the Near East / GeoServer (CAST UARK)
   'geoserve.cast.uark.edu', // CORONA GeoWebCache WMS-C tile server
   'idee.es',        // IDEE/IGN tile services — "Mapa LiDAR" WMS (Spain LiDAR)
+  'hungaricana.hu', // Hungaricana ECW tile pyramid, thumbnails, imagesize, viewer
+  'wikimedia.org',  // Wikimedia Commons Josephine map scans
   'nls.uk'          // National Library of Scotland: map-view IIIF tiles, geoserver WFS, maps viewer
 ];
 

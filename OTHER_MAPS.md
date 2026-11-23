@@ -30,12 +30,15 @@ prioritate, dar lista include și foile Iosefine. Discurile respectă opacitatea
 stratului și scala geografică la zoom.
 
 Catalogul nu conține poligoane ale localităților sau limite georeferențiate ale
-foilor, deci acestea sunt **estimări**, nu contururi exacte. Localitățile aceleiași
-foi sunt grupate în zone compacte (cel mult 25 km între oricare două puncte),
-iar fiecare disc acoperă centrele grupului cu o marjă de 1 km (minimum 1,2 km
-raza). Astfel, omonimele geocodate departe nu produc un disc pe jumătate de
-țară. Mai multe discuri pot duce la aceeași foaie, fără a o duplica în catalog.
-Calitatea pozițiilor depinde de `iosfree_db.json`.
+foilor, deci acestea sunt **estimări**, nu contururi exacte. Toate cele 241 de foi
+Wikimedia Commons (`Josephinische_Landaufnahme_pg001`–`pg280`) aparțin ridicării
+iosefine a Transilvaniei (1769–1773): coordonatele omonimelor din afara regiunii
+sau de pe alte foi (de pildă Bocșa, Caraș-Severin în loc de Bocșa, Sălaj pe
+`pg017`) sunt corectate în `iosfree_db.json`, iar `js/other-maps.js` filtrează
+suplimentar punctele după perimetrul ridicării iosefine a Transilvaniei și elimină
+clusterele omonime minoritare situate la peste 25 km de grupul principal al foii,
+astfel încît fiecare foaie produce un disc compact în Transilvania (marjă 1 km,
+raza minimă 1,2 km).
 
 ## 1. De ce e nevoie de un modul separat
 
@@ -458,6 +461,65 @@ Versiunea: `js/map-app.js` este `20261105-iosfree-retired`, iar
 `js/other-maps.js` + `js/other-maps-overlay.js` sînt
 `20261105-other-maps-master-opacity`; cache `detectlab-v410-other-maps-legacy-fix`.
 
+## 8.4 Foile non-Josephine rămîn fixe în conturul hărții la orice zoom și scalare (v428)
+
+După v338, scanările Josephine rămîneau perfect fixe în propriul contur (`.om-box`),
+dar hărțile non-Josephine (Hungaricana ECW și cazuri marginale NLS IIIF) încă se
+deplasau / întindeau în interiorul conturului foii la zoom in/out sau la scalare:
+
+1. **Tile-uri Hungaricana decupate la margine (`js/other-maps-tiles.js`,
+   `js/other-maps-overlay.js`)**: v338 presupusese că piramida ECW Hungaricana
+   returnează mereu celule pătrate de 512 × 512 cu margine albă și lăsase
+   `dispatchTileSpan` blocat la `{w: 512, h: 512}`. Serverul Zoomify/ECW decupează
+   însă tile-urile de pe ultima coloană / ultimul rînd (inclusiv tile-ul rădăcină
+   de la nivelul 0), astfel încît fiecare schimbare de nivel întindea imaginea cu un
+   alt factor în `.om-box`. Acum overlay-ul reconciliază la `load` dimensiunea reală
+   decodată (`naturalWidth × naturalHeight`) cu `Tiles.tileSpanFor` prin
+   `Tiles.measuredTileSpan` (ținînd primul tile de margine ascuns pînă la decodare):
+   un bitmap `< 512 px` e pictat exact la span-ul fracționar al nivelului și
+   marchează foaia ca `edgeMode: "cropped"` (ca toate tile-urile următoare să fie
+   dimensionate din start), iar un bitmap de `512 px` pe o celulă îngustă rămîne la
+   `512 px` (`edgeMode: "padded"`) și e tăiat de `.om-grid { overflow: hidden }`.
+2. **Probarea exactă la pixel și protecția ordinii hash-ului (`js/other-maps-tiles.js`)**:
+   cînd `/tile/imagesize/<path>` e blocat de CORS, `probePyramid` găsește prin
+   căutare binară ultima coloană și ultimul rînd la `maxZoom` și citește
+   `naturalWidth` / `naturalHeight` pentru a reconstitui dimensiunea exactă
+   `(cols − 1)·512 + lastW` × `(rows − 1)·512 + lastH`. Dezambiguizarea `zxy` vs
+   `xyz` e permisă **doar** la `(0, 0, 1)` (niciodată pe muchii în afara grilei,
+   unde `sum|x|y|z` putea nimeri un tile de la alt nivel și corupe `_order`).
+   Cache-ul local trece la `dlOtherMaps.pyramid.v2` (și șterge intrările v1 vechi).
+3. **NLS IIIF (`js/other-maps-nls.js`)**: lanțul fallback `fetchInfo`
+   (`/iiif/2/` → `/iiif/` → `/iiif/1/`) păstrează baza serviciului și calitatea
+   (`native` pentru IIIF 1.x vs `default`), tile-urile de margine sub 0,5 px cer
+   minim `1 px` (fără `tw = 0`), `tileUrlAlt` oferă fallback canonic IIIF `{tw},`,
+   iar cache-ul trece la `dlOtherMaps.nls.pyramid.v2`. Dacă `info.json` eșuează
+   tranzitoriu la adăugare și răspunde la următoarea cerere, `adoptResolvedMeta`
+   actualizează imediat `ov.meta` ca grila și tile-urile să nu folosească dimensiuni
+   diferite.
+4. **Stand-in stabil la scalare și zoom rapid (`js/other-maps-overlay.js`)**:
+   fiecare tile promovat păstrează `staleScale = 2^(nivelCurent − nivelTile)` chiar
+   și cînd `tileSpan`/`load` se rezolvă tîrziu, pașii rapizi pe mai multe niveluri
+   rescalează tile-urile deja decodate fără să le înlocuiască cu tag-uri goale, iar
+   zoom-out / micșorarea păstrează tile-urile decodate scalate cu `2^Δ` pînă sosește
+   nivelul mai grosier.
+
+Versiunea pentru stabilitatea foilor: `css/other-maps.css`, `js/other-maps-tiles.js`,
+`js/other-maps-nls.js`, `js/other-maps-overlay.js` și `js/other-maps.js` sînt
+versionate `20261118-other-maps-lock`, cache `detectlab-v428-other-maps-lock`.
+
+## 8.5 Modul de aliniere — capturarea pointerului (v429)
+
+Comutatorul „Mod aliniere” dezactiva mișcarea hărții de bază și captura pointerul
+pe containerul Leaflet la începutul tragerii, dar asculta `pointermove`/`pointerup`
+pe elementul overlay, care este un copil din alt pane. După capturare, evenimentele
+sînt direcționate către container, nu către acel overlay; de aceea foaia nu se
+mișca. Acum toate evenimentele de mișcare/finalizare sînt ascultate pe același
+container care deține captura, iar evenimentele mânerelor îi propagă normal.
+Regresia verifică asocierea evenimentelor și curățarea lor la distrugerea managerului.
+
+`js/other-maps-overlay.js?v=20261118-align-pointer-capture`,
+`CACHE_NAME = detectlab-v429-map-click-align-fix`.
+
 ## 8. Regresie
 
 ```bash
@@ -529,11 +591,10 @@ peste 5 900 de verificări, fără rețea:
   `combineCatalogMaps` etichetează corect cele două surse și îmbinarea live
   (`mergeLiveRecords`/`rebuildRecords`) crește indexul comun fără dubluri.
 
-`js/other-maps-tiles.js` și `js/other-maps-nls.js` rămîn la
-`20261031-other-maps-tile-span` (vezi §8.2), `js/other-maps.js` și
-`js/other-maps-overlay.js` sînt la `20261105-other-maps-master-opacity` (vezi
-§8.3), iar `css/other-maps.css` rămîne la `20261028-other-maps-fix`; catalogul
-Hungaricana
+`css/other-maps.css`, `js/other-maps-tiles.js`, `js/other-maps-nls.js`,
+`js/other-maps-overlay.js` și `js/other-maps.js` sînt versionate
+`20261118-other-maps-lock` (vezi §8.4), `iosfree_db.json` e la
+`20261118-josephine-transylvania`, catalogul Hungaricana
 (`data/other-maps-catalog.json`) rămîne la `20261026-cluj-alba`, iar catalogul NLS
 (`data/other-maps-nls-catalog.json`) e la `20261028-other-maps-fix`; cache-ul
-service-worker-ului e `detectlab-v410-other-maps-legacy-fix`.
+service-worker-ului e `detectlab-v428-other-maps-lock`.

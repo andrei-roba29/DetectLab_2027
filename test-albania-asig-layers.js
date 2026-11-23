@@ -353,6 +353,9 @@ function allRows(node, found) {
     return found;
 }
 const rows = allRows(mount).concat(allRows(lidarMount));
+const italianMapRow = rows.find((row) => row.attributes['data-albania-row'] === 'italiane_100k');
+check(!!italianMapRow && italianMapRow.attributes['data-preview-wmts'] === 'hartat_historike:italiane_100k',
+    'the Albania historical WMTS sublayer opts into its own tile-photo background');
 const sections = mount.children.filter((child) => child.attributes['data-albania-section']);
 check(!mount.children.some(child => child.className === 'albania-catalogue-tools'), 'no country-level catalogue toolbar');
 const heritageBlock = mount.children[0];
@@ -397,8 +400,8 @@ sections.forEach((section) => {
     const sectionId = section.attributes['data-albania-section'];
     const head = section.children[0];
     const body = section.children[1];
-    /* Romania-style header: transp-layer-label with title+count left,
-     * expand chevron + master pill switch right. */
+    /* Section header: title+count and expand chevron are visible; the
+     * backing master stays only for internal state synchronization. */
     check(section.className.includes('transp-layer-row') && head.className === 'transp-layer-label',
         sectionId + ' is a Romania-style transp-layer-row section');
     check(head.attributes['aria-expanded'] === 'true', sectionId + ' starts expanded');
@@ -406,8 +409,9 @@ sections.forEach((section) => {
         sectionId + ' body holds exactly its rows');
     const node = API.state.sectionNodes[sectionId];
     check(!!node && !!node.master && node.master.id === 'albaniaSectionToggle_' + sectionId &&
-        !!node.button && node.button.id === 'albaniaSectionHead_' + sectionId,
-        sectionId + ' header carries a master switch and an expand button');
+        !!node.button && node.button.id === 'albaniaSectionHead_' + sectionId &&
+        read('css/styles.css').includes('#transpPanel .albania-section > .transp-layer-label .apm-toggle-switch'),
+        sectionId + ' keeps its backing master hidden and exposes only the expand control');
 });
 check(rows.length === 29 && rows.filter((row) => row.id !== 'albaniaRow_heritage').length === 28,
     'all 28 catalogue rows plus the Heritage toggle are mounted in the one Albania group');
@@ -520,6 +524,10 @@ API.toggle('ortho_1999', true);
 check(API.isActive('ortho_1999') && layersOnMap.size === 1, 'a row toggle adds exactly one layer');
 API.toggle('hillshade_2015', true);
 check(layersOnMap.size === 2, 'the WMTS row adds its canvas layer');
+const albaniaLidarLayer = API.state.entries.hillshade_2015.parts[0].layer;
+check(albaniaLidarLayer._dlLidar && albaniaLidarLayer._dlLidar.key === 'albania.hillshade_2015' &&
+    albaniaLidarLayer._dlDefId === 'albania.hillshade_2015',
+    'each standalone Albania LiDAR WMTS sublayer carries both shared 3D-focus tags and its registry identity');
 const orderBefore = API.activeOrder().slice();
 API.moveActive('ortho_1999', 1);
 check(API.activeOrder().indexOf('ortho_1999') === orderBefore.indexOf('ortho_1999') + 1,
@@ -609,6 +617,15 @@ document.createElement = (tag) => {
     return node;
 };
 const wmtsLayer = new API.WmtsLayer(CONFIG.byId('hillshade_2015'));
+const directWmtsTileUrl = wmtsLayer.tileUrl(12, 100, 200);
+check(/^https:\/\/geoportal\.asig\.gov\.al\/service\/wmts\?/.test(directWmtsTileUrl),
+    '2D WMTS images continue to load directly from ASIG');
+wmtsLayer._dl3dRendering = true;
+const relayedWmtsTileUrl = wmtsLayer.tileUrl(12, 100, 200);
+check(/^\/api\/map3d\/tile\?u=/.test(relayedWmtsTileUrl) &&
+    decodeURIComponent(relayedWmtsTileUrl.split('?u=')[1]) === directWmtsTileUrl,
+    '3D WMTS source images use the same-origin relay so their canvas can be exported');
+delete wmtsLayer._dl3dRendering;
 let completedTiles = 0;
 const destination = { z: 12, x: 2273, y: 1530 };
 wmtsLayer.createTile(destination, (error) => { assert.ifError(error); completedTiles++; });
@@ -618,7 +635,8 @@ wmtsLayer.createTile(destination, (error) => { assert.ifError(error); completedT
 check(sourceImages.length === uniqueRequests, 'concurrent WMTS tiles share in-flight source requests');
 sourceImages[0].naturalWidth = sourceImages[0].naturalHeight = 256;
 sourceImages[0].onload();
-check(paints > 0 && completedTiles === 0, 'available imagery paints before the slowest source completes');
+check(paints > 0 && completedTiles === 2,
+    'the destination canvas attaches on the first useful source while the remaining mosaic pieces load');
 sourceImages.slice(1).forEach(image => {
     image.naturalWidth = image.naturalHeight = 256;
     image.onload();
@@ -653,17 +671,18 @@ document.createElement = originalCreateElement;
     check(layersOnMap.size === 1 && /cadastre\/wms/.test(Array.from(layersOnMap)[0].endpoint()),
         'a resolved row draws from its per-workspace endpoint');
 
-    /* ── feature info ────────────────────────────────────────────────────── */
+    /* ── raster WMS clicks stay silent; feature vectors own their hit tests ─ */
     const leaves = API.activeLeaves();
-    check(leaves.length === 1 && leaves[0].name === 'cadastre:Cadastral_Zone', 'feature info queries every active WMS layer');
+    check(leaves.length === 0,
+        'ordinary raster/rendered WMS layers are not GetFeatureInfo candidates');
     fetchCalls.length = 0;
     const results = await API.featureInfo({ lat: 41.3, lng: 19.8 });
-    check(fetchCalls.length === 1 && /GetFeatureInfo/i.test(fetchCalls[0]), 'one GetFeatureInfo request per endpoint');
-    check(/x=400&y=300/.test(fetchCalls[0]) || /x=400/.test(fetchCalls[0]), 'the clicked pixel and view size are sent');
-    check(results.length === 1 && /Fortress/.test(results[0].html), 'the service HTML comes back for a sandboxed iframe');
-    API.openFeatureInfo({ lat: 41.3, lng: 19.8 });
-    const popup = map.openedPopup;
-    check(!!popup && popup.content && popup.content.className === 'albania-feature-info', 'the answer opens in a map popup');
+    check(fetchCalls.length === 0 && results.length === 0,
+        'clicking Albania with only a raster WMS layer sends no identify request and returns no popup content');
+    check(API.canQueryAt({ lat: 41.3, lng: 19.8 }) === false,
+        'the map click handler stays silent inside Albania unless a layer explicitly opts into feature identify');
+    check(map.openedPopup == null,
+        'the raster click path does not open the generic ASIG popup');
     API.toggle('cadastral_zone', false);
 
     /* ── persistence + text refresh ──────────────────────────────────────── */

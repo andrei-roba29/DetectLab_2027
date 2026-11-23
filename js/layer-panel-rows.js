@@ -33,7 +33,9 @@
  *      js/layer-registry.js → js/danish-layers.js, which tags the rows it
  *      generates with `data-preview-layer="danish.<id>"`). A Danish sheet
  *      previews through the same-origin /api/geo/dk-dtk25 proxy that draws
- *      it, so the token stays server-side for the row photo too.
+ *      it, so the token stays server-side for the row photo too. Albania's
+ *      WMTS-only historical rows opt in with `data-preview-wmts` and use the
+ *      catalogue's own EPSG:4326 matrix URL.
  *
  *  Rows opt in with `data-preview-layer="<registry id>"`; the CENAGIS
  *  catalogue rows carry `data-map-id="<catalogue key>"` instead, and are
@@ -289,6 +291,19 @@
         return urls.length ? urls[0] : null;
     }
 
+    /* Albania's three tile-only products are not WMS registry layers, but
+     * their panel rows still need a real map tile. Use the catalogue's WMTS
+     * URL builder and one tile covering Tirana on its EPSG:4326 matrix. */
+    function wmtsPreviewUrl(layerName) {
+        var cfg = root.ASIG_ALBANIA_CONFIG;
+        if (!cfg || !cfg.wmtsTileUrl || !layerName) return null;
+        var z = 8;
+        var lat = 41.3275, lng = 19.8187;
+        var col = Math.floor((lng + 180) / 360 * Math.pow(2, z + 1));
+        var row = Math.floor((90 - lat) / 180 * Math.pow(2, z));
+        return cfg.wmtsTileUrl(layerName, z, col, row);
+    }
+
     /* ── DOM helpers ───────────────────────────────────────────────────── */
     function panel() {
         return DOC.getElementById('transpPanel');
@@ -425,14 +440,15 @@
         if (!host || !host.classList.contains('open')) return 0;
         markGlass();
 
-        var rows = host.querySelectorAll('[data-preview-layer], .cenagis-map-row[data-map-id]');
+        var rows = host.querySelectorAll('[data-preview-layer], [data-preview-wmts], .cenagis-map-row[data-map-id]');
         var started = 0;
         Array.prototype.forEach.call(rows, function (row) {
             if (row.hasAttribute('data-row-preview') || row.hasAttribute('data-row-preview-state')) return;
             if (!isVisible(row, host)) return;    /* collapsed accordion / hidden tab */
             var id = row.getAttribute('data-preview-layer');
-            if (!id) id = 'cenagis.' + row.getAttribute('data-map-id');
-            var urls = urlsFor(id);
+            var wmtsName = row.getAttribute('data-preview-wmts');
+            if (!id && !wmtsName) id = 'cenagis.' + row.getAttribute('data-map-id');
+            var urls = wmtsName ? [wmtsPreviewUrl(wmtsName)].filter(Boolean) : urlsFor(id);
             if (!urls.length) {
                 row.setAttribute('data-row-preview-state', 'unavailable');
                 return;
@@ -508,6 +524,7 @@
         isHistoricalSheet: isHistoricalSheet,
         urlFor: urlFor,
         urlsFor: urlsFor,
+        wmtsPreviewUrl: wmtsPreviewUrl,
         markGlass: markGlass,
         sweep: sweep,
         tileZoom: TILE_ZOOM,

@@ -1257,6 +1257,11 @@
             var shim = Object.create(layer);
             shim._tileZoom = z;
             shim._tileSize = { x: size, y: size };
+            /* Tile-only ASIG WMTS layers reproject their own source images
+             * into a canvas. Mark this render-only shim so those images use
+             * the same-origin relay and the canvas remains exportable. The
+             * live 2D layer continues to load directly from the WMTS host. */
+            shim._dl3dRendering = true;
             var settled = false;
             /* A canvas tile that declared done() but never called it (a vector
              * renderer whose fetch failed, a plugin that forgot): hand over what

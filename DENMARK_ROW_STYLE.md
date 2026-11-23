@@ -36,10 +36,9 @@ Only `CONFIG.panelGroups` (`js/danish-layers.config.js`) is rendered:
 | **Ortophoto** | Denmark mount | 2008 · 2005 · 2002 · 1999 |
 
 Heritage / Historical maps / Ortophoto are Romania-style sections: a
-`.transp-layer-row` header (`danishGroup_<id>`) with title, expand chevron
-(`danishGroupExpandBtn_<id>`) and a master on/off switch
-(`danishGroupToggle_<id>`, indeterminate for partial states) over a bordered
-`danish<Group>SubLayers` column.
+`.transp-layer-row` header (`danishGroup_<id>`) with title and expand chevron
+(`danishGroupExpandBtn_<id>`) over a bordered `danish<Group>SubLayers` column.
+There is no visible group switch; each actual sublayer keeps its own switch.
 
 **The three headers carry no icon** (2026-11-15). They used to copy the LiDAR
 accordion's leading blue target glyph (`danishGroupMarker_<id>`, the
@@ -143,9 +142,9 @@ pins both:
 
 - `#lidarExpandBtn` is the only way in: a real touch target (≥16 px) with
   `aria-controls` / `aria-expanded` kept in step by `toggleLidarSubLayers()`.
-- The accordion's master switch (`#lidarToggle`) also switches the Danish LiDAR
-  rows off (`DetectLabDanishLayers.deactivatePanelGroup('lidar')`), so a row can
-  never stay on the map inside a collapsed container with no switch in reach.
+- Each Danish LiDAR sublayer keeps its own switch inside the shared accordion;
+  the group-level `#lidarToggle` is hidden with the other parent switches. The
+  accordion chevron remains available independently of the layers' on/off state.
 
 ## Removed
 

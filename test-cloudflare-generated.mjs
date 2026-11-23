@@ -286,7 +286,7 @@ group('9. The generated modules load and expose their entry points');
     const tile = await import(new URL('file://' + path.join(ROOT, 'functions/_generated/map3d-tile.mjs')).href);
     check('handleTileRequest is a function', typeof tile.handleTileRequest === 'function');
     const layers = tile.registry.all();
-    eq('the statically imported registry exposes all 189 layers', layers.length, 189);
+    eq('the statically imported registry exposes all 187 layers', layers.length, 187);
     check('layerById() resolves a module-backed LiDAR layer', !!tile.layerById('lidar.se-lantmateriet'));
     check('layerById() resolves a base layer', !!tile.layerById('base.imagery'));
     check('layerById() refuses an unknown layer', !tile.layerById('not-a-layer'));

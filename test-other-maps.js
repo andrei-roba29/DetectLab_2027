@@ -733,7 +733,7 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
             fire: (type, ev) => { (events[type] || []).slice().forEach((fn) => fn(Object.assign({ type }, ev))); }
         };
     }
-    const projMap = makeProjMap({ zoom: 12, size: { x: 800, y: 600 }, center: { lat: 47.933, lng: 23.892 } });
+    const projMap = makeProjMap({ zoom: 12, size: { x: 800, y: 600 }, center: { lat: 46.769, lng: 23.59 } });
     const originAt = (z) => projectAt(projMap.getCenter(), z)
         .subtract(pt(400, 300)).add(PANE_POS);
     const TOP_LEFT = pt(0, 0).subtract(PANE_POS);   // containerPointToLayerPoint(0,0)
@@ -741,8 +741,9 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     // ── the dots canvas ─────────────────────────────────────────────────
     fakeCatalogJson = catalog;
     fakeJosephineJson = {
-        centre: { d: 'Centre', l: 'https://commons.wikimedia.org/wiki/File:Test.jpg', c: { lat: 47.933, lng: 23.892 } },
-        nearby: { d: 'Nearby', l: 'https://commons.wikimedia.org/wiki/File:Test.jpg', c: { lat: 47.93305, lng: 23.892 } },
+        centre: { d: 'Centre', l: 'https://commons.wikimedia.org/wiki/File:Test.jpg', c: { lat: 46.769, lng: 23.59 } },
+        nearby: { d: 'Nearby', l: 'https://commons.wikimedia.org/wiki/File:Test.jpg', c: { lat: 46.76905, lng: 23.59 } },
+        bocsaCs: { d: 'Bocsa CS homonym', l: 'https://commons.wikimedia.org/wiki/File:Test.jpg', c: { lat: 45.3781756, lng: 21.7312589 } },
         homonym: { d: 'Distant homonym', l: 'https://commons.wikimedia.org/wiki/File:Test.jpg', c: { lat: 45, lng: 25 } }
     };
     OtherMaps.attach(projMap);
@@ -754,8 +755,10 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     ok(OtherMaps.state.hits.length > 0, 'dots are painted at the settled zoom');
     ok(OtherMaps.records().some((r) => r.source === 'josephine'), 'enable loads the Josephine catalogue');
     const foot = OtherMaps.state.josephineFootprints;
-    eq(foot.length, 2, 'distant homonyms do not create a country-wide coverage disc');
-    eq(foot[0].sheet.id, foot[1].sheet.id, 'separated coverage groups select the same sheet');
+    eq(foot.length, 1, 'out-of-Transylvania homonyms are excluded without creating extra coverage discs');
+    eq(foot[0].places.length, 2, 'only the Transylvania localities remain on the sheet footprint');
+    ok(foot.every((f) => OtherMaps.isInJosephineTransylvania(f.lat, f.lng)),
+        'every painted Josephine footprint sits inside the Transylvania survey');
     ok(OtherMaps.state.hits.some((h) => h.coverage), 'coverage appears below zoom 13');
     const styles = [];
     const ctx = OtherMaps.state.ctx;
@@ -1396,25 +1399,121 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
         ok(enclosing, 'Josephine coverage circles enclose all places assigned to each scan');
     });
 
-    // Every catalogue locality must belong to an estimated, compact footprint.
+    // Every catalogue locality must belong to a single compact Transylvania footprint.
     const allFootprints = OtherMaps.buildJosephineFootprints(josephineRecords);
+    const dbKeys = Object.keys(josephineDb);
+    eq(josephineRecords.reduce((sum, r) => sum + r.josephinePlaces.length, 0),
+        dbKeys.length,
+        'every iosfree_db.json locality lies inside the Transylvania Josephine survey');
+    eq(allFootprints.length, josephineRecords.length,
+        'every Josephine sheet produces one compact Transylvania coverage disc (no split homonym discs)');
     eq(allFootprints.reduce((sum, f) => sum + f.places.length, 0),
         josephineRecords.reduce((sum, r) => sum + r.josephinePlaces.length, 0),
         'all indexed Josephine localities are represented');
-    allFootprints.forEach((f) => f.places.forEach((p) => {
-        const dLat = (p.lat - f.lat) * Math.PI / 180;
-        const dLng = (p.lng - f.lng) * Math.PI / 180;
-        const a = Math.sin(dLat / 2) ** 2 + Math.cos(f.lat * Math.PI / 180) *
-            Math.cos(p.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-        ok(12742000 * Math.asin(Math.sqrt(a)) <= f.radiusMeters,
-            'each estimated disc covers the localities assigned to it');
-    }));
+    allFootprints.forEach((f) => {
+        ok(OtherMaps.isInJosephineTransylvania(f.lat, f.lng),
+            'footprint centre lies inside the Transylvania survey (' + f.sheet.id + ')');
+        ok(f.radiusMeters <= 20000,
+            'footprint radius matches a single compact map sheet (' + f.sheet.id + ')');
+        f.places.forEach((p) => {
+            ok(OtherMaps.isInJosephineTransylvania(p.lat, p.lng),
+                'footprint locality lies inside Transylvania (' + p.name + ')');
+            const dLat = (p.lat - f.lat) * Math.PI / 180;
+            const dLng = (p.lng - f.lng) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(f.lat * Math.PI / 180) *
+                Math.cos(p.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+            ok(12742000 * Math.asin(Math.sqrt(a)) <= f.radiusMeters,
+                'each estimated disc covers the localities assigned to it');
+        });
+    });
+
+    // Regression: Bocșa on pg017 must resolve to Bocșa, Sălaj (Transylvania),
+    // never Bocșa, Caraș-Severin (Banat), and no non-Transylvanian town may be
+    // covered by any Josephine sheet footprint.
+    const haversineM = (a, b) => {
+        const dLat = (b.lat - a.lat) * Math.PI / 180;
+        const dLng = (b.lng - a.lng) * Math.PI / 180;
+        const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) *
+            Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+        return 12742000 * Math.asin(Math.sqrt(Math.min(1, h)));
+    };
+    const bocsaSalaj = { lat: 47.2948642, lng: 22.9172167 };
+    const bocsaCarasSeverin = { lat: 45.3781756, lng: 21.7312589 };
+    ok(josephineDb.bocsa && haversineM(josephineDb.bocsa.c, bocsaSalaj) < 1000,
+        'iosfree_db.json maps Bocsa (pg017) to Bocsa, Salaj in Transylvania');
+    ok(allFootprints.some((f) => haversineM(f, bocsaSalaj) <= f.radiusMeters),
+        'pg017 covers Bocsa, Salaj');
+    const outsideProbeTowns = [
+        ['Bocsa, Caras-Severin', bocsaCarasSeverin.lat, bocsaCarasSeverin.lng],
+        ['Resita, Caras-Severin', 45.3008, 21.8893],
+        ['Caransebes, Caras-Severin', 45.4167, 22.2167],
+        ['Timisoara, Timis', 45.7489, 21.2087],
+        ['Arad, Arad', 46.1866, 21.3123],
+        ['Oradea, Bihor', 47.0465, 21.9189],
+        ['Satu Mare, Satu Mare', 47.79, 22.8857],
+        ['Sighetu Marmatiei, Maramures', 47.933, 23.892],
+        ['Suceava, Suceava', 47.6514, 26.2556],
+        ['Botosani, Botosani', 47.7486, 26.6694],
+        ['Piatra Neamt, Neamt', 46.9275, 26.3708],
+        ['Bacau, Bacau', 46.567, 26.9146],
+        ['Iasi, Iasi', 47.1585, 27.6014],
+        ['Focsani, Vrancea', 45.696, 27.183],
+        ['Buzau, Buzau', 45.15, 26.8333],
+        ['Ploiesti, Prahova', 44.9462, 26.0254],
+        ['Bucuresti', 44.4268, 26.1025],
+        ['Pitesti, Arges', 44.8565, 24.8692],
+        ['Ramnicu Valcea, Valcea', 45.1047, 24.375],
+        ['Targu Jiu, Gorj', 45.0342, 23.2747],
+        ['Craiova, Dolj', 44.3302, 23.7949],
+        ['Orsova, Mehedinti', 44.723, 22.398],
+        ['Constanta, Constanta', 44.1598, 28.6348]
+    ];
+    outsideProbeTowns.forEach(([label, lat, lng]) => {
+        ok(!OtherMaps.isInJosephineTransylvania(lat, lng),
+            label + ' is rejected by the Transylvania Josephine filter');
+        ok(allFootprints.every((f) => haversineM(f, { lat, lng }) > f.radiusMeters),
+            'no Josephine coverage disc overlaps ' + label);
+    });
+
+    // Runtime defence against future homonyms: out-of-region places, minority
+    // intra-Transylvania homonyms, all-outside sheets, and 1-vs-1 ties.
+    const mixedDb = {
+        campia: { d: 'Campia', l: 'https://commons.wikimedia.org/wiki/File:Josephinische_Landaufnahme_pg017.jpg', c: { lat: 47.3095, lng: 22.899 } },
+        salajeni: { d: 'Salajeni', l: 'https://commons.wikimedia.org/wiki/File:Josephinische_Landaufnahme_pg017.jpg', c: { lat: 47.3264, lng: 22.9056 } },
+        bocsaWrong: { d: 'Bocsa', l: 'https://commons.wikimedia.org/wiki/File:Josephinische_Landaufnahme_pg017.jpg', c: bocsaCarasSeverin },
+        intraHomonym: { d: 'Saliste', l: 'https://commons.wikimedia.org/wiki/File:Josephinische_Landaufnahme_pg017.jpg', c: { lat: 45.795, lng: 23.886 } },
+        banatOnly: { d: 'Timisoara', l: 'https://commons.wikimedia.org/wiki/File:Banat_Only.jpg', c: { lat: 45.7489, lng: 21.2087 } },
+        tieA: { d: 'Cluj', l: 'https://commons.wikimedia.org/wiki/File:Tie.jpg', c: { lat: 46.77, lng: 23.59 } },
+        tieB: { d: 'Sibiu', l: 'https://commons.wikimedia.org/wiki/File:Tie.jpg', c: { lat: 45.80, lng: 24.15 } }
+    };
+    const mixedRecs = OtherMaps.buildJosephineRecords(mixedDb);
+    eq(mixedRecs.length, 2, 'sheets whose places are all outside Transylvania are omitted');
+    const mixed017 = mixedRecs.find((r) => r.id.includes('pg017'));
+    eq(mixed017.josephinePlaces.length, 2, 'Bocsa CS and distant minority homonyms are dropped from pg017');
+    const mixedFoot = OtherMaps.buildJosephineFootprints(mixedRecs);
+    eq(mixedFoot.filter((f) => f.sheet.id === mixed017.id).length, 1,
+        'pg017 retains a single compact Sălaj coverage disc');
+    eq(mixedFoot.filter((f) => f.sheet.id.includes('Tie')).length, 2,
+        'equal-size separated Transylvania groups stay split rather than forming a region-wide disc');
+
+    // Cache-busting tags keep installed PWAs and force-cache fetches current.
+    const otherMapsSrc = fs.readFileSync(path.join(ROOT, 'js/other-maps.js'), 'utf8');
+    const overlaySrc = fs.readFileSync(path.join(ROOT, 'js/other-maps-overlay.js'), 'utf8');
+    const indexSrc = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+    const swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+    const dbTag = (otherMapsSrc.match(/JOSEPHINE_CATALOG_URL = '(iosfree_db\.json\?v=[^']+)'/) || [])[1];
+    const jsTag = (indexSrc.match(/src="(js\/other-maps\.js\?v=[^"]+)"/) || [])[1];
+    ok(Boolean(dbTag) && swSrc.includes("'" + dbTag + "'"),
+        'sw.js precaches the active iosfree_db.json cache-busting URL');
+    ok(Boolean(jsTag) && swSrc.includes("'" + jsTag + "'"),
+        'sw.js precaches the active js/other-maps.js cache-busting URL');
+
     // At high zoom, a disc remains hittable even if its centre is off screen.
     const state = OtherMaps.state;
     state.staticRecords = OtherMaps.buildJosephineRecords(fakeJosephineJson);
     state.liveRecords = [];
     OtherMaps.rebuildRecords();
-    fm._state.center = { lat: 47.933025, lng: 23.892035 };
+    fm._state.center = { lat: 46.769025, lng: 23.590035 };
     fm._state.zoom = 14;
     OtherMaps.redraw();
     const coverageOffscreen = state.hits.find((h) => h.coverage);
@@ -1427,7 +1526,7 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     modal.querySelector = (selector) => modalChildren[selector] || (modalChildren[selector] = fakeEl('div'));
     state.modal = modal;
     const clickPoint = pt(-16, Math.max(-9, Math.min(591, coverageOffscreen.point.y)));
-    fm.fire('click', { latlng: { lat: 47.933, lng: 23.892 },
+    fm.fire('click', { latlng: { lat: 46.769, lng: 23.59 },
         layerPoint: clickPoint, containerPoint: clickPoint.add(PANE_POS) });
     ok(modal.classList.contains('show'), 'clicking the visible portion opens the available maps');
     ok(modalChildren['.om-modal-list'].innerHTML.includes('Test.jpg'),
@@ -1435,7 +1534,7 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     // A normal dot must win hit precedence even if the large coverage disc
     // has a closer centre; both sources remain available in the same list.
     state.staticRecords.push({ id: 'normal-test', source: 'hungaricana', path: 'test/path',
-        place: 'Existing dot', title: 'Existing sheet', lat: 47.933025, lng: 23.892011 });
+        place: 'Existing dot', title: 'Existing sheet', lat: 46.769025, lng: 23.590011 });
     OtherMaps.rebuildRecords();
     OtherMaps.redraw();
     const ordinaryHit = state.hits.find((h) => !h.coverage);
@@ -1447,7 +1546,7 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     ok(listHtml.indexOf('Existing sheet') >= 0 && listHtml.indexOf('Test.jpg') >= 0 &&
         listHtml.indexOf('Existing sheet') < listHtml.indexOf('Test.jpg'),
         'the top dot is selected first while overlapping Josephine sheets remain accessible');
-    fm._state.center = { lat: 47.933025, lng: 23.892 };
+    fm._state.center = { lat: 46.769025, lng: 23.59 };
     fm._state.zoom = 13;
     OtherMaps.redraw();
     const radius13 = state.hits.find((h) => h.coverage).radius;
@@ -1468,6 +1567,452 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     ok(restored7, 'the saved sheet is restored with the layer');
     eq(restored7.root.style.opacity, '0', 'a sheet restored at layer opacity 0% stays invisible');
     OtherMaps.setOpacity(80);
+
+    /* ══ 16. non-Josephine intra-border stability (zoom & scale lock) ═══
+     * Regression for Task 2: Hungaricana ECW and NLS IIIF sheets must stay
+     * motionless inside their own `.om-box` outline across every basemap zoom
+     * and every sheet scale (mpp), matching Josephine sheets. */
+    const TILE = Tiles.TILE_SIZE;
+    const BLEED = 0.6;
+
+    /* Map a normalised sheet point (u, v) ∈ (0, 1)² through the actual DOM
+     * tile layout (`img.style.left/top/width/height`) and `.om-grid` /
+     * `.om-box` sizes, returning its normalised position inside `.om-box`. */
+    function paintedBoxPos(ov, u, v, serverMode, trueW, trueH) {
+        const gW = parseFloat(ov.gridEl.style.width);
+        const gH = parseFloat(ov.gridEl.style.height);
+        const bW = parseFloat(ov.boxEl.style.width);
+        const bH = parseFloat(ov.boxEl.style.height);
+        const bL = parseFloat(ov.boxEl.style.left);
+        const bT = parseFloat(ov.boxEl.style.top);
+        ok(Math.abs(bL + bW / 2) < 1e-9 && Math.abs(bT + bH / 2) < 1e-9,
+            '.om-box stays centred on the sheet anchor');
+        ok(Math.abs(gW * ov.geom.k - bW) < 1e-6 && Math.abs(gH * ov.geom.k - bH) < 1e-6,
+            '.om-grid fills .om-box 1:1 on both axes');
+        const scale = Math.pow(2, ov.meta.maxZoom - ov.geom.level);
+        const lx = (u * trueW) / scale;
+        const ly = (v * trueH) / scale;
+        const tx = Math.floor(lx / TILE);
+        const ty = Math.floor(ly / TILE);
+        const img = ov.tiles[ov.geom.level + ':' + tx + ':' + ty];
+        assert(img, 'missing active tile ' + ov.geom.level + ':' + tx + ':' + ty);
+        const left = parseFloat(img.style.left);
+        const top = parseFloat(img.style.top);
+        const spanW = parseFloat(img.style.width) - BLEED;
+        const spanH = parseFloat(img.style.height) - BLEED;
+        const trueSpanW = serverMode === 'padded' ? TILE : Math.min(TILE, (trueW / scale) - tx * TILE);
+        const trueSpanH = serverMode === 'padded' ? TILE : Math.min(TILE, (trueH / scale) - ty * TILE);
+        const fx = (lx - tx * TILE) / trueSpanW;
+        const fy = (ly - ty * TILE) / trueSpanH;
+        return {
+            x: (left + fx * spanW) / gW,
+            y: (top + fy * spanH) / gH
+        };
+    }
+
+    function decodeActiveTiles(ov, serverMode, trueW, trueH) {
+        const s = Math.pow(2, ov.meta.maxZoom - ov.geom.level);
+        Object.keys(ov.tiles).forEach((key) => {
+            const img = ov.tiles[key];
+            const x = img._om.x, y = img._om.y;
+            if (serverMode === 'padded') {
+                img.naturalWidth = TILE;
+                img.naturalHeight = TILE;
+            } else {
+                const roundFn = serverMode === 'floor' ? Math.floor
+                    : serverMode === 'ceil' ? Math.ceil : Math.round;
+                const tw = Math.max(1, Math.min(TILE, roundFn(trueW / s) - x * TILE));
+                const th = Math.max(1, Math.min(TILE, roundFn(trueH / s) - y * TILE));
+                img.naturalWidth = tw;
+                img.naturalHeight = th;
+            }
+            img.dispatch('load');
+        });
+    }
+
+    const sampleLandmarks = [
+        [0.08, 0.12], [0.5, 0.5], [0.94, 0.93], [0.985, 0.35], [0.32, 0.985]
+    ];
+
+    // 16a. Hungaricana cropped-edge sheets (round, ceil, floor) and padded
+    //      512×512 sheets stay fixed to 0.000 px across full zoom + scale sweeps.
+    function wideFakeMap(zoom, lat, lng) {
+        const m = fakeMap({ zoom, size: { x: 32000, y: 32000 }, center: { lat, lng } });
+        m.latLngToLayerPoint = () => ({ x: 16000, y: 16000 });
+        return m;
+    }
+
+    const hungCases = [
+        { id: 'H/CROP-R', path: 'maps/mol/t/crop_r.ecw', w: 7420, h: 5380, mode: 'round' },
+        { id: 'H/CROP-C', path: 'maps/mol/t/crop_c.ecw', w: 10680, h: 5329, mode: 'ceil' },
+        { id: 'H/CROP-F', path: 'maps/mol/t/crop_f.ecw', w: 4004, h: 4941, mode: 'floor' },
+        { id: 'H/PAD',    path: 'maps/mol/t/pad512.ecw', w: 7420, h: 5380, mode: 'padded' }
+    ];
+    for (const c of hungCases) {
+        const zMap = wideFakeMap(11, 46.77, 23.59);
+        const zMgr = Overlay.createManager(zMap, { pane: 'pane_' + c.id, opacity: 0.85 });
+        const sheet = { id: c.id, source: 'hungaricana', path: c.path, lat: 46.77, lng: 23.59, w: c.w, h: c.h };
+        const res11 = Overlay.resolutionAt(46.77, 11);
+        // Start framed at level 0 so the root tile itself exercises edge detection.
+        const initMpp = res11 * Math.pow(2, -Tiles.maxZoomFor(c.w, c.h)) * 0.85;
+        const zOv = await zMgr.add(sheet, { mpp: initMpp });
+        await new Promise((r) => setImmediate(r));
+        // Before decode: interior cells stay visible while unmeasured edge tiles
+        // are held hidden so they never flash stretched for a single frame.
+        const initialTiles = Object.values(zOv.tiles);
+        const edgeTiles = initialTiles.filter((img) => {
+            const sp = Tiles.tileSpanFor(zOv.meta, img._om.x, img._om.y, img._om.level);
+            return sp.w < TILE || sp.h < TILE;
+        });
+        ok(edgeTiles.length > 0 && edgeTiles.every((img) => img.style.visibility === 'hidden'),
+            c.id + ': unmeasured edge tiles are hidden until decode');
+        decodeActiveTiles(zOv, c.mode, c.w, c.h);
+        ok(edgeTiles.every((img) => img.style.visibility === ''),
+            c.id + ': decoded edge tiles become visible immediately');
+        eq(Tiles.edgeModeOf(sheet), c.mode === 'padded' ? 'padded' : 'cropped',
+            c.id + ': edge mode is inferred from the decoded bitmap and cached');
+
+        const visitedLevels = new Set();
+        // Scale sweep across every level 0..maxZoom and back down, plus rotations.
+        for (let lv = 0; lv <= zOv.meta.maxZoom; lv++) {
+            const mpp = res11 * Math.pow(2, lv - zOv.meta.maxZoom) * 0.9;
+            zMgr.setState(c.id, { mpp, rotation: lv === 2 ? 37 : 0 });
+            await new Promise((r) => setImmediate(r));
+            decodeActiveTiles(zOv, c.mode, c.w, c.h);
+            visitedLevels.add(zOv.geom.level);
+            for (const [u, v] of sampleLandmarks) {
+                const got = paintedBoxPos(zOv, u, v, c.mode, c.w, c.h);
+                ok(Math.abs(got.x - u) < 1e-9 && Math.abs(got.y - v) < 1e-9,
+                    c.id + ' L=' + zOv.geom.level + ': landmark (' + u + ',' + v + ') stays pinned in .om-box');
+            }
+        }
+        // Basemap zoom in/out sweep without changing mpp.
+        zMgr.setState(c.id, { mpp: res11 * Math.pow(2, -zOv.meta.maxZoom) * 0.9, rotation: 0 });
+        for (const z of [11, 12, 13, 14, 15, 13, 11]) {
+            zMap._state.zoom = z;
+            zMap.fire('zoomend');
+            await new Promise((r) => setImmediate(r));
+            decodeActiveTiles(zOv, c.mode, c.w, c.h);
+            for (const [u, v] of sampleLandmarks) {
+                const got = paintedBoxPos(zOv, u, v, c.mode, c.w, c.h);
+                ok(Math.abs(got.x - u) < 1e-9 && Math.abs(got.y - v) < 1e-9,
+                    c.id + ' zoom=' + z + ': landmark stays pinned inside .om-box');
+            }
+        }
+        ok(visitedLevels.size >= 4, c.id + ': exercised multiple pyramid levels');
+        zMgr.remove(c.id);
+    }
+
+    // 16b. probePyramid recovers pixel-exact dimensions and never corrupts
+    //      hash order on portrait/out-of-bounds edges (decrypts real hashes).
+    function decryptHungUrl(url) {
+        const hex = String(url || '').split('/').pop();
+        if (!/^[0-9a-f]{32}$/.test(hex)) return null;
+        const decipher = crypto.createDecipheriv('aes-128-ecb', Buffer.from('dGhpcyBpcyBubyBr'), null);
+        decipher.setAutoPadding(false);
+        const plain = Buffer.concat([decipher.update(Buffer.from(hex, 'hex')), decipher.final()])
+            .toString('utf8').replace(/\*+$/, '');
+        const parts = plain.split('|').map(Number);
+        return parts.length === 4 ? { sum: parts[0], a: parts[1], b: parts[2], c: parts[3] } : null;
+    }
+
+    function installProbeServer(spec) {
+        const Z = Tiles.maxZoomFor(spec.w, spec.h);
+        sandbox.Image = function MockProbeImage() {
+            const self = { naturalWidth: 0, naturalHeight: 0, onload: null, onerror: null };
+            Object.defineProperty(self, 'src', {
+                set(url) {
+                    setImmediate(() => {
+                        const dec = decryptHungUrl(url);
+                        if (!dec) { if (self.onerror) self.onerror(); return; }
+                        const z = spec.order === 'xyz' ? dec.c : dec.a;
+                        const x = spec.order === 'xyz' ? dec.a : dec.b;
+                        const y = spec.order === 'xyz' ? dec.b : dec.c;
+                        const maxZ = spec.truncatedMaxZ != null ? spec.truncatedMaxZ : Z;
+                        if (z < 0 || z > maxZ || x < 0 || y < 0) {
+                            if (self.onerror) self.onerror();
+                            return;
+                        }
+                        const s = Math.pow(2, maxZ - z);
+                        const tW = Math.max(1, Math.ceil(spec.w / s));
+                        const tH = Math.max(1, Math.ceil(spec.h / s));
+                        const cols = Math.ceil(tW / TILE), rows = Math.ceil(tH / TILE);
+                        if (x >= cols || y >= rows) {
+                            if (self.onerror) self.onerror();
+                            return;
+                        }
+                        self.naturalWidth = spec.padded ? TILE : Math.min(TILE, tW - x * TILE);
+                        self.naturalHeight = spec.padded ? TILE : Math.min(TILE, tH - y * TILE);
+                        if (self.onload) self.onload();
+                    });
+                }
+            });
+            return self;
+        };
+    }
+
+    const prevCatalogJson = fakeCatalogJson;
+    fakeCatalogJson = null; // simulate /tile/imagesize/ blocked by CORS
+    Tiles.clearCache();
+
+    // Cropped landscape sheet: exact pixel dimensions recovered.
+    installProbeServer({ w: 7420, h: 5380, order: 'zxy', padded: false });
+    const probedCrop = await Tiles.resolve('maps/probe/crop_7420.ecw');
+    eq(probedCrop.w, 7420, 'probePyramid recovers exact natural width from cropped edge tile');
+    eq(probedCrop.h, 5380, 'probePyramid recovers exact natural height from cropped edge tile');
+    eq(probedCrop.maxZoom, 4, 'probePyramid recovers exact maxZoom');
+    eq(probedCrop.edgeMode, 'cropped', 'probePyramid records cropped edge mode immediately');
+    eq((await Tiles.tileSpan('maps/probe/crop_7420.ecw', 0, 0, 0)).w, 7420 / 16,
+        'probed cropped Hungaricana sheet pre-sizes tiles to exact fractional span');
+
+    // Tall portrait sheet (1400×3500, Z=3, cols=3, rows=7): probe(3,0,3) in xyz
+    // would collide with valid z=3,x=0,y=3 — must NOT inflate width or flip order.
+    installProbeServer({ w: 1400, h: 3500, order: 'zxy', padded: false });
+    const probedPortrait = await Tiles.resolve('maps/probe/portrait_1400.ecw');
+    eq(probedPortrait.w, 1400, 'portrait probe is immune to xyz/zxy coordinate collision');
+    eq(probedPortrait.h, 3500, 'portrait probe recovers exact height');
+    eq(Tiles.preferredOrder(), 'zxy', 'portrait edge probe never flips hash order to xyz');
+
+    // Padded 512×512 sheet: grid size halves identically across every level (0 drift).
+    installProbeServer({ w: 7420, h: 5380, order: 'zxy', padded: true });
+    const probedPad = await Tiles.resolve('maps/probe/pad_7420.ecw');
+    eq(probedPad.w, 15 * TILE, 'padded probe recovers exact column grid width');
+    eq(probedPad.h, 11 * TILE, 'padded probe recovers exact row grid height');
+    eq(probedPad.edgeMode, 'padded', 'non-square padded pyramid is detected at root');
+
+    // Alternate-order server: cleanly disambiguated at (0,0,1) without corrupting spans.
+    installProbeServer({ w: 1400, h: 3500, order: 'xyz', padded: false });
+    const probedXyz = await Tiles.resolve('maps/probe/alt_xyz.ecw');
+    eq(Tiles.preferredOrder(), 'xyz', 'order disambiguation still works via (0,0,1)');
+    eq(probedXyz.w, 1400, 'xyz server width is recovered to the pixel');
+    eq(probedXyz.h, 3500, 'xyz server height is recovered to the pixel');
+    Tiles.noteOrder('zxy');
+
+    // Overlay error on an out-of-bounds/missing tile never flips hash order.
+    eq(Tiles.canFlipOrder({ source: 'hungaricana', path: 'maps/probe/p.ecw' }, 0, 0, 1), true,
+        'hash-order retry is allowed on unambiguous (0,0,1) for tagged Hungaricana records');
+    eq(Tiles.canFlipOrder({ source: 'hungaricana', path: 'maps/probe/p.ecw' }, 3, 0, 3), false,
+        'hash-order retry is blocked on ambiguous edge coordinates');
+
+    delete sandbox.Image;
+    fakeCatalogJson = prevCatalogJson;
+
+    // 16c. Stand-in scaling stays locked across late span resolution, rapid
+    //      multi-step wheel/handle scale-in, and zoom-out/scale-out transitions.
+    const stMap = fakeMap({ zoom: 11, size: { x: 400, y: 800 }, center: { lat: 46.77, lng: 23.59 } });
+    const stMgr = Overlay.createManager(stMap, { pane: 'om_standin_lock', opacity: 0.8 });
+    const stSheet = { id: 'H/ST', source: 'hungaricana', path: 'maps/mol/t/st.ecw', lat: 46.77, lng: 23.59, w: 7420, h: 5380 };
+    const stOv = await stMgr.add(stSheet);
+    await new Promise((r) => setImmediate(r));
+    decodeActiveTiles(stOv, 'round', 7420, 5380);
+    eq(stOv.geom.level, 0, 'stand-in test begins at level 0');
+    // Rapid two-step scale-in L0 → L1 → L2 without L1 finishing in between:
+    stMgr.setState('H/ST', { mpp: stOv.state.mpp * 2 });
+    eq(stOv.geom.level, 1, 'step 1 reaches level 1');
+    stMgr.setState('H/ST', { mpp: stOv.state.mpp * 2 });
+    eq(stOv.geom.level, 2, 'step 2 reaches level 2 before L1 decoded');
+    const keptL0 = stOv.stale && stOv.stale.imgs['0:0:0'];
+    ok(Boolean(keptL0), 'rapid multi-level scale retains the decoded L0 stand-in');
+    ok(Math.abs((parseFloat(keptL0.style.width) - BLEED) - stOv.geom.wL) < 1e-6 &&
+       Math.abs((parseFloat(keptL0.style.height) - BLEED) - stOv.geom.hL) < 1e-6,
+       'retained L0 stand-in scales by 4× to match L2 .om-box exactly');
+    await new Promise((r) => setImmediate(r));
+    decodeActiveTiles(stOv, 'round', 7420, 5380);
+    ok(!stOv.stale, 'stand-in retires once L2 finishes decoding');
+    // Now scale back OUT L2 → L1: decoded L2 tiles stay scaled by 0.5× until L1 decodes.
+    stMgr.setState('H/ST', { mpp: stOv.state.mpp * 0.5 });
+    eq(stOv.geom.level, 1, 'scaling down steps to level 1');
+    ok(stOv.stale && Object.keys(stOv.stale.imgs).length > 0,
+        'scaling down retains decoded L2 tiles as a 0.5× stand-in (no blank blink)');
+    const staleCorner = stOv.stale.imgs['2:3:2'];
+    if (staleCorner) {
+        const expRight = parseFloat(staleCorner.style.left) + parseFloat(staleCorner.style.width) - BLEED;
+        const expBottom = parseFloat(staleCorner.style.top) + parseFloat(staleCorner.style.height) - BLEED;
+        ok(Math.abs(expRight - stOv.geom.wL) < 1e-6 && Math.abs(expBottom - stOv.geom.hL) < 1e-6,
+            'downscaled L2 corner stand-in lands flush on L1 .om-box border');
+    }
+    await new Promise((r) => setImmediate(r));
+    decodeActiveTiles(stOv, 'round', 7420, 5380);
+    ok(!stOv.stale, 'downscaled stand-in retires once L1 decodes');
+    stMgr.remove('H/ST');
+
+    // 16d. NLS IIIF fixes: legacy /iiif/1/ fallback chain + native quality,
+    //      sub-0.5-px edge tile clamping, canonical width-only fallback URL,
+    //      transient info.json recovery, and full zoom/scale box-lock sweep.
+    const origFetch = sandbox.fetch;
+    sandbox.fetch = (url) => {
+        const u = String(url || '');
+        if (u.indexOf('/iiif/1/94000%2F940000001/info.json') !== -1) {
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({
+                    '@context': 'http://library.stanford.edu/iiif/image-api/1.1/context.json',
+                    width: 9392,
+                    height: 8770,
+                    scale_factors: [1, 2, 4, 8, 16, 32]
+                })
+            });
+        }
+        if (u.indexOf('94000%2F940000001/info.json') !== -1) {
+            return Promise.resolve({ ok: false, json: () => Promise.resolve(null) });
+        }
+        return origFetch(url);
+    };
+    const legacyRec = { id: 'nls/940000001', nlsId: '940000001', source: 'nls', path: '94000/940000001' };
+    const legacyMeta = await Nls.resolve(legacyRec);
+    eq(legacyMeta.w, 9392, 'NLS info.json fallback succeeds when /iiif/2/ 404s and /iiif/1/ answers');
+    eq(legacyMeta.quality, 'native', 'IIIF v1.1 info.json selects native quality');
+    const legacyUrl = await Nls.tileUrl(legacyRec, 0, 0, 0);
+    ok(legacyUrl.startsWith('https://map-view.nls.uk/iiif/1/94000%2F940000001/') &&
+       /\/native\.jpg$/.test(legacyUrl),
+       'legacy NLS tiles use the resolved /iiif/1/ service base and native.jpg');
+    sandbox.fetch = origFetch;
+
+    // Sub-0.5-px trailing edge sliver (26625 px at scale 4 → rw=1, rw/s=0.25):
+    const sliverRec = { id: 'nls/940000002', nlsId: '940000002', source: 'nls', path: '94000/940000002', w: 26625, h: 18433 };
+    await Nls.resolve(sliverRec, { w: 26625, h: 18433 });
+    const sliverUrl = await Nls.tileUrl(sliverRec, 13, 0, 4);
+    ok(/\/26624,0,1,2048\/1,512\/0\/default\.jpg$/.test(sliverUrl),
+        'sub-0.5-px NLS edge tile clamps request width to 1 px instead of empty URL');
+    const altRootUrl = await Nls.tileUrlAlt(nlsRec, 0, 0, 0);
+    eq(altRootUrl, 'https://map-view.nls.uk/iiif/2/14284%2F142842536/full/412,/0/default.jpg',
+        'NLS alternate tile URL uses canonical IIIF full/{w}, syntax');
+    const altEdgeUrl = await Nls.tileUrlAlt(nlsRec, 25, 0, 5);
+    eq(altEdgeUrl, 'https://map-view.nls.uk/iiif/2/14284%2F142842536/12800,0,376,512/376,/0/default.jpg',
+        'NLS alternate edge URL keeps exact region with canonical width-only size');
+
+    // Full NLS zoom + scale sweep preserves 0.000 px landmark coordinates inside .om-box,
+    // AND a late tileSpan resolving after stand-in promotion preserves its 2^Δ scale.
+    const nlsSweepMap = wideFakeMap(11, 51.57, -0.77);
+    const nlsSweepMgr = Overlay.createManager(nlsSweepMap, { pane: 'om_nls_sweep', opacity: 0.85 });
+    const nlsSweepRec = { id: 'nls/940000003', nlsId: '940000003', source: 'nls', path: '94000/940000003',
+        lat: 51.57, lng: -0.77, w: 13176, h: 10110 };
+    const nlsRes11 = Overlay.resolutionAt(51.57, 11);
+    const nlsInitMpp = nlsRes11 * Math.pow(2, -5) * 0.85;
+    const nlsSweepOv = await nlsSweepMgr.add(nlsSweepRec, { mpp: nlsInitMpp });
+    // Promote L0 → L1 BEFORE L0's async tileSpan/tileUrl microtask settles:
+    nlsSweepMgr.setState(nlsSweepRec.id, { mpp: nlsInitMpp * 2 });
+    await new Promise((r) => setImmediate(r));
+    const latePromoted = nlsSweepOv.stale && nlsSweepOv.stale.imgs['0:0:0'];
+    ok(Boolean(latePromoted) &&
+       Math.abs((parseFloat(latePromoted.style.width) - BLEED) - (13176 / 16)) < 1e-6 &&
+       Math.abs((parseFloat(latePromoted.style.height) - BLEED) - (10110 / 16)) < 1e-6,
+       'late tileSpan on a promoted stand-in scales by 2^Δ instead of shrinking to 1×');
+    for (let lv = 0; lv <= nlsSweepOv.meta.maxZoom; lv++) {
+        nlsSweepMgr.setState(nlsSweepRec.id, { mpp: nlsRes11 * Math.pow(2, lv - nlsSweepOv.meta.maxZoom) * 0.85 });
+        await new Promise((r) => setImmediate(r));
+        // Even if the IIIF server rounds output height by 1 px, NLS keeps exact region span.
+        Object.values(nlsSweepOv.tiles).forEach((img) => {
+            img.naturalWidth = 500;
+            img.naturalHeight = 350;
+            img.dispatch('load');
+        });
+        for (const [u, v] of sampleLandmarks) {
+            const got = paintedBoxPos(nlsSweepOv, u, v, 'round', 13176, 10110);
+            ok(Math.abs(got.x - u) < 1e-9 && Math.abs(got.y - v) < 1e-9,
+                'NLS L=' + nlsSweepOv.geom.level + ': landmark stays pinned inside .om-box');
+        }
+    }
+    for (const z of [11, 12, 13, 14, 15, 12]) {
+        nlsSweepMgr.setState(nlsSweepRec.id, { mpp: nlsInitMpp });
+        nlsSweepMap._state.zoom = z;
+        nlsSweepMap.fire('zoomend');
+        await new Promise((r) => setImmediate(r));
+        Object.values(nlsSweepOv.tiles).forEach((img) => img.dispatch('load'));
+        for (const [u, v] of sampleLandmarks) {
+            const got = paintedBoxPos(nlsSweepOv, u, v, 'round', 13176, 10110);
+            ok(Math.abs(got.x - u) < 1e-9 && Math.abs(got.y - v) < 1e-9,
+                'NLS zoom=' + z + ': landmark stays pinned inside .om-box');
+        }
+    }
+    nlsSweepMgr.remove(nlsSweepRec.id);
+
+    // Transient info.json failure followed by recovery upgrades ov.meta to exact sheet aspect.
+    fakeNlsInfoJson = null;
+    const recovRec = { id: 'nls/940000004', nlsId: '940000004', source: 'nls', path: '94000/940000004', lat: 51.57, lng: -0.77 };
+    const warnSaved = console.warn;
+    console.warn = () => {};
+    const recovOv = await nlsSweepMgr.add(recovRec);
+    console.warn = warnSaved;
+    ok(recovOv.metaFallback === true && recovOv.meta.w === 4000, 'failed info.json marks overlay as fallback meta');
+    fakeNlsInfoJson = { width: 14450, height: 9960, tiles: [{ width: 512, height: 512, scaleFactors: [1, 2, 4, 8, 16, 32] }] };
+    nlsSweepMgr.setState(recovRec.id, { mpp: recovOv.state.mpp * 2 });
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+    eq(recovOv.metaFallback, false, 'subsequent resolved info.json clears fallback flag');
+    eq(recovOv.meta.w, 14450, 'overlay adopts real NLS width so grid and tiles never drift apart');
+    eq(recovOv.meta.h, 9960, 'overlay adopts real NLS height');
+    nlsSweepMgr.remove(recovRec.id);
+
+    // Rotated basemap (leaflet-rotate bearing ≠ 0°): pyramid level, .om-box size, and
+    // tile visibility never jump or get reverse-culled when containerPointToLayerPoint rotates.
+    const rotBaseMap = fakeMap({ zoom: 12, size: { x: 1000, y: 800 }, center: { lat: 46.77, lng: 23.59 } });
+    let bearingDeg = 0;
+    rotBaseMap.containerPointToLayerPoint = function (pt) {
+        const cx = rotBaseMap._state.size.x / 2;
+        const cy = rotBaseMap._state.size.y / 2;
+        const rad = bearingDeg * Math.PI / 180;
+        const dx = pt.x - cx, dy = pt.y - cy;
+        return {
+            x: cx + dx * Math.cos(rad) - dy * Math.sin(rad),
+            y: cy + dx * Math.sin(rad) + dy * Math.cos(rad),
+        };
+    };
+    const rotMgr = Overlay.createManager(rotBaseMap, { pane: 'om_rot_base', opacity: 0.85 });
+    const rotRec = { id: 'MOLTerkeptar/99004', source: 'hungaricana', path: 'maps/test/r.ecw',
+        lat: 46.77, lng: 23.59, w: 6971, h: 4813 };
+    await Tiles.resolve(rotRec.path, { w: 6971, h: 4813 });
+    Tiles.noteEdgeMode(rotRec.path, 'cropped');
+    const rotOv = await rotMgr.add(rotRec);
+    await new Promise((r) => setImmediate(r));
+    const levelAt0 = rotOv.geom.level;
+    const wAt0 = rotOv.geom.dW;
+    const hAt0 = rotOv.geom.dH;
+    const tileCountAt0 = Object.keys(rotOv.tiles).length;
+    ok(tileCountAt0 > 0, 'rotated-basemap overlay renders visible tiles at 0°');
+    for (const b of [45, 90, 135, 180, 225, 315, 0]) {
+        bearingDeg = b;
+        rotBaseMap.fire('move');
+        await new Promise((r) => setImmediate(r));
+        eq(rotOv.geom.level, levelAt0, 'basemap bearing ' + b + '° keeps identical pyramid level');
+        ok(Math.abs(rotOv.geom.dW - wAt0) < 1e-9 && Math.abs(rotOv.geom.dH - hAt0) < 1e-9,
+            'basemap bearing ' + b + '° keeps identical .om-box dimensions');
+        ok(Object.keys(rotOv.tiles).length >= tileCountAt0,
+            'basemap bearing ' + b + '° never reverse-culls visible tiles');
+    }
+    rotMgr.remove(rotRec.id);
+
+    // 16e. All live other-maps assets in index.html are precached by sw.js,
+    // pointer-capture events are listened to on their capture target, external
+    // tile hosts pass through sw.js, and pyramid storage keys are v2.
+    for (const asset of [
+        'css/other-maps.css',
+        'js/other-maps-tiles.js',
+        'js/other-maps-nls.js',
+        'js/other-maps-overlay.js',
+        'js/other-maps.js'
+    ]) {
+        const re = new RegExp('(?:href|src)="(' + asset.replace(/[./]/g, '\\$&') + '\\?v=[^"]+)"');
+        const tagged = (indexSrc.match(re) || [])[1];
+        ok(Boolean(tagged) && swSrc.includes("'" + tagged + "'"),
+            'sw.js precaches live ' + asset + ' URL (' + tagged + ')');
+    }
+    ok(overlaySrc.includes("container.addEventListener('pointermove', onPointerMove") &&
+       overlaySrc.includes("container.addEventListener('pointerup', onPointerUp") &&
+       overlaySrc.includes("container.removeEventListener('pointermove', onPointerMove"),
+       'align drags receive and clean up pointer events on the map container that owns pointer capture');
+    ok(/const CACHE_NAME = 'detectlab-v430-leaf-switches-only'/.test(swSrc),
+       'the current layer-switch hierarchy gets a fresh service-worker cache version');
+    for (const host of ['hungaricana.hu', 'nls.uk', 'wikimedia.org']) {
+        ok(swSrc.includes("'" + host + "'"), 'sw.js passes through external tile host ' + host);
+    }
+    eq(Tiles.CACHE_KEY, 'dlOtherMaps.pyramid.v2', 'Hungaricana pyramid cache bumped to v2');
+    ok(Boolean(sandbox.localStorage.getItem('dlOtherMaps.nls.pyramid.v2')) &&
+       sandbox.localStorage.getItem('dlOtherMaps.nls.pyramid.v1') === null &&
+       Boolean(sandbox.localStorage.getItem('dlOtherMaps.pyramid.v2')) &&
+       sandbox.localStorage.getItem('dlOtherMaps.pyramid.v1') === null,
+       'Hungaricana & NLS pyramid caches persist under v2 and purge v1');
+    flushTimers();
 
     console.log('✓ other-maps: ' + checks + ' checks passed '+
         ('(' + catalog.maps.length + ' Hungaricana + ' + nlsCatalog.maps.length + ' NLS catalogue records, ' +

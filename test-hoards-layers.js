@@ -79,8 +79,10 @@ check(/<span[^>]*data-key="layer_hoards"[^>]*id="hoardsTitle"[^>]*>/.test(groupH
 check(/showHoardsGroupInfo\(\)/.test(groupHtml), 'the group carries its own ⓘ');
 check(/id="hoardsExpandBtn"/.test(groupHtml) && /id="hoardsExpandIcon"/.test(groupHtml),
     'the group carries the expand/collapse chevron of the other groups');
-check(/id="hoardsToggle"/.test(groupHtml) && /toggleHoardsLayers\(this\.checked\)/.test(groupHtml),
-    'the group carries a master on/off switch');
+check(/class="apm-toggle-switch dl-parent-layer-switch"[^>]*>[\s\S]*?id="hoardsToggle"/.test(groupHtml) &&
+      /toggleHoardsLayers\(this\.checked\)/.test(groupHtml) &&
+      /\.dl-parent-layer-switch[\s\S]*?display:\s*none\s*!important/.test(read('css/styles.css')),
+    'the group master is hidden; only catalogue sublayer switches are user-visible');
 check(/id="hoardsOpacitySlider"/.test(groupHtml) && /setHoardsOpacity\(this\.value\)/.test(groupHtml),
     'the group carries the group opacity slider');
 check(/class="transp-slider"[^>]*id="hoardsOpacitySlider"/.test(groupHtml),
@@ -650,9 +652,9 @@ function finish() {
 
     check(/js\/hoards-layers\.js\?v=20261106-hoards/.test(sw),
         'sw.js pre-caches the hoards module with the same version index.html requests');
-    check(/css\/styles\.css\?v=20261106-hoards/.test(sw) &&
-          /css\/styles\.css\?v=20261106-hoards/.test(html),
-        'index.html and sw.js agree on the stylesheet version');
+    check(/css\/styles\.css\?v=20261118-leaf-switch-only/.test(sw) &&
+          /css\/styles\.css\?v=20261118-leaf-switch-only/.test(html),
+        'index.html and sw.js agree on the latest parent/sublayer switch stylesheet version');
     check(/const CACHE_NAME = 'detectlab-v\d+-/.test(sw) &&
         Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]) >= 411,
         'the app-shell cache is bumped for the release (v411 or newer)');

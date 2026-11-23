@@ -55,14 +55,31 @@
 
     var TILE_SIZE = 512;
     var MAX_LEVEL = 12;
+    var MAX_PROBE_SPAN = 256;
+    var PROBE_TIMEOUT_MS = 12000;
     var AES_KEY = 'dGhpcyBpcyBubyBr';
-    var CACHE_KEY = 'dlOtherMaps.pyramid.v1';
+    var CACHE_KEY = 'dlOtherMaps.pyramid.v2';
+    var LEGACY_CACHE_KEYS = ['dlOtherMaps.pyramid.v1', 'dlOtherMaps.pyramid.v1.order'];
+    var EDGE_MODES = { CROPPED: 'cropped', PADDED: 'padded' };
 
     var bases = Object.assign({}, DEFAULT_BASES);
     var _keyPromise = null;
     var _hashCache = Object.create(null);
     var _metaCache = Object.create(null);
     var _inflight = Object.create(null);
+
+    /* Drop stale v1 pyramid caches on upgrade: v1 rounded probed sheets up to
+     * whole 512 px cells and could flip the hash order on out-of-bounds edge
+     * probes, leaving distorted dimensions in localStorage across reloads. */
+    function purgeLegacyStorage() {
+        try {
+            if (!root.localStorage) return;
+            for (var i = 0; i < LEGACY_CACHE_KEYS.length; i++) {
+                root.localStorage.removeItem(LEGACY_CACHE_KEYS[i]);
+            }
+        } catch (e) { /* private mode / restricted storage */ }
+    }
+    purgeLegacyStorage();
 
     /* ── tiny helpers ─────────────────────────────────────────────────── */
     function encodeUtf8(text) {
@@ -108,24 +125,51 @@
         } catch (e) { /* private mode / quota — the probe simply re-runs */ }
     }
 
+    function validEdgeMode(mode) {
+        return mode === EDGE_MODES.CROPPED || mode === EDGE_MODES.PADDED ? mode : null;
+    }
+
     function cachedMeta(path) {
+        if (!path) return null;
         if (_metaCache[path]) return _metaCache[path];
         var store = readStore();
         var entry = store[path];
         if (entry && entry.w && entry.h && isFinite(entry.maxZoom)) {
-            _metaCache[path] = { w: entry.w, h: entry.h, maxZoom: entry.maxZoom, cached: true };
+            _metaCache[path] = {
+                w: entry.w,
+                h: entry.h,
+                maxZoom: entry.maxZoom,
+                edgeMode: validEdgeMode(entry.edgeMode),
+                cached: true
+            };
             return _metaCache[path];
         }
         return null;
     }
 
     function rememberMeta(path, meta) {
+        if (!path || !meta) return;
+        var mode = validEdgeMode(meta.edgeMode);
+        if (mode) meta.edgeMode = mode;
         _metaCache[path] = meta;
         try {
             var store = readStore();
-            store[path] = { w: meta.w, h: meta.h, maxZoom: meta.maxZoom };
+            var saved = { w: meta.w, h: meta.h, maxZoom: meta.maxZoom };
+            if (mode) saved.edgeMode = mode;
+            store[path] = saved;
             writeStore(store);
         } catch (e) { /* ignore */ }
+    }
+
+    function setSheetEdgeMode(path, mode) {
+        var valid = validEdgeMode(mode);
+        if (!path || !valid) return null;
+        var meta = cachedMeta(path);
+        if (!meta) return valid;
+        if (meta.edgeMode === valid) return valid;
+        meta.edgeMode = valid;
+        rememberMeta(path, meta);
+        return valid;
     }
 
     /* ── the tile hash ────────────────────────────────────────────────── */
@@ -206,49 +250,86 @@
         return zoom;
     }
 
-    function tileLoads(url) {
+    function imageConstructor() {
+        if (root && typeof root.Image === 'function') return root.Image;
+        if (typeof Image === 'function') return Image;
+        return null;
+    }
+
+    /* Fetch one tile via <img> and return its decoded bitmap size {w, h}, or
+     * null on 404 / timeout.  Unlike fetch(), <img> works without CORS headers
+     * AND reveals naturalWidth/naturalHeight so edge-tile cropping recovers
+     * the sheet's exact pixel size to the single pixel. */
+    function probeTile(url) {
+        var Img = imageConstructor();
+        if (!Img || !url) return Promise.resolve(null);
         return new Promise(function (resolve) {
-            var img = new Image();
+            var img = new Img();
             var settled = false;
-            function done(ok) {
+            var timer = root.setTimeout(function () { done(null); }, PROBE_TIMEOUT_MS);
+            function done(dims) {
                 if (settled) return;
                 settled = true;
+                if (timer) root.clearTimeout(timer);
                 img.onload = img.onerror = null;
-                resolve(ok);
+                resolve(dims);
             }
-            img.onload = function () { done(img.naturalWidth > 0); };
-            img.onerror = function () { done(false); };
+            img.onload = function () {
+                var nw = Number(img.naturalWidth) || 0;
+                var nh = Number(img.naturalHeight) || 0;
+                done(nw > 0 && nh > 0 ? { w: nw, h: nh } : null);
+            };
+            img.onerror = function () { done(null); };
             img.src = url;
-            // A hung request must not freeze the probe forever.
-            root.setTimeout(function () { done(false); }, 12000);
         });
     }
 
-    /* Answers true for the first order that returns an image and switches the
-     * module over to it, so the ambiguity above is settled by the server once,
-     * on the first probe, instead of by guesswork. */
-    function tileExists(path, x, y, z) {
-        return tileUrl(path, x, y, z).then(tileLoads).then(function (ok) {
-            if (ok) return true;
-            return tileUrlAlt(path, x, y, z).then(tileLoads).then(function (okAlt) {
-                if (okAlt) noteOrder(alternateOrder());
-                return okAlt;
+    /* Coordinate (0, 0, 1) is the ONLY safe place to disambiguate `sum|z|x|y`
+     * from `sum|x|y|z`: level 0 is always a single 1 × 1 tile, so (x=0, y=1)
+     * never exists at z=0, whereas (x=0, y=0) always exists at z=1 for any
+     * sheet past 512 px.  Flipping on an arbitrary out-of-bounds edge tile
+     * such as (x=3, y=0, z=3) sends `sum|3|0|3`, hits the real tile (x=0, y=3)
+     * at z=3, inflates the probed width and corrupts the stored hash order. */
+    function isOrderProbeCoord(x, y, z) {
+        return Number(x) === 0 && Number(y) === 0 && Number(z) === 1;
+    }
+
+    function probeCoord(path, x, y, z, allowOrderFlip) {
+        return tileUrl(path, x, y, z).then(probeTile).then(function (dims) {
+            if (dims || !allowOrderFlip) return dims;
+            var alt = alternateOrder();
+            return tileUrlWithOrder(alt)(path, x, y, z).then(probeTile).then(function (altDims) {
+                if (altDims) noteOrder(alt);
+                return altDims;
             });
         });
     }
 
-    /* Walk the top row / left column of the deepest level to learn how many
-     * tiles the image spans.  Only used when /tile/imagesize is unreadable. */
-    function probeSpan(path, maxZoom, axis) {
-        var limit = 64;
-        var index = 1;
+    /* Binary-search the top row (axis='x') or left column (axis='y') of the
+     * deepest level to find BOTH the exact tile count and the decoded pixel
+     * size of the last tile.  Takes at most maxZoom requests (≤ 6 for typical
+     * archival scans) instead of walking up to 64 tiles linearly. */
+    function probeAxis(path, maxZoom, axis, originTile) {
+        if (maxZoom <= 0) {
+            return Promise.resolve({ count: 1, last: originTile });
+        }
+        var lo = 0;
+        var loTile = originTile;
+        var hi = Math.min(MAX_PROBE_SPAN, Math.pow(2, maxZoom) + 1);
         function step() {
-            if (index > limit) return Promise.resolve(index);
-            var x = axis === 'x' ? index : 0;
-            var y = axis === 'x' ? 0 : index;
-            return tileExists(path, x, y, maxZoom).then(function (ok) {
-                if (!ok) return index;
-                index++;
+            if (lo + 1 >= hi) {
+                return Promise.resolve({ count: lo + 1, last: loTile });
+            }
+            var mid = Math.floor((lo + hi) / 2);
+            var x = axis === 'x' ? mid : 0;
+            var y = axis === 'x' ? 0 : mid;
+            return probeCoord(path, x, y, maxZoom, false).then(function (dims) {
+                if (dims) {
+                    lo = mid;
+                    loTile = dims;
+                } else {
+                    hi = mid;
+                }
                 return step();
             });
         }
@@ -256,28 +337,61 @@
     }
 
     function probePyramid(path) {
+        var origins = [];
         var level = 0;
         function nextLevel() {
-            if (level > MAX_LEVEL) return Promise.resolve(Math.max(0, MAX_LEVEL));
-            return tileExists(path, 0, 0, level).then(function (ok) {
-                if (!ok) return Math.max(0, level - 1);
-                level++;
-                return nextLevel();
-            });
+            if (level > MAX_LEVEL) return Promise.resolve();
+            return probeCoord(path, 0, 0, level, isOrderProbeCoord(0, 0, level))
+                .then(function (dims) {
+                    if (!dims) return;
+                    origins.push(dims);
+                    level++;
+                    return nextLevel();
+                });
         }
-        return nextLevel().then(function (maxZoom) {
+        return nextLevel().then(function () {
+            if (!origins.length) {
+                throw new Error('Hungaricana pyramid unreachable for ' + path);
+            }
+            var maxZoom = origins.length - 1;
+            var rootTile = origins[0];
+            var deepestOrigin = origins[maxZoom];
             return Promise.all([
-                probeSpan(path, maxZoom, 'x', 64),
-                probeSpan(path, maxZoom, 'y', 64)
-            ]).then(function (spans) {
-                return {
-                    w: Math.max(TILE_SIZE, spans[0] * TILE_SIZE),
-                    h: Math.max(TILE_SIZE, spans[1] * TILE_SIZE),
-                    maxZoom: maxZoom,
-                    probed: true
-                };
+                probeAxis(path, maxZoom, 'x', deepestOrigin),
+                probeAxis(path, maxZoom, 'y', deepestOrigin)
+            ]).then(function (axes) {
+                var xr = axes[0], yr = axes[1];
+                var lastW = xr.last && xr.last.w > 0 ? Math.min(TILE_SIZE, xr.last.w) : TILE_SIZE;
+                var lastH = yr.last && yr.last.h > 0 ? Math.min(TILE_SIZE, yr.last.h) : TILE_SIZE;
+                /* Exact to the pixel when the server crops edge tiles
+                 * ((cols−1)·512 + lastW = W), and exact grid extent
+                 * (cols·512) when the server pads every cell to 512 × 512. */
+                var w = Math.max(1, (xr.count - 1) * TILE_SIZE + lastW);
+                var h = Math.max(1, (yr.count - 1) * TILE_SIZE + lastH);
+                var edgeMode = null;
+                if (lastW < TILE_SIZE || lastH < TILE_SIZE ||
+                    rootTile.w < TILE_SIZE || rootTile.h < TILE_SIZE) {
+                    edgeMode = EDGE_MODES.CROPPED;
+                } else if (rootTile.w === TILE_SIZE && rootTile.h === TILE_SIZE &&
+                           maxZoom > 0 && xr.count !== yr.count) {
+                    /* A non-square grid whose 1 × 1 root tile still decoded at
+                     * 512 × 512 must pad its shorter axis inside the cell. */
+                    edgeMode = EDGE_MODES.PADDED;
+                }
+                var result = { w: w, h: h, maxZoom: maxZoom, probed: true };
+                if (edgeMode) result.edgeMode = edgeMode;
+                return result;
             });
         });
+    }
+
+    /* Guard the narrow boundary where truncated Zoomify tier halving (dim >> 1)
+     * stops one level earlier than exact halving (e.g. 8193..8207 px). */
+    function isTruncatedBoundary(w, h, maxZoom) {
+        if (maxZoom <= 0) return false;
+        var longest = Math.max(w, h);
+        var shifted = Math.floor(longest / Math.pow(2, maxZoom - 1));
+        return longest > TILE_SIZE * Math.pow(2, maxZoom - 1) && shifted === TILE_SIZE;
     }
 
     function fetchSize(path) {
@@ -288,13 +402,23 @@
                 return response.json();
             })
             .then(function (json) {
-                if (!json || !json.width || !json.height) return null;
-                return {
-                    w: Number(json.width),
-                    h: Number(json.height),
-                    maxZoom: maxZoomFor(json.width, json.height),
-                    probed: false
-                };
+                var w = Number(json && json.width) || 0;
+                var h = Number(json && json.height) || 0;
+                if (!(w > 0 && h > 0)) return null;
+                var maxZoom = maxZoomFor(w, h);
+                var meta = { w: w, h: h, maxZoom: maxZoom, probed: false };
+                if (imageConstructor() && isTruncatedBoundary(w, h, maxZoom)) {
+                    return probeCoord(path, 0, 0, maxZoom, false).then(function (dims) {
+                        if (dims) return meta;
+                        /* Confirm the server actually answered on maxZoom − 1
+                         * so a transient network drop never lowers maxZoom. */
+                        return probeCoord(path, 0, 0, maxZoom - 1, false).then(function (prev) {
+                            if (prev) meta.maxZoom = Math.max(0, maxZoom - 1);
+                            return meta;
+                        });
+                    });
+                }
+                return meta;
             })
             .catch(function () { return null; });
     }
@@ -355,14 +479,79 @@
         };
     }
 
+    /**
+     * Reconcile the exact level-pixel box of a pre-cut server tile from its
+     * decoded bitmap dimensions (`img.naturalWidth` × `img.naturalHeight`).
+     *
+     * Hungaricana's Zoomify-style ECW tiler crops edge tiles (including the
+     * whole root tile at level 0) to the sheet edge rather than padding them
+     * to 512 × 512.  Stretching a cropped edge bitmap across a full 512 px
+     * cell magnifies and shifts the scan inside `.om-box` by a different
+     * factor at every pyramid level.  Conversely, if a server DOES pad an
+     * edge cell to 512 × 512 (`natural === 512` where `expected < 510`), the
+     * bitmap must stay at 512 px so `.om-grid { overflow: hidden }` trims
+     * only the padding.  Checking both against `tileSpanFor` gives exact
+     * 0.0 px registration across every level for BOTH cropped and padded
+     * pyramids without guessing ahead of time.
+     *
+     * @param {{w:number,h:number,maxZoom:number,edgeMode?:string}} meta
+     * @returns {{w:number,h:number,edgeMode:string|null}}
+     */
+    function measuredTileSpan(meta, x, y, level, naturalW, naturalH) {
+        var exp = meta ? tileSpanFor(meta, x, y, level) : { w: TILE_SIZE, h: TILE_SIZE };
+        var nw = Number(naturalW) || 0;
+        var nh = Number(naturalH) || 0;
+        var knownMode = meta ? validEdgeMode(meta.edgeMode) : null;
+
+        function resolveAxis(expected, natural) {
+            var e = expected > 0 ? expected : TILE_SIZE;
+            if (!(natural > 0)) return e;
+            /* An interior cell always spans the full 512 px grid step so it
+             * joins seamlessly with the neighbour placed at (idx + 1)·512. */
+            if (e >= TILE_SIZE) return TILE_SIZE;
+            if (natural < TILE_SIZE) {
+                /* Cropped edge tile: floor / bit-shift / round / ceil on the
+                 * server stays within < 1 px of the exact fractional span `e`.
+                 * Using `e` eliminates sub-pixel drift between levels; a
+                 * wider mismatch falls back to the bitmap's own pixel size so
+                 * it is never stretched to 512 px. */
+                return Math.abs(natural - e) <= 2 ? e : natural;
+            }
+            if (natural === TILE_SIZE) {
+                /* A near-full cropped edge (e.g. 511.5 px rounded to 512)
+                 * keeps its exact fractional span once cropping is known;
+                 * otherwise a 512 px bitmap on a narrow edge cell is padded
+                 * and stays at 512 px so the grid clip trims the margin. */
+                if (knownMode === EDGE_MODES.CROPPED && TILE_SIZE - e <= 2) return e;
+                return TILE_SIZE;
+            }
+            return e;
+        }
+
+        var xCropped = nw > 0 && nw < TILE_SIZE && exp.w < TILE_SIZE;
+        var yCropped = nh > 0 && nh < TILE_SIZE && exp.h < TILE_SIZE;
+        var xPadded = nw === TILE_SIZE && exp.w > 0 && exp.w < TILE_SIZE - 2;
+        var yPadded = nh === TILE_SIZE && exp.h > 0 && exp.h < TILE_SIZE - 2;
+        var detected = null;
+        if ((xCropped || yCropped) && !xPadded && !yPadded) {
+            detected = EDGE_MODES.CROPPED;
+        } else if ((xPadded || yPadded) && !xCropped && !yCropped) {
+            detected = EDGE_MODES.PADDED;
+        }
+        return {
+            w: resolveAxis(exp.w, nw),
+            h: resolveAxis(exp.h, nh),
+            edgeMode: detected
+        };
+    }
+
     /* ── multi-source registry ──────────────────────────────────────────
      * Other maps can be served by more than one portal.  Each source
      * registers an adapter implementing tileUrl / thumbUrl / recordUrl /
      * resolve for its own records (js/other-maps-nls.js is the NLS IIIF
      * adapter).  A record object carrying a known `source` routes to that
-     * adapter; a plain path string, or a record without a source, stays on
-     * the legacy Hungaricana pyramid — so every older caller and test keeps
-     * working unchanged. */
+     * adapter; a plain path string, a sourceless record, or `source ===
+     * 'hungaricana'` stays on the Hungaricana ECW pyramid. */
     var sources = Object.create(null);
 
     function registerSource(name, adapter) {
@@ -376,11 +565,50 @@
         return null;
     }
 
+    /* True when the source extracts and scales an explicit natural-pixel
+     * region (rx, ry, rw, rh) per tile (NLS IIIF and Josephine Commons
+     * canvases).  Those tiles ALWAYS cover exact tileSpanFor(meta, x, y, z),
+     * even if the server rounds the output JPEG by 1 px.  False for pre-cut
+     * server grids (Hungaricana ECW), whose bitmap size distinguishes cropped
+     * from padded edge cells. */
+    function dispatchIsRegionScaled(arg) {
+        var adapter = sourceAdapter(arg);
+        return !!(adapter && adapter.regionScaled);
+    }
+
     /* Legacy callers pass ECW path strings; source callers pass the whole
      * record.  Normalise the latter to the path the Hungaricana helpers key
      * their caches on. */
     function asPath(arg) {
         return arg && typeof arg === 'object' ? arg.path : arg;
+    }
+
+    function dispatchPeekMeta(arg) {
+        var adapter = sourceAdapter(arg);
+        if (adapter && typeof adapter.peekMeta === 'function') {
+            return adapter.peekMeta(arg);
+        }
+        if (adapter) return null;
+        return cachedMeta(asPath(arg));
+    }
+
+    function dispatchEdgeModeOf(arg) {
+        if (dispatchIsRegionScaled(arg)) return EDGE_MODES.CROPPED;
+        var meta = cachedMeta(asPath(arg));
+        return meta ? validEdgeMode(meta.edgeMode) : null;
+    }
+
+    function dispatchNoteEdgeMode(arg, mode) {
+        if (sourceAdapter(arg)) return null;
+        return setSheetEdgeMode(asPath(arg), mode);
+    }
+
+    /* Only allow a Hungaricana hash-order flip on (0, 0, 1) — never on an
+     * arbitrary failed edge tile where `xyz` could fetch a wrong-level tile
+     * and poison `_order` for every subsequent request. */
+    function dispatchCanFlipOrder(arg, x, y, z) {
+        if (sourceAdapter(arg)) return false;
+        return isOrderProbeCoord(x, y, z);
     }
 
     function dispatchTileUrl(arg, x, y, z) {
@@ -392,26 +620,30 @@
     function dispatchTileUrlAlt(arg, x, y, z) {
         var adapter = sourceAdapter(arg);
         if (adapter) {
-            /* IIIF has no hash-order ambiguity: the "alternate order" retry
-             * simply re-requests the same canonical region URL. */
+            if (typeof adapter.tileUrlAlt === 'function') {
+                return adapter.tileUrlAlt(arg, x, y, z);
+            }
             return adapter.tileUrl(arg, x, y, z);
         }
         return tileUrlAlt(asPath(arg), x, y, z);
     }
 
-    /* Level-pixel box that one tile really covers.  The Hungaricana ECW
-     * pyramid always answers with a full 512 × 512 square (the sheet is
-     * padded inside it, and the overlay's grid clip trims that padding), so
-     * its span is the grid cell itself.  A source that CROPS its tiles at
-     * the image edge must report the smaller span — an NLS IIIF region is
-     * clamped to the sheet, so the last column / row comes back narrower;
-     * stretching such a bitmap over a whole 512 px cell squashed the sheet
-     * by a different factor at every pyramid level, which is what made the
-     * added maps look distorted while zooming in and out. */
+    /* Level-pixel box that one tile really covers.
+     *  - Region-scaled adapters (NLS IIIF, Josephine) expose `tileSpan` →
+     *    exact `tileSpanFor(meta, x, y, z)`.
+     *  - Hungaricana ECW reports exact `tileSpanFor(meta, x, y, z)` once a
+     *    sheet's edge cropping has been observed (either during `probePyramid`
+     *    or on the first decoded edge tile), and `{512, 512}` when the sheet
+     *    is padded or not yet observed (the overlay reconciles every pre-cut
+     *    tile's actual `naturalWidth × naturalHeight` on load before reveal). */
     function dispatchTileSpan(arg, x, y, z) {
         var adapter = sourceAdapter(arg);
         if (adapter && typeof adapter.tileSpan === 'function') {
             return adapter.tileSpan(arg, x, y, z);
+        }
+        var meta = cachedMeta(asPath(arg));
+        if (meta && meta.edgeMode === EDGE_MODES.CROPPED) {
+            return tileSpanFor(meta, x, y, z);
         }
         return { w: TILE_SIZE, h: TILE_SIZE };
     }
@@ -426,7 +658,7 @@
     function dispatchRecordUrl(arg) {
         var adapter = sourceAdapter(arg);
         if (adapter) return adapter.recordUrl(arg);
-        var id = asPath(arg);
+        var id = arg && typeof arg === 'object' ? (arg.id || arg.path) : arg;
         if (!id) return bases.record;
         return bases.record + id + '/view/';
     }
@@ -440,6 +672,8 @@
     root.DetectLabOtherMapsTiles = {
         TILE_SIZE: TILE_SIZE,
         MAX_LEVEL: MAX_LEVEL,
+        CACHE_KEY: CACHE_KEY,
+        EDGE_MODES: EDGE_MODES,
         registerSource: registerSource,
         source: function (name) { return sources[name] || null; },
         configure: function (overrides) {
@@ -452,6 +686,12 @@
         tileUrlAlt: dispatchTileUrlAlt,
         tileSpan: dispatchTileSpan,
         tileSpanFor: tileSpanFor,
+        measuredTileSpan: measuredTileSpan,
+        isRegionScaled: dispatchIsRegionScaled,
+        peekMeta: dispatchPeekMeta,
+        edgeModeOf: dispatchEdgeModeOf,
+        noteEdgeMode: dispatchNoteEdgeMode,
+        canFlipOrder: dispatchCanFlipOrder,
         preferredOrder: preferredOrder,
         alternateOrder: alternateOrder,
         noteOrder: noteOrder,
@@ -460,7 +700,14 @@
         clearCache: function () {
             _hashCache = Object.create(null);
             _metaCache = Object.create(null);
-            try { if (root.localStorage) root.localStorage.removeItem(CACHE_KEY); } catch (e) { /* ignore */ }
+            _order = 'zxy';
+            purgeLegacyStorage();
+            try {
+                if (root.localStorage) {
+                    root.localStorage.removeItem(CACHE_KEY);
+                    root.localStorage.removeItem(CACHE_KEY + '.order');
+                }
+            } catch (e) { /* ignore */ }
         }
     };
 }(typeof window !== 'undefined' ? window : this));

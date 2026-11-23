@@ -27,6 +27,12 @@
 > without one leaves the plain glass row. Service worker shell v425, tag
 > `20261115-danish-panel-rows`.
 
+> UI update (2026-11-18): parent categories that contain sublayers (Albania,
+> Denmark, Finland, UK Heritage, Hoards and the historical/heritage groups) no
+> longer show their own switches. The sublayer rows remain independently
+> switchable; standalone layers keep their switch. Existing group state inputs
+> remain only as hidden compatibility state for older programmatic controls.
+
 > UI update (2026-10-26): thematic sections now appear directly in the layer list, without a country master layer. All Albanian and Danish LiDAR rows live once under the existing shared LiDAR accordion. Country filtering and per-layer controls remain in place.
 
 > UI update (2026-10-28): the Heritage section now exposes **every** layer of
@@ -62,8 +68,8 @@
 ## Free Denmark-only source groups (October 2026)
 
 The Danish panel shows four collapsible groups, with no premium gate. Each
-group header carries an expand chevron and a master on/off switch, and every
-layer inside has its own switch and opacity slider:
+group header carries an expand chevron; there is no group-level switch, and
+every layer inside has its own switch and opacity slider:
 
 - **LiDAR** (inside the shared LiDAR accordion, after the global “Hillshade
   LiDAR derivate” row): LiDAR hillshade 1.6 m (DHM historik); LiDAR

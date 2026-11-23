@@ -2525,6 +2525,16 @@
             flex-shrink: 0;
         }
 
+        /* A parent group with individual child switches is navigational only:
+           keep its backing checkbox in the DOM for legacy state/API sync, but
+           expose switches only on the actual sublayers. */
+        .dl-parent-layer-switch,
+        #transpPanel .albania-section > .transp-layer-label .apm-toggle-switch,
+        #transpPanel .danish-group-row .lidar-style-switch,
+        #transpPanel .finland-group-master {
+            display: none !important;
+        }
+
             .apm-toggle-switch input {
                 opacity: 0;
                 width: 0;
