@@ -267,13 +267,13 @@ const danishConfig = sandboxWindow.DANISH_LAYERS_CONFIG;
 assert(danishConfig && typeof danishConfig.byId === 'function',
     'the Danish config (loaded before the registry) describes the sheets');
 const danishSheets = danishConfig.panelGroups
-    .find(group => group.id === 'historical').layers
+    .find(group => group.id === 'other-maps').layers
     .map(id => 'danish.' + id);
-assert(danishSheets.length >= 6, 'Denmark still publishes its six historical sheets');
+assert.strictEqual(danishSheets.length, 3, 'Denmark historical sources are filed once under Other maps');
 danishSheets.forEach(id => {
     const def = sandboxWindow.DetectLabLayers.get(id);
     assert(def, 'the registry mirrors the Danish sheet ' + id);
-    assert.strictEqual(def.panelGroup, 'historical', id + ' is filed under Historical maps');
+    assert.strictEqual(def.panelGroup, 'other-maps', id + ' is filed under Other maps');
     assert(api.isHistoricalSheet(def), id + ' is a map sheet, so its row gets a photo');
     /* The mirror carries no bounding box, and the country-wide one would
      * centre in the Kattegat: the anchor table names a town of the series. */

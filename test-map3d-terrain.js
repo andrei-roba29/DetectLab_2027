@@ -83,7 +83,7 @@ const TAG_3D = '20261118-asig-3d-wmts';       /* mirror (canvas tiles)          
 const TAG_VIEWER = '20261106-hist-shift-3d'; /* viewer (js)                     */
 const TAG_CSS = '20261102-report-lidar-window';  /* viewer skin (css)              */
 const TAG_FOCUS = '20261118-all-lidar-sublayers'; /* LiDAR focus (3D, one disc)   */
-const TAG_REGISTRY = '20261118-asig-3d-wmts';   /* shared registry (historical maps) */
+const TAG_REGISTRY = '20261124-nl-ahn-3d';   /* shared registry (historical maps + AHN 3D) */
 
 // ══════════════════════════════════════════════════════════════
 // 1. Static wiring — the viewer must be reachable in the app
@@ -197,6 +197,10 @@ const TAG_REGISTRY = '20261118-asig-3d-wmts';   /* shared registry (historical m
     const ahn = R.get('lidar.nl-ahn');
     assert(ahn && ahn.kind === 'dynamic' && ahn.builder && ahn.builder.module === 'AhnLidar',
         'the AHN LiDAR layer is still a module-backed dynamic definition');
+    assert.deepStrictEqual(ahn.bounds, [[50.65, 3.20], [53.70, 7.25]],
+        'the 3D AHN source is clipped to its published Netherlands coverage');
+    assert.strictEqual(ahn.proxy, 'always',
+        'AHN 3D image tiles use the proxy because its Leaflet source does not request CORS');
     assert(JSON.stringify(R.rasterSource(ahn).tiles) === '[]',
         'without its module a dynamic layer has no 3D tile template (never the service URL)');
 

@@ -89,12 +89,29 @@
 
     /** Starts the UAT protection-mask request right away, exactly as setPredictionAnalysis
      * would, so the caller can run it alongside the DEM/water fetches instead of after them. */
+    function isRomanianCentre(point) {
+        /* Manual mode has no site-record metadata. Use Romania's conservative
+         * national envelope so the Romanian UAT raster is never imposed on
+         * other countries; the official national source remains active in RO. */
+        return !!(point && Number(point.lat) >= 43.5 && Number(point.lat) <= 48.4 &&
+            Number(point.lon) >= 20.1 && Number(point.lon) <= 29.9);
+    }
+
     function startExclusionMask(grid, lat, lon, radiusM, params) {
         if (typeof root.computeArcheoExclusionMask !== 'function') {
             return Promise.reject(new Error('Spatial exclusion service is unavailable. Please reload and try again.'));
         }
+        var region = null;
+        try { region = typeof root._archeoPotentialRegion === 'function' ? root._archeoPotentialRegion(lat, lon) : null; }
+        catch (ignore) { region = null; }
         return root.computeArcheoExclusionMask(grid, lat, lon, radiusM,
             { isCancelled: function () { return !!(params.token && params.token.cancelled); },
+                /* UAT is a Romania-only exclusion. For any other national
+                 * coverage (or a point outside the Romanian region), don't
+                 * fetch/require the Romanian raster. */
+                skipUat: params.skipUat === true || !isRomanianCentre({ lat: lat, lon: lon }) ||
+                    !!(region && region.uat === false) || (params.records && params.records._meta &&
+                    (params.records._meta.region === 'outside-romania' || params.records._meta.region === 'denmark')),
                 siteRecords: params.records ? (params.records._protectionRecords || params.records) : undefined });
     }
 
@@ -391,7 +408,8 @@
                     // them in sequence added their times instead of taking the longest.
                     var demP = prov.loadDemGrid(dem, grid, dem.tilePx || 1000);
                     var waterP = fetchWaterChain(params.centre, bbox, params.token, warnings, waterOptions(params));
-                    var exclusionP = startExclusionMask(grid, params.centre.lat, params.centre.lon, radiusM, params);
+                    var exclusionP = startExclusionMask(grid, params.centre.lat, params.centre.lon, radiusM,
+                        Object.assign({}, params, { skipUat: !isRomanianCentre(params.centre) }));
                     return Promise.all([demP, waterP, exclusionP]).then(function (r) {
                         var elev = r[0], wr = r[1], exclusionResult = r[2];
                         checkToken(params.token);

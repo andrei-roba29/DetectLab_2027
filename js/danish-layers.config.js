@@ -288,7 +288,16 @@
                 "ru": "Исторические карты",
                 "sq": "Historical maps"
             },
-                layers: ['topo4cm_1980_2001', 'topo4cm_1953_1976', 'hist_lave', 'hist_hoeje', 'hist_preussen', 'dtk25'] },
+                layers: ['topo4cm_1980_2001', 'topo4cm_1953_1976', 'dtk25'] },
+            { id: 'other-maps', title: {
+                en: 'Other maps', da: 'Andre kort', ro: 'Alte hărți / Other maps',
+                de: 'Weitere Karten', fr: 'Autres cartes', it: 'Altre mappe', es: 'Otros mapas',
+                pl: 'Inne mapy', nl: 'Andere kaarten', sv: 'Övriga kartor', no: 'Andre kart',
+                fi: 'Muut kartat', pt: 'Outros mapas', cs: 'Ostatní mapy', sk: 'Ostatné mapy',
+                hu: 'Egyéb térképek', el: 'Άλλοι χάρτες', uk: 'Інші карти', bg: 'Други карти',
+                hr: 'Ostale karte', sr: 'Остале карте', sl: 'Drugi zemljevidi', et: 'Muud kaardid',
+                lv: 'Citas kartes', lt: 'Kiti žemėlapiai', ru: 'Другие карты', sq: 'Other maps'
+            }, mount: 'danishSubLayers', layers: ['hist_lave', 'hist_hoeje', 'hist_preussen'] },
             { id: 'orthophoto', title: {
                 "en": "Ortophoto",
                 "ro": "Ortophoto",
@@ -1767,7 +1776,7 @@
             /* ── Historical maps (base) ──────────────────────────────────── */
             {
                 id: 'hist_hoeje',
-                panelGroup: 'historical',
+                panelGroup: 'other-maps',
                 title: {
                     "en": "High measuring table leaves 1842-1899",
                     "ro": "High measuring table leaves 1842-1899",
@@ -1815,7 +1824,7 @@
             },
             {
                 id: 'hist_lave',
-                panelGroup: 'historical',
+                panelGroup: 'other-maps',
                 title: {
                     "en": "Low measuring table leaves 1901-1971",
                     "ro": "Low measuring table leaves 1901-1971",
@@ -1863,7 +1872,7 @@
             },
             {
                 id: 'hist_preussen',
-                panelGroup: 'historical',
+                panelGroup: 'other-maps',
                 title: {
                     "en": "Prussian measuring table leaves 1877-1920",
                     "ro": "Prussian measuring table leaves 1877-1920",
