@@ -821,6 +821,21 @@
             .then(function (data) { return { data: data, blank: blankTile }; });
     }
 
+    /* Canvas-based country layers that intentionally disable CORS in 2D
+     * (AHN is the Netherlands example) cannot be read back from an <img> in
+     * the 3D focus renderer. Fetch their registry-built tile through our
+     * allow-listed same-origin proxy instead, preserving the selected mode. */
+    function fetchRegistryTileFor3d(defId, z, x, y, abortController) {
+        var def = defId && REGISTRY.get(defId);
+        if (!def || def.proxy !== 'always' || !REGISTRY.tileUrlAt) return null;
+        var mode = REGISTRY.modeOf(def, {});
+        var url = REGISTRY.tileUrlAt(def, z, x, y, { mode: mode });
+        var proxyUrl = REGISTRY.proxyTemplate(def, { time: REGISTRY.timeOf(def), mode: mode });
+        return url && proxyUrl ? fetchTile(url, abortController, {
+            proxyUrl: proxyUrl, preferProxy: true, force: true
+        }) : null;
+    }
+
     /* ═══════════════════════════════════════════════════════════════════════
      *  CSS BLEND MODES THE MIRROR CANNOT CARRY
      * -----------------------------------------------------------------------
@@ -1169,7 +1184,11 @@
                     primedPut(templateUrl, MIRROR.disc.blankTile(), true, pipelineSigFor(key, templateUrl));
                     return Promise.resolve();
                 }
-                return MIRROR.renderTile(MIRROR.layerByKey(key), entry.z, entry.x, entry.y).then(function (bytes) {
+                var registryFetch = fetchRegistryTileFor3d(defId, entry.z, entry.x, entry.y, abort);
+                var tileRequest = registryFetch || MIRROR.renderTile(MIRROR.layerByKey(key), entry.z, entry.x, entry.y);
+                return tileRequest.then(function (tileResult) {
+                    if (registryFetch && tileResult.blank) return;
+                    var bytes = registryFetch ? tileResult.data : tileResult;
                     /* renderTile repaints a CSS-blended layer itself. */
                     return clipFocusedTile(key, templateUrl, bytes, tileId).then(function (prepared) {
                         /* A normal (non-LiDAR) canvas tile has no fetch URL to
@@ -1457,7 +1476,11 @@
             /* No URL: the layer draws its own tiles (canvas / custom plugin).
              * Ask the 2D layer for these pixels instead of re-implementing it. */
             if (typeof MIRROR.renderTile === 'function') {
-                return MIRROR.renderTile(layer, z, x, y).then(function (data) {
+                var registryFetch = fetchRegistryTileFor3d(layer && layer._dlDefId, z, x, y, abortController);
+                var tileRequest = registryFetch || MIRROR.renderTile(layer, z, x, y);
+                return tileRequest.then(function (tileResult) {
+                    if (registryFetch && tileResult.blank) return { data: MIRROR.disc.blankTile() };
+                    var data = registryFetch ? tileResult.data : tileResult;
                     state.renderedTiles += 1;
                     /* renderTile already repainted a CSS-blended layer, so only
                      * the disc clip is left to apply here. */

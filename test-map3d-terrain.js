@@ -80,7 +80,7 @@ const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261019-tile-order';              /* MapLibre itself (coveringTiles patch) */
 const TAG_3D = '20261118-asig-3d-wmts';       /* mirror (canvas tiles)          */
-const TAG_VIEWER = '20261106-hist-shift-3d'; /* viewer (js)                     */
+const TAG_VIEWER = '20261124-ahd-3d-proxy'; /* viewer (CORS-safe AHN 3D tiles) */
 const TAG_CSS = '20261102-report-lidar-window';  /* viewer skin (css)              */
 const TAG_FOCUS = '20261118-all-lidar-sublayers'; /* LiDAR focus (3D, one disc)   */
 const TAG_REGISTRY = '20261124-nl-ahn-3d';   /* shared registry (historical maps + AHN 3D) */

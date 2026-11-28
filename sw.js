@@ -1057,7 +1057,7 @@
 //   isolation from main with the latest LiDAR, layer-lock and map-catalogue work.
 //   The new shell version ensures installed PWAs fetch the merged shell assets.
 // v435: bound DEM requests/probes so unavailable sources cannot stall APM.
-const CACHE_NAME = 'detectlab-v436-nl-ahn-3d';
+const CACHE_NAME = 'detectlab-v437-nl-ahn-3d-proxy';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1438,6 +1438,7 @@ const PRECACHE_URLS = [
   'js/map3d-terrain.js?v=20261030-lidar-photo-3d',
   'js/map3d-terrain.js?v=20261030-3d-analysis-dock',
   'js/map3d-terrain.js?v=20261031-3d-bearing-handoff',
+  'js/map3d-terrain.js?v=20261124-ahd-3d-proxy',
   'js/map3d-terrain.js?v=20261102-lidar-gray-backing',
   'css/map3d-terrain.css?v=20261102-lidar-gray-backing',
   'js/translations.js?v=20261102-lidar-gray-backing',
