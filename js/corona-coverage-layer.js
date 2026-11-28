@@ -81,6 +81,50 @@
         return !(a[2] < b[0] || a[0] > b[2] || a[3] < b[1] || a[1] > b[3]);
     }
 
+    function pointInRing(point, ring) {
+        var x = point[0], y = point[1], inside = false;
+        for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+            var xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+            if (((yi > y) !== (yj > y)) && x < (xj - xi) * (y - yi) / ((yj - yi) || 1e-15) + xi) inside = !inside;
+        }
+        return inside;
+    }
+
+    function segmentIntersects(a, b, c, d) {
+        function orient(p, q, r) { return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]); }
+        function onSegment(p, q, r) {
+            return q[0] >= Math.min(p[0], r[0]) - 1e-10 && q[0] <= Math.max(p[0], r[0]) + 1e-10 &&
+                q[1] >= Math.min(p[1], r[1]) - 1e-10 && q[1] <= Math.max(p[1], r[1]) + 1e-10;
+        }
+        var abC = orient(a, b, c), abD = orient(a, b, d), cdA = orient(c, d, a), cdB = orient(c, d, b);
+        if (((abC > 0 && abD < 0) || (abC < 0 && abD > 0)) &&
+                ((cdA > 0 && cdB < 0) || (cdA < 0 && cdB > 0))) return true;
+        return (Math.abs(abC) < 1e-10 && onSegment(a, c, b)) ||
+            (Math.abs(abD) < 1e-10 && onSegment(a, d, b)) ||
+            (Math.abs(cdA) < 1e-10 && onSegment(c, a, d)) ||
+            (Math.abs(cdB) < 1e-10 && onSegment(c, b, d));
+    }
+
+    function ringIntersectsBounds(ring, bounds) {
+        if (!ring || ring.length < 4) return false;
+        var box = [bounds[0], bounds[1], bounds[2], bounds[3]]; // west,south,east,north
+        var ringBox = ringBounds(ring);
+        if (!bboxIntersects(ringBox, box)) return false;
+        for (var i = 0; i < ring.length; i++) {
+            var p = ring[i];
+            if (p[0] >= box[0] && p[0] <= box[2] && p[1] >= box[1] && p[1] <= box[3]) return true;
+        }
+        var corners = [[box[0],box[1]],[box[2],box[1]],[box[2],box[3]],[box[0],box[3]]];
+        for (var c = 0; c < corners.length; c++) if (pointInRing(corners[c], ring)) return true;
+        var edges = [[corners[0],corners[1]],[corners[1],corners[2]],[corners[2],corners[3]],[corners[3],corners[0]]];
+        for (var r = 1; r < ring.length; r++) {
+            for (var e = 0; e < edges.length; e++) {
+                if (segmentIntersects(ring[r - 1], ring[r], edges[e][0], edges[e][1])) return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * KML → array of rings ([[lon,lat], …]) clipped to `bbox`.
      * Pure string/DOM work, no Leaflet — the test calls it directly.
@@ -301,6 +345,15 @@
         parseKml: parseKml,
         simplifyRing: simplifyRing,
         ringsFromCatalog: ringsFromCatalog,
+        ringIntersectsBounds: ringIntersectsBounds,
+        intersectsBounds: function (bounds, rings) {
+            var candidates = rings || _rings;
+            if (!bounds || !candidates || !candidates.length) return false;
+            for (var i = 0; i < candidates.length; i++) {
+                if (ringIntersectsBounds(candidates[i], bounds)) return true;
+            }
+            return false;
+        },
         load: load,
         show: show,
         hide: hide,

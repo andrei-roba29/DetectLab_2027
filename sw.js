@@ -1057,7 +1057,7 @@
 //   isolation from main with the latest LiDAR, layer-lock and map-catalogue work.
 //   The new shell version ensures installed PWAs fetch the merged shell assets.
 // v435: bound DEM requests/probes so unavailable sources cannot stall APM.
-const CACHE_NAME = 'detectlab-v437-nl-ahn-3d-proxy';
+const CACHE_NAME = 'detectlab-v439-corona-coverage-filter';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1132,6 +1132,8 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 //   archeo-report-pdf.js and translations.js.
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
+  'js/map-app.js?v=20261124-historical-coverage-bounds',
+  'js/corona-coverage-layer.js?v=20261124-corona-viewport-footprints',
   'js/apm-next/apm-providers.js?v=20261123-dem-timeout',
   'js/layer-registry.js?v=20261124-nl-ahn-3d',
   'js/apm-next/apm-pipeline.js?v=20261124-non-ro-no-uat',

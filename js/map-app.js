@@ -13367,14 +13367,19 @@
 
                 reymann: {
                     // Special-Karte von Central-Europa – Daniel Gottlob Reymann (1806–1908) — CENAGIS / IH PAN
-                    bounds: [[45.0, 5.0], [55.5, 30.0]],
+                    // Match the actual CENAGIS catalogue extent (also used by
+                    // js/historical-eu-maps.js), not the former oversized box.
+                    bounds: [[46.5, 5.2], [55.8, 28.5]],
                     label: 'Harta Central-Europa – Reymann (1806–1908)',
                     layerVar: '_reymannMapLayer'
                 },
 
                 kdr100k: {
                     // Karte des Deutschen Reiches 1:100 000 (1878–1945) — CENAGIS / IH PAN
-                    bounds: [[45.5, 5.5], [56.0, 24.5]],
+                    // Match the published CENAGIS raster extent. The older
+                    // southern/western overshoot made this sheet appear over
+                    // northern Italy and unrelated neighbouring regions.
+                    bounds: [[47.25, 5.83], [56.0, 23.33]],
                     label: 'Karte des Deutschen Reiches (1878–1945)',
                     layerVar: '_kdr100kMapLayer'
                 },
@@ -14180,6 +14185,35 @@
                     return availableCount;
                 }
 
+                var coronaCoverageReady = false;
+                var coronaCoverageLoading = false;
+                var coronaCoverageRings = null;
+                function coronaCoverageOnViewport(mapBounds) {
+                    var api = window.CoronaCoverage;
+                    if (!api || typeof api.intersectsBounds !== 'function') return null;
+                    if (coronaCoverageReady) {
+                        return api.intersectsBounds([
+                            boundsEdge(mapBounds, 'west'), boundsEdge(mapBounds, 'south'),
+                            boundsEdge(mapBounds, 'east'), boundsEdge(mapBounds, 'north')
+                        ], coronaCoverageRings);
+                    }
+                    if (!coronaCoverageLoading && typeof api.load === 'function') {
+                        coronaCoverageLoading = true;
+                        api.load().then(function (rings) {
+                            coronaCoverageRings = rings || [];
+                            coronaCoverageReady = true;
+                            coronaCoverageLoading = false;
+                            if (typeof window.checkLayerVisibility === 'function') window.checkLayerVisibility();
+                        }).catch(function () {
+                            coronaCoverageRings = [];
+                            coronaCoverageReady = true;
+                            coronaCoverageLoading = false;
+                            if (typeof window.checkLayerVisibility === 'function') window.checkLayerVisibility();
+                        });
+                    }
+                    return null; // retain the coarse Europe extent until real footprints arrive
+                }
+
                 window.checkLayerVisibility = function() {
                     var activeMap = window._dlMap || map || window.map;
                     // Keep event listeners on the same instance whose bounds we read,
@@ -14200,6 +14234,10 @@
                     var regionIso = selectedCountryIso();
                     allDefs.forEach(function(def) {
                         var visible = def.viewportIndependent || isIntersecting(mapBounds, def.bounds);
+                        if (def.key === 'satellite60s') {
+                            var hasCoronaFootprint = coronaCoverageOnViewport(mapBounds);
+                            if (hasCoronaFootprint !== null) visible = hasCoronaFootprint;
+                        }
                         // A sheet whose published rectangle covers a country it
                         // only marginally reaches (WIG 1:100k over Romania) is
                         // decided by the region it really covers there, not by

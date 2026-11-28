@@ -265,6 +265,12 @@ async function testCoverageLayer() {
 
     const fromCatalog = Coverage.ringsFromCatalog(CATALOG_BLOCKS, [-25, 34, 60, 72]);
     eq('every real pass footprint becomes an outline', fromCatalog.length, 2);
+    check('a viewport over the Romanian footprint is covered',
+        Coverage.intersectsBounds([22, 45, 24, 47], fromCatalog));
+    check('a viewport with no pass outline is not marked as available',
+        !Coverage.intersectsBounds([8, 45, 10, 47], fromCatalog));
+    check('a viewport inside only the footprint bbox but outside its polygon is rejected',
+        !Coverage.intersectsBounds([29.30, 41.149, 29.32, 41.15], [fromCatalog[0]]));
     check('degenerate world-sized catalogue rings are dropped too',
         !fromCatalog.some((r) => r.some(([lon]) => lon === -180)));
 

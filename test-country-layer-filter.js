@@ -370,7 +370,7 @@ function groupRowOf(document, iconId) {
         'premium historical group kept for Italy (Central-European sheets cover the Alps)');
     assert.equal(unavailable(document, 'mitteleuropaRow'), false, 'Mitteleuropa kept for Italy');
     assert.equal(unavailable(document, 'reymannRow'), false, 'Reymann kept for Italy');
-    assert.equal(unavailable(document, 'kdr100kRow'), false, 'KDR 100k kept for Italy');
+    assert.equal(unavailable(document, 'kdr100kRow'), true, 'KDR 100k hidden for Italy once its published extent is used (no Italian coverage)');
     assert.equal(unavailable(document, 'chrzanowskiRow'), true, 'Chrzanowski (Old Poland) hidden for Italy — bbox graze is not coverage');
     assert.equal(unavailable(document, 'bucovinaRow'), true, 'Bucovina sheet hidden for Italy');
     assert.equal(groupRowOf(document, 'vegfpExpandIcon').classList.contains(UNAVAILABLE), true, 'vegetation group hidden for Italy');
