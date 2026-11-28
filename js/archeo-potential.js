@@ -1685,7 +1685,7 @@
         var runTiles = null;
         var largeWindow = radiusM >= 15000 && grid.w * grid.h >= 200000 &&
             Array.isArray(opts.siteRecords) && !opts.cacheOnly;
-        if (largeWindow) {
+        if (largeWindow && !opts.skipUat) {
             var coarseZ = uatZoomForBounds(allBounds, z, maxTiles);
             if (coarseZ < z) {
                 var loaded = await loadUatTilesForRun(
@@ -1717,7 +1717,7 @@
                 var nearLng = Math.max(grid.west + col0 * grid.dLon, Math.min(centerLng, grid.west + colEnd * grid.dLon));
                 var near = projectToLocalMeters(nearLat, nearLng, centerLat);
                 var intersects = Math.hypot(near.x - ctx.center.x, near.y - ctx.center.y) <= radiusM;
-                if (!runTiles && !opts.cacheOnly && intersects) {
+                if (!opts.skipUat && !runTiles && !opts.cacheOnly && intersects) {
                     await prewarmUatTiles({ minLat: grid.north - rowEnd * grid.dLat - halfSampleLat,
                         maxLat: grid.north - row0 * grid.dLat + halfSampleLat,
                         minLng: grid.west + col0 * grid.dLon - halfSampleLng,
@@ -1741,7 +1741,7 @@
                         var reason = null, displayable = false;
                         if (cellDx * cellDx + cellDy2 > radius2) reason = 'outside';
                         else if (heritageCells[i]) { reason = 'heritage'; displayable = true; }
-                        if (!reason || displayable) {
+                        if ((!reason || displayable) && !opts.skipUat) {
                             var lng = grid.west + (col + 0.5) * grid.dLon;
                             var sample = uatCellRedFraction(rowLat, lng, Math.max(dx, dy), z, runTiles, merc);
                             // Unknown data and built-up land must remain excluded

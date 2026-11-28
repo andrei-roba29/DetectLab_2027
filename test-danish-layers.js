@@ -77,7 +77,8 @@ const TOKEN = 'test-token-not-a-credential';
             'fortidsminder_areal_beskyttelse', 'fortidsminder_areal_marin',
             'fortidsminder_linie_alle', 'fortidsminder_linje_fredet', 'fortidsminder_linie_marin',
             'fortidsminder_punkt_fredet', 'fortidsminder_punkt_ikkefredet']],
-        ['historical', 'Historical maps', ['topo4cm_1980_2001', 'topo4cm_1953_1976', 'hist_lave', 'hist_hoeje', 'hist_preussen', 'dtk25']],
+        ['historical', 'Historical maps', ['topo4cm_1980_2001', 'topo4cm_1953_1976', 'dtk25']],
+        ['other-maps', 'Other maps', ['hist_lave', 'hist_hoeje', 'hist_preussen']],
         ['orthophoto', 'Ortophoto', ['orto_sommer_2008', 'orto_sommer_2005', 'orto_sommer_2002', 'orto_sommer_1999']]
     ], 'the requested free Denmark groups and sublayer order are explicit in the catalogue');
     assert.strictEqual(CONFIG.panelGroups.filter((group) => group.id === 'lidar')[0].mount, 'danishLidarLayers',
@@ -341,9 +342,10 @@ const TOKEN = 'test-token-not-a-credential';
         assert.strictEqual(def.format, layer.format, id + ': same format');
         assert.strictEqual(def.version, layer.version, id + ': same version');
         assert.strictEqual(def.crs, layer.crs, id + ': same CRS');
-        assert.strictEqual(def.group, layer.group === 'base' ? 'danish-base' : 'danish-overlay');
+        assert.strictEqual(def.group, layer.panelGroup === 'lidar' ? 'lidar' : (layer.group === 'base' ? 'danish-base' : 'danish-overlay'));
         if (RENDERED.indexOf(id) !== -1) {
-            assert.strictEqual(def.group, 'danish-overlay', id + ': rendered Danish layers are overlays in the registry too');
+            assert.strictEqual(def.group, layer.panelGroup === 'lidar' ? 'lidar' : 'danish-overlay',
+                id + ': rendered Danish LiDAR is discoverable by the 3D focus and remains an overlay in the UI');
             assert.strictEqual(def.ui.slider, 'danishOpacity_' + id, id + ': the registry knows its opacity slider');
             assert.strictEqual(def.ui.toggle, 'danishToggle_' + id, id + ': the registry knows its on/off switch');
         }
@@ -783,8 +785,8 @@ async function testMapModule() {
        tiles and paints it under the shared violet wash. The LiDAR hillshades,
        the heritage registers and the orthophoto years are not sheets and keep
        the plain glass row. */
-    const sheetRows = CONFIG.panelGroups.find((group) => group.id === 'historical').layers;
-    assert.ok(sheetRows.length >= 6, 'the Historical maps section still has all its sheets');
+    const sheetRows = CONFIG.panelGroups.find((group) => group.id === 'other-maps').layers;
+    assert.ok(sheetRows.length === 3, 'the Other maps section contains Denmark’s historical map sheets');
     RENDERED.forEach((id) => {
         const preview = dom.byId['danishRow_' + id].getAttribute('data-preview-layer');
         if (sheetRows.indexOf(id) !== -1) {
@@ -796,7 +798,7 @@ async function testMapModule() {
     });
     assert.strictEqual(sheetRows.filter((id) => RENDERED.indexOf(id) !== -1).length, sheetRows.length,
         'every configured Historical maps sheet really is rendered');
-    ok('the Historical maps rows opt into the tile-photo background, and only they do');
+    ok('the Other maps historical rows opt into the tile-photo background, and only they do');
 
     /* The removed panel furniture stays removed: no Base map rows, no
        spring-orthophoto dropdown, no Danish OSM row. The catalogue entries

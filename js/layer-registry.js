@@ -3903,9 +3903,13 @@
             },
             url: 'https://ahn.arcgisonline.nl/arcgis/rest/services/Hoogtebestand',
             layer: 'exportImage', format: 'image/png', transparent: true, version: '',
-            tileSize: 256, minZoom: 6, maxZoom: 20, opacity: 1,
+            tileSize: 256, minZoom: 8, maxZoom: 21, maxNativeZoom: 19, opacity: 0.8,
+            bounds: [[50.65, 3.20], [53.70, 7.25]],
             attribution: '© AHN / Esri Nederland',
-            cors: 'yes', proxy: 'auto',
+            /* The Leaflet layer intentionally uses plain image requests
+             * (CROSS_ORIGIN=false); 3D must fetch these image bytes through
+             * the same-origin proxy so MapLibre can decode them reliably. */
+            cors: 'no', proxy: 'always',
             resolve: function () {
                 var mod = root && root.AhnLidar;
                 if (!mod || typeof mod.tileUrl !== 'function') return null;
@@ -5653,7 +5657,11 @@
                 var isBase = layer.group === 'base';
                 API.register({
                     id: id,
-                    group: isBase ? 'danish-base' : 'danish-overlay',
+                    /* LiDAR is a first-class 3D category: the LiDAR focus
+                     * selector discovers definitions by group, not by panel row.
+                     * Preserve Denmark's independent overlay switches while
+                     * exposing its thematic LiDAR rows to the shared 3D dock. */
+                    group: layer.panelGroup === 'lidar' ? 'lidar' : (isBase ? 'danish-base' : 'danish-overlay'),
                     z: isBase ? 399 : 406,
                     kind: layer.type === 'wms' ? 'wms' : (layer.type === 'wfs' ? 'wfs' : 'tile'),
                     /* Which thematic section of the Denmark panel the layer is
